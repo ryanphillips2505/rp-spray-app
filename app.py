@@ -42,7 +42,7 @@ def load_settings():
     return defaults
 
 SETTINGS = load_settings()
-TEAM_CODE, TEAM_CFG = require_team_access()
+
 # ==============================
 # ACCESS CODE GATE
 # ==============================
@@ -81,7 +81,7 @@ def require_team_access():
             st.error("Invalid access code")
 
     st.stop()
-
+TEAM_CODE, TEAM_CFG = require_team_access()
 # -----------------------------
 # PAGE CONFIG
 # -----------------------------
@@ -1088,4 +1088,5 @@ else:
             indiv_rows.append({"Type": rk, "Count": stats.get(rk, 0)})
 
     st.table(indiv_rows)
+
 
