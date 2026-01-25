@@ -42,6 +42,45 @@ def load_settings():
     return defaults
 
 SETTINGS = load_settings()
+TEAM_CODE, TEAM_CFG = require_team_access()
+# ==============================
+# ACCESS CODE GATE
+# ==============================
+
+SETTINGS_PATH = os.path.join("TEAM_CONFIG", "team_settings.json")
+
+@st.cache_data(show_spinner=False)
+def load_team_codes():
+    if not os.path.exists(SETTINGS_PATH):
+        return {}
+    with open(SETTINGS_PATH, "r", encoding="utf-8") as f:
+        data = json.load(f)
+        return data.get("codes", {})
+
+def require_team_access():
+    codes = load_team_codes()
+
+    if "team_code" not in st.session_state:
+        st.session_state.team_code = None
+
+    # Already unlocked
+    if st.session_state.team_code in codes:
+        return st.session_state.team_code, codes[st.session_state.team_code]
+
+    # Lock screen
+    st.title("RP Spray Analytics")
+    st.markdown("### Enter Access Code")
+
+    code = st.text_input("Access Code").strip()
+
+    if st.button("Unlock"):
+        if code in codes:
+            st.session_state.team_code = code
+            st.rerun()
+        else:
+            st.error("Invalid access code")
+
+    st.stop()
 
 # -----------------------------
 # PAGE CONFIG
@@ -58,9 +97,18 @@ def get_base64_image(path: str) -> str:
     with open(path, "rb") as f:
         return base64.b64encode(f.read()).decode("utf-8")
 
-BG_B64 = get_base64_image(SETTINGS["background_image"])
+# Team-specific branding override
+if TEAM_CFG:
+    BG_B64 = get_base64_image(TEAM_CFG["background_path"])
+    LOGO_PATH = TEAM_CFG["logo_path"]
+else:
+    BG_B64 = get_base64_image(SETTINGS["background_image"])
+    LOGO_PATH = SETTINGS["logo_image"]
+
 PRIMARY = SETTINGS["primary_color"]
 SECONDARY = SETTINGS["secondary_color"]
+LOGO_B64 = get_base64_image(LOGO_PATH)
+
 
 # -----------------------------
 # FONTS (force load)
@@ -1040,3 +1088,4 @@ else:
             indiv_rows.append({"Type": rk, "Count": stats.get(rk, 0)})
 
     st.table(indiv_rows)
+
