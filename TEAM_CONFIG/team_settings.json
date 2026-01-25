@@ -1,0 +1,10 @@
+
+ {
+  "app_title": "RP Spray Analytics",
+  "subtitle": "Coaches that want to win, WILL put in the time",
+  "primary_color": "#b91c1c",
+  "secondary_color": "#111111",
+  "background_image": "assets/background.jpg",
+  "logo_image": "assets/logo.png",
+  "strict_mode_default": true
+}
