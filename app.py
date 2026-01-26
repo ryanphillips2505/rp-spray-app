@@ -5,6 +5,15 @@ import base64
 import re
 from datetime import datetime
 from typing import Optional, Tuple
+import streamlit as st
+import os
+import json
+import base64
+import re
+from datetime import datetime
+from typing import Optional, Tuple
+import pandas as pd   # ✅ MOVE IT HERE
+
 
 # -----------------------------
 # PATHS / FOLDERS
@@ -993,7 +1002,33 @@ for player in sorted(season_players.keys()):
     for rk in RUN_KEYS:
         row[rk] = stats.get(rk, 0)
     season_rows.append(row)
-st.dataframe(season_rows)
+ 
+
+df_season = pd.DataFrame(season_rows)
+
+# scouting-friendly column order (ONLY what you already track)
+col_order = (
+    ["Player"]
+    + LOCATION_KEYS
+    + ["GB", "FB"]
+    + COMBO_KEYS
+    + RUN_KEYS
+)
+
+# safety: keep only columns that exist
+col_order = [c for c in col_order if c in df_season.columns]
+df_season = df_season[col_order]
+
+st.dataframe(df_season, use_container_width=True)
+
+csv_bytes = df_season.to_csv(index=False).encode("utf-8")
+st.download_button(
+    label="⬇️ Download Season CSV (Scouting Ready)",
+    data=csv_bytes,
+    file_name=f"{TEAM_CODE}_{selected_team}_SEASON.csv",
+    mime="text/csv",
+)
+
 
 st.subheader(f"🎯 Individual Spray – SEASON TO DATE ({selected_team})")
 selectable_players = sorted(
@@ -1021,6 +1056,7 @@ else:
             indiv_rows.append({"Type": rk, "Count": stats.get(rk, 0)})
 
     st.table(indiv_rows)
+
 
 
 
