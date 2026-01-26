@@ -10,15 +10,14 @@ from typing import Optional, Tuple
 # PATHS / FOLDERS
 # -----------------------------
 SETTINGS_PATH = os.path.join("TEAM_CONFIG", "team_settings.json")
-
-# NOTE: KEEP these as the "template" / repo folders (do NOT write team data here)
-ROSTERS_DIR = os.path.join("TEAM_CONFIG", "rosters")  # (legacy / admin-only)
 ASSETS_DIR = "assets"
-SEASON_DIR = os.path.join("data", "season_totals")    # (legacy / admin-only)
 
-os.makedirs(ROSTERS_DIR, exist_ok=True)
+# These become TEAM-CODE specific AFTER login (so rosters don't leak across teams)
+ROSTERS_DIR = None
+SEASON_DIR = None
+
 os.makedirs(ASSETS_DIR, exist_ok=True)
-os.makedirs(SEASON_DIR, exist_ok=True)
+
 
 # -----------------------------
 # SETTINGS LOADER
@@ -88,6 +87,16 @@ def require_team_access():
 
 TEAM_CODE, TEAM_CFG = require_team_access()
 TEAM_CFG = TEAM_CFG or {}
+# -----------------------------
+# TEAM-SCOPED DATA PATHS (per access code)
+# -----------------------------
+TEAM_DATA_ROOT = os.path.join("data", "teams", str(TEAM_CODE).upper())
+ROSTERS_DIR = os.path.join(TEAM_DATA_ROOT, "rosters")
+SEASON_DIR = os.path.join(TEAM_DATA_ROOT, "season_totals")
+
+os.makedirs(ROSTERS_DIR, exist_ok=True)
+os.makedirs(SEASON_DIR, exist_ok=True)
+
 
 # -----------------------------
 # ✅ TEAM-ISOLATED STORAGE (FIXES OCS vs CLAREMORE BLEED-OVER)
@@ -1009,6 +1018,7 @@ else:
             indiv_rows.append({"Type": rk, "Count": stats.get(rk, 0)})
 
     st.table(indiv_rows)
+
 
 
 
