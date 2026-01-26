@@ -759,14 +759,6 @@ st.subheader("🏟️ Team Selection")
 
 team_files = list_team_files()
 
-    st.write("TEAM_CODE:", TEAM_CODE)
-    st.write("Resolved ROSTERS_DIR:", ROSTERS_DIR)
-    try:
-        st.write("Files in ROSTERS_DIR:", os.listdir(ROSTERS_DIR))
-    except Exception as e:
-        st.error(f"Could not list ROSTERS_DIR: {e}")
-# -------------------------------------------------------------
-
 if not team_files:
     st.warning("No roster files found yet for THIS access code. Create one below.")
     st.stop()
@@ -1029,6 +1021,7 @@ else:
             indiv_rows.append({"Type": rk, "Count": stats.get(rk, 0)})
 
     st.table(indiv_rows)
+
 
 
 
