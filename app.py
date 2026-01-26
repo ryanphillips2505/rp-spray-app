@@ -13,6 +13,10 @@ from io import BytesIO
 from openpyxl.utils import get_column_letter
 from openpyxl.formatting.rule import ColorScaleRule, FormulaRule, CellIsRule
 from openpyxl.styles import PatternFill
+from supabase import create_client, Client
+
+
+
 
 
 def normalize_pbp(text: str) -> str:
@@ -1283,6 +1287,7 @@ else:
             indiv_rows.append({"Type": rk, "Count": stats.get(rk, 0)})
 
     st.table(indiv_rows)
+
 
 
 
