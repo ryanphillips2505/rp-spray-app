@@ -4,6 +4,7 @@ import json
 import base64
 import re
 import hashlib
+import time  # ✅ NEW: used for anti-stuck processing lock + failsafe unlock
 from datetime import datetime
 from typing import Optional, Tuple
 import pandas as pd   # ✅ MOVE IT HERE
@@ -13,16 +14,15 @@ from openpyxl.utils import get_column_letter
 from openpyxl.formatting.rule import ColorScaleRule, FormulaRule, CellIsRule
 from openpyxl.styles import PatternFill
 
+
 def normalize_pbp(text: str) -> str:
     return "\n".join([ln.strip() for ln in (text or "").strip().splitlines() if ln.strip()])
+
 
 def game_key_from_pbp(team_key: str, pbp_text: str) -> str:
     norm = normalize_pbp(pbp_text)
     h = hashlib.sha1((team_key + "||" + norm).encode("utf-8")).hexdigest()
     return f"pbp_sha1_{h}"
-
-
-
 
 
 # -----------------------------
@@ -63,6 +63,7 @@ def load_settings():
             pass
     return defaults
 
+
 SETTINGS = load_settings()
 
 # ============================
@@ -70,6 +71,7 @@ SETTINGS = load_settings()
 # ============================
 
 SETTINGS_PATH = os.path.join("TEAM_CONFIG", "team_settings.json")
+
 
 @st.cache_data(show_spinner=False)
 def load_team_codes() -> dict:
@@ -82,6 +84,7 @@ def load_team_codes() -> dict:
         return {str(k).strip().upper(): v for k, v in codes.items()}
     except Exception:
         return {}
+
 
 def require_team_access():
     codes = load_team_codes()
@@ -106,8 +109,10 @@ def require_team_access():
 
     st.stop()
 
+
 TEAM_CODE, TEAM_CFG = require_team_access()
 TEAM_CFG = TEAM_CFG or {}
+
 # -----------------------------
 # TEAM-SCOPED DATA PATHS (per access code)
 # -----------------------------
@@ -140,11 +145,13 @@ st.set_page_config(
     layout="wide",
 )
 
+
 def get_base64_image(path: str) -> str:
     if not path or not os.path.exists(path):
         return ""
     with open(path, "rb") as f:
         return base64.b64encode(f.read()).decode("utf-8")
+
 
 # --- Branding (fallback + team overrides) ---
 PRIMARY = SETTINGS["primary_color"]
@@ -395,6 +402,7 @@ DI_REGEX_BARE = re.compile(r"\bdefensive\s+indifference\b", re.IGNORECASE)
 RUNNER_TAG_REGEX = re.compile(r"\bR([123])\b", re.IGNORECASE)
 PAREN_NAME_REGEX = re.compile(r"\(([^)]+)\)")
 
+
 def normalize_base_bucket(prefix: str, base_raw: Optional[str]) -> str:
     if not base_raw:
         return prefix
@@ -407,18 +415,21 @@ def normalize_base_bucket(prefix: str, base_raw: Optional[str]) -> str:
         return f"{prefix}-H"
     return prefix
 
+
 BAD_FIRST_TOKENS = {
-    "top","bottom","inning","pitch","ball","strike","foul",
-    "runner","runners","advances","advance","steals","stole","caught",
-    "substitution","defensive","offensive","double","triple","single","home",
-    "out","safe","error","no","one","two","three",
+    "top", "bottom", "inning", "pitch", "ball", "strike", "foul",
+    "runner", "runners", "advances", "advance", "steals", "stole", "caught",
+    "substitution", "defensive", "offensive", "double", "triple", "single", "home",
+    "out", "safe", "error", "no", "one", "two", "three",
 }
+
 
 def starts_like_name(token: str) -> bool:
     if not token:
         return False
     t = token.strip().strip('"').strip().lower()
     return t[:1].isalpha() and t not in BAD_FIRST_TOKENS
+
 
 def empty_stat_dict():
     d = {loc: 0 for loc in LOCATION_KEYS}
@@ -429,6 +440,7 @@ def empty_stat_dict():
     for rk in RUN_KEYS:
         d[rk] = 0
     return d
+
 
 def ensure_all_keys(d: dict):
     for loc in LOCATION_KEYS:
@@ -441,12 +453,14 @@ def ensure_all_keys(d: dict):
         d.setdefault(rk, 0)
     return d
 
+
 def overall_confidence_score(conf_val: int):
     if conf_val >= 4:
         return "high"
     elif conf_val >= 2:
         return "medium"
     return "low"
+
 
 def get_batter_name(line: str, roster: set[str]):
     line = (line or "").strip().strip('"')
@@ -475,6 +489,7 @@ def get_batter_name(line: str, roster: set[str]):
 
     return None
 
+
 def extract_runner_name_near_event(clean_line: str, match_start: int, roster: set[str]) -> Optional[str]:
     left = (clean_line[:match_start] or "").strip()
     if not left:
@@ -494,6 +509,7 @@ def extract_runner_name_near_event(clean_line: str, match_start: int, roster: se
 
     return None
 
+
 def extract_runner_name_fallback(clean_line: str, roster: set[str]) -> Optional[str]:
     runner = get_batter_name(clean_line, roster)
     if runner:
@@ -507,6 +523,7 @@ def extract_runner_name_fallback(clean_line: str, roster: set[str]) -> Optional[
             return runner
 
     return None
+
 
 def parse_running_event(clean_line: str, roster: set[str]) -> Tuple[Optional[str], Optional[str], Optional[str]]:
     """
@@ -541,6 +558,7 @@ def parse_running_event(clean_line: str, roster: set[str]) -> Tuple[Optional[str
 
     return None, None, None
 
+
 def is_ball_in_play(line_lower: str) -> bool:
     ll = (line_lower or "").strip()
     if not ll:
@@ -548,49 +566,50 @@ def is_ball_in_play(line_lower: str) -> bool:
 
     # Explicit NOT-BIP events
     if any(kw in ll for kw in [
-        "hit by pitch","hit-by-pitch","hit batsman",
-        "walks","walked"," base on balls","intentional walk",
-        "strikes out","strikeout","called out on strikes",
-        "reaches on catcher interference","catcher's interference",
+        "hit by pitch", "hit-by-pitch", "hit batsman",
+        "walks", "walked", " base on balls", "intentional walk",
+        "strikes out", "strikeout", "called out on strikes",
+        "reaches on catcher interference", "catcher's interference",
 
         # running events — we track separately
-        "caught stealing","out stealing",
-        "steals","stole","stealing",
+        "caught stealing", "out stealing",
+        "steals", "stole", "stealing",
         "defensive indifference",
 
         # pickoffs (we are NOT tracking them now)
-        "picked off","pickoff",
+        "picked off", "pickoff",
     ]):
         return False
 
     bip_outcomes = [
-        "grounds","grounded","ground ball","groundball","grounder",
-        "singles","doubles","triples","homers","home run",
-        "lines out","line drive","lined out","line out",
-        "flies out","fly ball","flied out","fly out",
-        "pops out","pop up","pop-out","popup",
-        "bloops","blooper",
-        "bunts","bunt","sacrifice bunt","sac bunt","sacrifice hit",
-        "sac fly","sacrifice fly",
-        "reaches on a fielding error","reaches on a throwing error",
-        "reaches on error","reached on error","safe on error",
+        "grounds", "grounded", "ground ball", "groundball", "grounder",
+        "singles", "doubles", "triples", "homers", "home run",
+        "lines out", "line drive", "lined out", "line out",
+        "flies out", "fly ball", "flied out", "fly out",
+        "pops out", "pop up", "pop-out", "popup",
+        "bloops", "blooper",
+        "bunts", "bunt", "sacrifice bunt", "sac bunt", "sacrifice hit",
+        "sac fly", "sacrifice fly",
+        "reaches on a fielding error", "reaches on a throwing error",
+        "reaches on error", "reached on error", "safe on error",
         "reaches on a missed catch error",
-        "fielder's choice","fielders choice",
-        "double play","triple play",
-        "out at first","out at second","out at third","out at home",
+        "fielder's choice", "fielders choice",
+        "double play", "triple play",
+        "out at first", "out at second", "out at third", "out at home",
     ]
     if any(kw in ll for kw in bip_outcomes):
         return True
 
     fielder_markers = [
-        "left fielder","center fielder","right fielder",
-        "shortstop","second baseman","third baseman","first baseman",
-        "to left field","to center field","to right field",
-        "to shortstop","to second baseman","to third baseman","to first baseman",
-        "to pitcher","back to the mound",
-        "down the left","down the right","left-center","right-center"
+        "left fielder", "center fielder", "right fielder",
+        "shortstop", "second baseman", "third baseman", "first baseman",
+        "to left field", "to center field", "to right field",
+        "to shortstop", "to second baseman", "to third baseman", "to first baseman",
+        "to pitcher", "back to the mound",
+        "down the left", "down the right", "left-center", "right-center"
     ]
     return any(m in ll for m in fielder_markers)
+
 
 def classify_ball_type(line_lower: str):
     reasons = []
@@ -616,6 +635,7 @@ def classify_ball_type(line_lower: str):
             return "FB", 2, [f"Matched FB regex: {rx.pattern}"]
 
     return None, conf, reasons
+
 
 def classify_location(line_lower: str, strict_mode: bool = False):
     if "sacrifice bunt" in line_lower or "sac bunt" in line_lower or "sacrifice hit" in line_lower:
@@ -658,6 +678,7 @@ def classify_location(line_lower: str, strict_mode: bool = False):
 
     return None, 0, []
 
+
 # -----------------------------
 # UNLIMITED TEAMS: read roster files
 # -----------------------------
@@ -670,16 +691,20 @@ def list_team_files():
     files.sort(key=lambda x: x.lower())
     return files
 
+
 def team_name_from_file(filename: str) -> str:
     return os.path.splitext(filename)[0]
+
 
 def safe_team_key(team_name: str) -> str:
     key = re.sub(r"[^a-zA-Z0-9]+", "_", team_name.strip()).strip("_").lower()
     return key or "team"
 
+
 def roster_path_for_file(filename: str) -> str:
     # ✅ CHANGED: write to TEAM_ROSTERS_DIR (isolated per access code)
     return os.path.join(TEAM_ROSTERS_DIR, filename)
+
 
 def load_roster_text(path: str) -> str:
     if os.path.exists(path):
@@ -687,9 +712,11 @@ def load_roster_text(path: str) -> str:
             return f.read()
     return ""
 
+
 def save_roster_text(path: str, text: str):
     with open(path, "w", encoding="utf-8") as f:
         f.write(text.strip() + "\n" if text.strip() else "")
+
 
 # -----------------------------
 # SEASON FILES PER TEAM
@@ -697,6 +724,7 @@ def save_roster_text(path: str, text: str):
 def season_file_for_team(team_key: str) -> str:
     # ✅ CHANGED: season totals isolated per access code
     return os.path.join(TEAM_SEASON_DIR, f"{team_key}_spray_totals.json")
+
 
 def load_season_totals(team_key: str, current_roster):
     filename = season_file_for_team(team_key)
@@ -727,11 +755,13 @@ def load_season_totals(team_key: str, current_roster):
 
     return season_team, season_players, games_played
 
+
 def save_season_totals(team_key: str, season_team, season_players, games_played: int):
     filename = season_file_for_team(team_key)
     data = {"meta": {"games_played": games_played}, "team": season_team, "players": season_players}
     with open(filename, "w") as f:
         json.dump(data, f, indent=2)
+
 
 def add_game_to_season(season_team, season_players, game_team, game_players):
     for key in LOCATION_KEYS + BALLTYPE_KEYS + COMBO_KEYS + RUN_KEYS:
@@ -742,6 +772,7 @@ def add_game_to_season(season_team, season_players, game_team, game_players):
         sstats = season_players[player]
         for key in LOCATION_KEYS + BALLTYPE_KEYS + COMBO_KEYS + RUN_KEYS:
             sstats[key] = sstats.get(key, 0) + gstats.get(key, 0)
+
 
 # -----------------------------
 # SIDEBAR
@@ -857,6 +888,86 @@ with col_reset:
         st.warning("Season totals reset for this team.")
 
 # -----------------------------
+# ✅ COACH-PROOF BACKUP / RESTORE (FASTEST SAFETY NET)
+# -----------------------------
+with st.expander("🛟 Backup / Restore (Coach-Proof) — Download + Upload Season Totals"):
+    # Download: read the current season file as-is (best for exact restore)
+    if os.path.exists(sf):
+        try:
+            with open(sf, "r", encoding="utf-8") as f:
+                raw_payload = json.load(f)
+        except Exception:
+            raw_payload = {"meta": {"games_played": games_played}, "team": season_team, "players": season_players}
+    else:
+        raw_payload = {"meta": {"games_played": games_played}, "team": season_team, "players": season_players}
+
+    backup_bytes = json.dumps(raw_payload, indent=2).encode("utf-8")
+    safe_team = re.sub(r"[^A-Za-z0-9_-]+", "_", selected_team).strip("_")
+
+    st.download_button(
+        label="⬇️ Download Season Totals JSON (backup)",
+        data=backup_bytes,
+        file_name=f"{TEAM_CODE}_{safe_team}_season_totals_backup.json",
+        mime="application/json",
+    )
+
+    st.markdown("**Restore from a backup JSON:** (This overwrites the current season totals for this selected team.)")
+
+    uploaded = st.file_uploader(
+        "Upload backup JSON",
+        type=["json"],
+        accept_multiple_files=False,
+        help="Choose a season_totals_backup.json file you downloaded earlier.",
+    )
+
+    col_r1, col_r2 = st.columns([1, 2])
+    with col_r1:
+        do_restore = st.button("♻️ Restore Backup NOW")
+
+    if do_restore:
+        if uploaded is None:
+            st.error("Upload a backup JSON first.")
+            st.stop()
+
+        try:
+            incoming = json.load(uploaded)
+            if not isinstance(incoming, dict):
+                raise ValueError("Backup JSON is not an object.")
+
+            incoming_team = incoming.get("team", {})
+            incoming_players = incoming.get("players", {})
+            incoming_meta = incoming.get("meta", {})
+
+            if not isinstance(incoming_team, dict) or not isinstance(incoming_players, dict) or not isinstance(incoming_meta, dict):
+                raise ValueError("Backup JSON is missing required sections: meta/team/players.")
+
+            # Normalize keys so the app doesn't break
+            incoming_team = ensure_all_keys(incoming_team)
+            fixed_players = {}
+            for p, sd in incoming_players.items():
+                fixed_players[p] = ensure_all_keys(sd) if isinstance(sd, dict) else empty_stat_dict()
+
+            # Ensure current roster exists in the restored file too
+            for p in current_roster:
+                if p not in fixed_players:
+                    fixed_players[p] = empty_stat_dict()
+
+            # If processed keys exist, games_played should match that list
+            processed = incoming_team.get("_processed_game_keys", [])
+            if isinstance(processed, list):
+                restored_games_played = len(set(processed))
+            else:
+                restored_games_played = int(incoming_meta.get("games_played", 0) or 0)
+
+            save_season_totals(team_key, incoming_team, fixed_players, restored_games_played)
+
+            st.success("✅ Restore complete. Reloading…")
+            st.rerun()
+
+        except Exception as e:
+            st.error(f"Restore failed: {e}")
+
+# -----------------------------
 # PLAY-BY-PLAY INPUT
 # -----------------------------
 st.subheader("📓 GameChanger Play-by-Play")
@@ -865,11 +976,24 @@ raw_text = st.text_area(
     f"Paste the full play-by-play for ONE game involving {selected_team}:",
     height=260,
 )
+
 # -----------------------------
-# PROCESS GAME
+# PROCESS GAME (FIXED: never-stuck lock + proper rerun)
 # -----------------------------
 if "processing_game" not in st.session_state:
     st.session_state.processing_game = False
+if "processing_started_at" not in st.session_state:
+    st.session_state.processing_started_at = 0.0
+
+# ✅ FAILSAFE: auto-unlock if a rerun/exception ever left us stuck
+if st.session_state.processing_game:
+    try:
+        if (time.time() - float(st.session_state.processing_started_at or 0.0)) > 15:
+            st.session_state.processing_game = False
+            st.session_state.processing_started_at = 0.0
+    except Exception:
+        st.session_state.processing_game = False
+        st.session_state.processing_started_at = 0.0
 
 if st.button("📥 Process Game (ADD to Season Totals)"):
     if st.session_state.processing_game:
@@ -877,6 +1001,9 @@ if st.button("📥 Process Game (ADD to Season Totals)"):
         st.stop()
 
     st.session_state.processing_game = True
+    st.session_state.processing_started_at = time.time()
+
+    rerun_needed = False
     try:
         if not raw_text.strip():
             st.error("Paste play-by-play first.")
@@ -911,7 +1038,7 @@ if st.button("📥 Process Game (ADD to Season Totals)"):
             clean_line = re.sub(r"\s+", " ", clean_line).strip()
             line_lower = clean_line.lower()
 
-            # ----- RUNNING EVENTS (SB / CS / DI / PO / POCS) -----
+            # ----- RUNNING EVENTS (SB / CS / DI) -----
             runner, total_key, base_key = parse_running_event(clean_line, current_roster)
             if runner and total_key:
                 game_team[total_key] += 1
@@ -977,10 +1104,16 @@ if st.button("📥 Process Game (ADD to Season Totals)"):
         save_season_totals(team_key, season_team, season_players, games_played)
 
         st.success("✅ Game processed and added to season totals.")
-        st.rerun()
+        rerun_needed = True
 
     finally:
+        # ✅ ALWAYS unlock, even if st.stop() or an exception happens
         st.session_state.processing_game = False
+        st.session_state.processing_started_at = 0.0
+
+    # ✅ IMPORTANT: rerun AFTER finally so the lock can't get stuck
+    if rerun_needed:
+        st.rerun()
 
 
 # -----------------------------
@@ -1000,7 +1133,6 @@ for player in sorted(season_players.keys()):
     for rk in RUN_KEYS:
         row[rk] = stats.get(rk, 0)
     season_rows.append(row)
- 
 
 df_season = pd.DataFrame(season_rows)
 
@@ -1018,6 +1150,7 @@ col_order = [c for c in col_order if c in df_season.columns]
 df_season = df_season[col_order]
 
 st.dataframe(df_season, use_container_width=True)
+
 # --- downloads (CSV + Excel) ---
 csv_bytes = df_season.to_csv(index=False).encode("utf-8")
 safe_team = re.sub(r"[^A-Za-z0-9_-]+", "_", selected_team).strip("_")
@@ -1045,7 +1178,7 @@ with pd.ExcelWriter(out, engine="openpyxl") as writer:
         cell.alignment = header_align
         cell.fill = header_fill
 
-     # 3) Set column widths (auto-fit style)
+    # 3) Set column widths (auto-fit style)
     for col_idx, col_name in enumerate(df_season.columns, start=1):
         col_letter = get_column_letter(col_idx)
 
@@ -1060,7 +1193,6 @@ with pd.ExcelWriter(out, engine="openpyxl") as writer:
     # -----------------------------
     # CONDITIONAL FORMATTING (Excel)
     # -----------------------------
-
     start_row = 2
     start_col = 2  # column B (skip Player)
     end_row = ws.max_row
@@ -1107,7 +1239,6 @@ with pd.ExcelWriter(out, engine="openpyxl") as writer:
 
 excel_bytes = out.getvalue()
 
-
 col_dl1, col_dl2 = st.columns(2)
 
 with col_dl1:
@@ -1152,6 +1283,8 @@ else:
             indiv_rows.append({"Type": rk, "Count": stats.get(rk, 0)})
 
     st.table(indiv_rows)
+
+
 
 
 
