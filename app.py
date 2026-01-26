@@ -88,6 +88,8 @@ def require_team_access():
     st.stop()
 
 TEAM_CODE, TEAM_CFG = require_team_access()
+TEAM_CFG = TEAM_CFG or {}
+
 
 # -----------------------------
 # PAGE CONFIG
@@ -103,18 +105,22 @@ def get_base64_image(path: str) -> str:
         return ""
     with open(path, "rb") as f:
         return base64.b64encode(f.read()).decode("utf-8")
-
-# Team-specific branding override
-if TEAM_CFG:
-    BG_B64 = get_base64_image(TEAM_CFG["background_path"])
-    LOGO_PATH = TEAM_CFG["logo_path"]
-else:
-    BG_B64 = get_base64_image(SETTINGS["background_image"])
-    LOGO_PATH = SETTINGS["logo_image"]
-
+    
+# --- Branding (fallback + team overrides) ---
 PRIMARY = SETTINGS["primary_color"]
 SECONDARY = SETTINGS["secondary_color"]
-LOGO_B64 = get_base64_image(LOGO_PATH)
+
+# Defaults (fallback RP branding)
+LOGO_PATH = SETTINGS.get("logo_image", "assets/logo.png")
+BG_PATH = SETTINGS.get("background_image", "assets/background.jpg")
+
+# Team overrides (if unlocked)
+if TEAM_CFG:
+    LOGO_PATH = TEAM_CFG.get("logo_path", LOGO_PATH)
+    BG_PATH = TEAM_CFG.get("background_path", BG_PATH)
+
+BG_B64 = get_base64_image(BG_PATH)
+
 
 
 # -----------------------------
@@ -1095,6 +1101,7 @@ else:
             indiv_rows.append({"Type": rk, "Count": stats.get(rk, 0)})
 
     st.table(indiv_rows)
+
 
 
 
