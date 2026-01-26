@@ -1048,63 +1048,59 @@ with pd.ExcelWriter(out, engine="openpyxl") as writer:
         cell.alignment = header_align
         cell.fill = header_fill
 
-    # 3) Set column widths (auto-fit style)
+     # 3) Set column widths (auto-fit style)
     for col_idx, col_name in enumerate(df_season.columns, start=1):
         col_letter = get_column_letter(col_idx)
 
-        # base width = header length
         max_len = len(str(col_name))
-
-        # sample a chunk of rows so it doesn't get slow
         sample = df_season[col_name].astype(str).head(60).tolist()
         for v in sample:
             if len(v) > max_len:
                 max_len = len(v)
 
-        # cap widths so it stays printable
         ws.column_dimensions[col_letter].width = min(max(max_len + 2, 8), 22)
-       
-        # -----------------------------
-        # CONDITIONAL FORMATTING (Excel)
-        # -----------------------------
-    
-            start_row = 2
-            start_col = 2  # column B (skip Player)
-            end_row = ws.max_row
-            end_col = ws.max_column
-        
-            if end_row >= start_row and end_col >= start_col:
-                start_cell = f"{get_column_letter(start_col)}{start_row}"
-                end_cell = f"{get_column_letter(end_col)}{end_row}"
-                data_range = f"{start_cell}:{end_cell}"
-        
-                # Gray out zeros
-                zero_fill = PatternFill("solid", fgColor="EFEFEF")
-                zero_rule = FormulaRule(
-                    formula=[f"{get_column_letter(start_col)}{start_row}=0"],
-                    fill=zero_fill,
-                    stopIfTrue=True
-                )
-                ws.conditional_formatting.add(data_range, zero_rule)
-        
-                # Heatmap for non-zeros
-                heat_rule = ColorScaleRule(
-                    start_type="num", start_value=1, start_color="FFFFFF",
-                    mid_type="percentile", mid_value=50, mid_color="FFF2CC",
-                    end_type="max", end_color="F8CBAD"
-                )
-                ws.conditional_formatting.add(data_range, heat_rule)
-        
-            # Flag UNKNOWN if present
-            if "UNKNOWN" in df_season.columns:
-                unk_idx = list(df_season.columns).index("UNKNOWN") + 1
-                unk_col = get_column_letter(unk_idx)
-                unk_range = f"{unk_col}{start_row}:{unk_col}{end_row}"
-        
-                unk_fill = PatternFill("solid", fgColor="FFC7CE")
-                unk_rule = CellIsRule(operator="greaterThan", formula=["0"], fill=unk_fill)
-                ws.conditional_formatting.add(unk_range, unk_rule)   
-           
+
+    # -----------------------------
+    # CONDITIONAL FORMATTING (Excel)
+    # -----------------------------
+
+    start_row = 2
+    start_col = 2  # column B (skip Player)
+    end_row = ws.max_row
+    end_col = ws.max_column
+
+    if end_row >= start_row and end_col >= start_col:
+        start_cell = f"{get_column_letter(start_col)}{start_row}"
+        end_cell = f"{get_column_letter(end_col)}{end_row}"
+        data_range = f"{start_cell}:{end_cell}"
+
+        # Gray out zeros
+        zero_fill = PatternFill("solid", fgColor="EFEFEF")
+        zero_rule = FormulaRule(
+            formula=[f"{get_column_letter(start_col)}{start_row}=0"],
+            fill=zero_fill,
+            stopIfTrue=True
+        )
+        ws.conditional_formatting.add(data_range, zero_rule)
+
+        # Heatmap for non-zeros
+        heat_rule = ColorScaleRule(
+            start_type="num", start_value=1, start_color="FFFFFF",
+            mid_type="percentile", mid_value=50, mid_color="FFF2CC",
+            end_type="max", end_color="F8CBAD"
+        )
+        ws.conditional_formatting.add(data_range, heat_rule)
+
+    # Flag UNKNOWN if present
+    if "UNKNOWN" in df_season.columns:
+        unk_idx = list(df_season.columns).index("UNKNOWN") + 1
+        unk_col = get_column_letter(unk_idx)
+        unk_range = f"{unk_col}{start_row}:{unk_col}{end_row}"
+
+        unk_fill = PatternFill("solid", fgColor="FFC7CE")
+        unk_rule = CellIsRule(operator="greaterThan", formula=["0"], fill=unk_fill)
+        ws.conditional_formatting.add(unk_range, unk_rule)
+
     # 4) Optional: make numbers centered
     num_align = Alignment(horizontal="center", vertical="center")
     for row in ws.iter_rows(min_row=2, max_row=ws.max_row):
@@ -1159,6 +1155,7 @@ else:
             indiv_rows.append({"Type": rk, "Count": stats.get(rk, 0)})
 
     st.table(indiv_rows)
+
 
 
 
