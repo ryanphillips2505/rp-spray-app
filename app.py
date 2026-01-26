@@ -793,8 +793,9 @@ def add_game_to_season(season_team, season_players, game_team, game_players):
 # SIDEBAR
 # -----------------------------
 with st.sidebar:
-    if SETTINGS.get("logo_image") and os.path.exists(SETTINGS["logo_image"]):
-        st.image(SETTINGS["logo_image"], width=260)
+    if LOGO_PATH and os.path.exists(LOGO_PATH):
+        st.image(LOGO_PATH, width=260)
+
 
     st.markdown("### ⚾ Spray Lab")
     st.markdown(
@@ -1101,6 +1102,7 @@ else:
             indiv_rows.append({"Type": rk, "Count": stats.get(rk, 0)})
 
     st.table(indiv_rows)
+
 
 
 
