@@ -21,9 +21,18 @@
       "logo_path": "assets/claremore/logo.png",
       "background_path": "assets/claremore/background.jpg",
       "data_folder": "data/teams/clare2026"
-    }
+    },
+    "YUKON2026": {
+  "team_name": "Yukon High School",
+  "team_slug": "yukon",
+  "logo_path": "assets/yukon/logo.png",
+  "background_path": "assets/yukon/background.jpg",
+  "data_folder": "data/teams/YUKON2026"
+}
+
   }
 }
+
 
 
 
