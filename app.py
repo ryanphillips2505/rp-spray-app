@@ -49,13 +49,14 @@ SETTINGS = load_settings()
 
 SETTINGS_PATH = os.path.join("TEAM_CONFIG", "team_settings.json")
 
-@st.cache_data(show_spinner=False)
+
 def load_team_codes():
     if not os.path.exists(SETTINGS_PATH):
         return {}
     with open(SETTINGS_PATH, "r", encoding="utf-8") as f:
         data = json.load(f)
-        return data.get("codes", {})
+codes = data.get("codes", {})
+return {str(k).strip().upper(): v for k, v in codes.items()}
 
 def require_team_access():
     codes = load_team_codes()
@@ -71,7 +72,8 @@ def require_team_access():
     st.title("RP Spray Analytics")
     st.markdown("### Enter Access Code")
 
-    code = st.text_input("Access Code").strip()
+  code = st.text_input("Access Code").strip().upper()
+
 
     if st.button("Unlock"):
         if code in codes:
@@ -1088,5 +1090,6 @@ else:
             indiv_rows.append({"Type": rk, "Count": stats.get(rk, 0)})
 
     st.table(indiv_rows)
+
 
 
