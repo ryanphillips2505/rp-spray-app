@@ -4,19 +4,16 @@ import json
 import base64
 import re
 import hashlib
-import time  # ✅ NEW: used for anti-stuck processing lock + failsafe unlock
+import time  # ✅ used for anti-stuck processing lock + failsafe unlock
 from datetime import datetime
 from typing import Optional, Tuple
-import pandas as pd   # ✅ MOVE IT HERE
+import pandas as pd
 from io import BytesIO
 
 from openpyxl.utils import get_column_letter
 from openpyxl.formatting.rule import ColorScaleRule, FormulaRule, CellIsRule
 from openpyxl.styles import PatternFill
 from supabase import create_client, Client
-
-
-
 
 
 def normalize_pbp(text: str) -> str:
@@ -118,27 +115,132 @@ TEAM_CODE, TEAM_CFG = require_team_access()
 TEAM_CFG = TEAM_CFG or {}
 
 # -----------------------------
-# TEAM-SCOPED DATA PATHS (per access code)
-# -----------------------------
-TEAM_DATA_ROOT = os.path.join("data", "teams", str(TEAM_CODE).upper())
-ROSTERS_DIR = os.path.join(TEAM_DATA_ROOT, "rosters")
-SEASON_DIR = os.path.join(TEAM_DATA_ROOT, "season_totals")
-
-os.makedirs(ROSTERS_DIR, exist_ok=True)
-os.makedirs(SEASON_DIR, exist_ok=True)
-
-
-# -----------------------------
-# ✅ TEAM-ISOLATED STORAGE (FIXES OCS vs CLAREMORE BLEED-OVER)
+# ✅ TEAM-ISOLATED STORAGE (folders only for rosters; totals are in Supabase)
 # Put this RIGHT AFTER the access gate.
 # -----------------------------
 TEAM_CODE_SAFE = str(TEAM_CODE).strip().upper()
 TEAM_ROOT = os.path.join("data", "teams", TEAM_CODE_SAFE)
 TEAM_ROSTERS_DIR = os.path.join(TEAM_ROOT, "rosters")
-TEAM_SEASON_DIR = os.path.join(TEAM_ROOT, "season_totals")
+TEAM_SEASON_DIR = os.path.join(TEAM_ROOT, "season_totals")  # legacy folder; not used for season totals anymore
 
 os.makedirs(TEAM_ROSTERS_DIR, exist_ok=True)
 os.makedirs(TEAM_SEASON_DIR, exist_ok=True)
+
+# -----------------------------
+# SUPABASE (persistent storage)
+# -----------------------------
+@st.cache_resource(show_spinner=False)
+def get_supabase() -> Client:
+    url = st.secrets.get("SUPABASE_URL", "").strip()
+    key = st.secrets.get("SUPABASE_SERVICE_KEY", "").strip()  # service role key (server-side only)
+    if not url or not key:
+        raise RuntimeError("Missing SUPABASE_URL or SUPABASE_SERVICE_KEY in Streamlit secrets.")
+    return create_client(url, key)
+
+
+supabase = get_supabase()
+
+
+def db_load_season_totals(team_code: str, team_key: str, current_roster: set[str]):
+    """
+    Returns (season_team, season_players, games_played, processed_hashes_set)
+    """
+    season_team = empty_stat_dict()
+    season_players = {p: empty_stat_dict() for p in current_roster}
+    games_played = 0
+
+    # season_totals row
+    res = (
+        supabase.table("season_totals")
+        .select("data, games_played")
+        .eq("team_code", team_code)
+        .eq("team_key", team_key)
+        .limit(1)
+        .execute()
+    )
+
+    if res.data:
+        row = res.data[0]
+        payload = row.get("data") or {}
+        raw_team = payload.get("team") or {}
+        raw_players = payload.get("players") or {}
+
+        season_team = ensure_all_keys(raw_team if isinstance(raw_team, dict) else {})
+        season_players = {}
+
+        if isinstance(raw_players, dict):
+            for p, stats in raw_players.items():
+                season_players[p] = ensure_all_keys(stats) if isinstance(stats, dict) else empty_stat_dict()
+
+        # ensure roster players exist
+        for p in current_roster:
+            if p not in season_players:
+                season_players[p] = empty_stat_dict()
+
+        games_played = int(row.get("games_played") or 0)
+
+    # processed games hashes (dedupe)
+    pres = (
+        supabase.table("processed_games")
+        .select("game_hash")
+        .eq("team_code", team_code)
+        .eq("team_key", team_key)
+        .execute()
+    )
+
+    processed_set = set()
+    if pres.data:
+        processed_set = {r["game_hash"] for r in pres.data if r.get("game_hash")}
+
+    return season_team, season_players, games_played, processed_set
+
+
+def db_save_season_totals(team_code: str, team_key: str, season_team: dict, season_players: dict, games_played: int):
+    """
+    UPSERT one row per (team_code, team_key)
+    Requires UNIQUE(team_code, team_key) on season_totals
+    """
+    payload = {"team": season_team, "players": season_players}
+
+    (
+        supabase.table("season_totals")
+        .upsert(
+            {
+                "team_code": team_code,
+                "team_key": team_key,
+                "data": payload,
+                "games_played": int(games_played),
+                "updated_at": datetime.utcnow().isoformat(),
+            },
+            on_conflict="team_code,team_key",
+        )
+        .execute()
+    )
+
+
+def db_try_mark_game_processed(team_code: str, team_key: str, game_hash: str) -> bool:
+    """
+    Returns True if we successfully marked as processed (new),
+    False if it already existed.
+    Requires UNIQUE(team_code, team_key, game_hash) on processed_games
+    """
+    try:
+        supabase.table("processed_games").insert(
+            {"team_code": team_code, "team_key": team_key, "game_hash": game_hash}
+        ).execute()
+        return True
+    except Exception:
+        # Unique constraint trip => already processed
+        return False
+
+
+def db_reset_season(team_code: str, team_key: str):
+    # wipe totals
+    supabase.table("season_totals").delete().eq("team_code", team_code).eq("team_key", team_key).execute()
+
+    # wipe processed hashes
+    supabase.table("processed_games").delete().eq("team_code", team_code).eq("team_key", team_key).execute()
+
 
 # -----------------------------
 # PAGE CONFIG
@@ -357,7 +459,6 @@ RIGHT_SIDE_PATTERNS = [
 # -----------------------------
 # RUNNING EVENTS (SB / CS / DI) — PICKOFFS REMOVED + FIXED
 # -----------------------------
-
 SB_ACTION_REGEX = re.compile(
     r"""
     \b(?:steals?|stole|stolen\s+base)\b
@@ -688,7 +789,6 @@ def classify_location(line_lower: str, strict_mode: bool = False):
 # -----------------------------
 def list_team_files():
     files = []
-    # ✅ CHANGED: read from TEAM_ROSTERS_DIR (isolated per access code)
     for fn in os.listdir(TEAM_ROSTERS_DIR):
         if fn.lower().endswith(".txt"):
             files.append(fn)
@@ -706,7 +806,6 @@ def safe_team_key(team_name: str) -> str:
 
 
 def roster_path_for_file(filename: str) -> str:
-    # ✅ CHANGED: write to TEAM_ROSTERS_DIR (isolated per access code)
     return os.path.join(TEAM_ROSTERS_DIR, filename)
 
 
@@ -723,10 +822,10 @@ def save_roster_text(path: str, text: str):
 
 
 # -----------------------------
-# SEASON FILES PER TEAM
+# LEGACY LOCAL SEASON FILES (NOT USED ON STREAMLIT CLOUD ANYMORE)
+# Kept so old installs don’t crash if referenced elsewhere, but UI/Process/Reset/Backup now use Supabase only.
 # -----------------------------
 def season_file_for_team(team_key: str) -> str:
-    # ✅ CHANGED: season totals isolated per access code
     return os.path.join(TEAM_SEASON_DIR, f"{team_key}_spray_totals.json")
 
 
@@ -803,7 +902,6 @@ with st.sidebar:
 
     st.markdown("---")
     st.write("**Add teams** by creating a `.txt` roster file in:")
-    # ✅ CHANGED: show the isolated folder so each org knows where it is
     st.code(f"{TEAM_ROSTERS_DIR}/", language="text")
 
 # -----------------------------
@@ -861,20 +959,18 @@ with col_a:
 current_roster = {line.strip().strip('"') for line in roster_text.split("\n") if line.strip()}
 st.write(f"**Hitters loaded:** {len(current_roster)}")
 
-season_team, season_players, games_played = load_season_totals(team_key, current_roster)
-sf = season_file_for_team(team_key)
+# ✅ LOAD FROM SUPABASE ONLY (source of truth)
+season_team, season_players, games_played, processed_set = db_load_season_totals(TEAM_CODE_SAFE, team_key, current_roster)
 
-if os.path.exists(sf):
-    last_updated_dt = datetime.fromtimestamp(os.path.getmtime(sf))
-    last_updated_str = last_updated_dt.strftime("%Y-%m-%d %H:%M")
-else:
-    last_updated_str = "Never"
+# ✅ No local season JSON files on Streamlit Cloud
+sf = "(stored in Supabase)"
+last_updated_str = "Supabase"
 
 st.markdown(
     f"""
     <div class="spray-card">
         <strong>Active team:</strong> {selected_team}<br>
-        <strong>Season file:</strong> <code>{sf}</code><br>
+        <strong>Season storage:</strong> <code>{sf}</code><br>
         <strong>Games processed:</strong> {games_played}<br>
         <strong>Last updated:</strong> {last_updated_str}
     </div>
@@ -885,25 +981,25 @@ st.markdown(
 col_reset, _ = st.columns([1, 3])
 with col_reset:
     if st.button(f"❗ Reset SEASON totals for {selected_team}"):
-        season_team = empty_stat_dict()
-        season_players = {p: empty_stat_dict() for p in current_roster}
-        games_played = 0
-        save_season_totals(team_key, season_team, season_players, games_played)
-        st.warning("Season totals reset for this team.")
+        db_reset_season(TEAM_CODE_SAFE, team_key)
+
+        # reload fresh from DB so UI matches immediately
+        season_team, season_players, games_played, processed_set = db_load_season_totals(
+            TEAM_CODE_SAFE, team_key, current_roster
+        )
+        st.warning("Season totals reset for this team (Supabase).")
+        st.rerun()
 
 # -----------------------------
-# ✅ COACH-PROOF BACKUP / RESTORE (FASTEST SAFETY NET)
+# ✅ COACH-PROOF BACKUP / RESTORE (SUPABASE)
 # -----------------------------
 with st.expander("🛟 Backup / Restore (Coach-Proof) — Download + Upload Season Totals"):
-    # Download: read the current season file as-is (best for exact restore)
-    if os.path.exists(sf):
-        try:
-            with open(sf, "r", encoding="utf-8") as f:
-                raw_payload = json.load(f)
-        except Exception:
-            raw_payload = {"meta": {"games_played": games_played}, "team": season_team, "players": season_players}
-    else:
-        raw_payload = {"meta": {"games_played": games_played}, "team": season_team, "players": season_players}
+    # ✅ Download = whatever is currently in memory (already loaded from Supabase)
+    raw_payload = {
+        "meta": {"games_played": games_played},
+        "team": season_team,
+        "players": season_players,
+    }
 
     backup_bytes = json.dumps(raw_payload, indent=2).encode("utf-8")
     safe_team = re.sub(r"[^A-Za-z0-9_-]+", "_", selected_team).strip("_")
@@ -956,16 +1052,26 @@ with st.expander("🛟 Backup / Restore (Coach-Proof) — Download + Upload Seas
                 if p not in fixed_players:
                     fixed_players[p] = empty_stat_dict()
 
-            # If processed keys exist, games_played should match that list
-            processed = incoming_team.get("_processed_game_keys", [])
-            if isinstance(processed, list):
-                restored_games_played = len(set(processed))
-            else:
-                restored_games_played = int(incoming_meta.get("games_played", 0) or 0)
+            # Determine games_played
+            restored_games_played = int(incoming_meta.get("games_played", 0) or 0)
 
-            save_season_totals(team_key, incoming_team, fixed_players, restored_games_played)
+            # If backup contains legacy processed list, use it
+            legacy_processed = incoming_team.get("_processed_game_keys", [])
+            legacy_hashes = []
+            if isinstance(legacy_processed, list):
+                legacy_hashes = [str(x) for x in legacy_processed if x]
+                restored_games_played = len(set(legacy_hashes))
 
-            st.success("✅ Restore complete. Reloading…")
+            # ✅ Coach-proof restore: wipe DB for this team, then re-save totals, then re-insert hashes if present
+            db_reset_season(TEAM_CODE_SAFE, team_key)
+            db_save_season_totals(TEAM_CODE_SAFE, team_key, incoming_team, fixed_players, restored_games_played)
+
+            # Rebuild processed dedupe keys if they exist in the backup
+            if legacy_hashes:
+                for h in set(legacy_hashes):
+                    db_try_mark_game_processed(TEAM_CODE_SAFE, team_key, h)
+
+            st.success("✅ Restore complete (Supabase). Reloading…")
             st.rerun()
 
         except Exception as e:
@@ -982,7 +1088,7 @@ raw_text = st.text_area(
 )
 
 # -----------------------------
-# PROCESS GAME (FIXED: never-stuck lock + proper rerun)
+# PROCESS GAME (SUPABASE DEDUPE + SUPABASE SAVE)
 # -----------------------------
 if "processing_game" not in st.session_state:
     st.session_state.processing_game = False
@@ -1017,18 +1123,16 @@ if st.button("📥 Process Game (ADD to Season Totals)"):
             st.error("Roster is empty. Add hitters first (and save).")
             st.stop()
 
-        # --- SAFE TO PROCESS ---
-        # build stable key so the same PBP can't be added twice
+        # build stable hash so the same PBP can't be added twice
         gkey = game_key_from_pbp(team_key, raw_text)
 
-        processed = season_team.get("_processed_game_keys", [])
-        if not isinstance(processed, list):
-            processed = []
-        processed_set = set(processed)
-
-        if gkey in processed_set:
+        # HARD dedupe (database-enforced)
+        if not db_try_mark_game_processed(TEAM_CODE_SAFE, team_key, gkey):
             st.warning("This exact play-by-play has already been processed for this team. Skipping.")
             st.stop()
+
+        # keep local set in sync for games_played calculation
+        processed_set.add(gkey)
 
         lines = [line.strip() for line in raw_text.split("\n") if line.strip()]
 
@@ -1101,13 +1205,10 @@ if st.button("📥 Process Game (ADD to Season Totals)"):
 
         add_game_to_season(season_team, season_players, game_team, game_players)
 
-        processed_set.add(gkey)
-        season_team["_processed_game_keys"] = sorted(processed_set)
-        games_played = len(processed_set)
+        # ✅ Save totals to Supabase (persistent)
+        db_save_season_totals(TEAM_CODE_SAFE, team_key, season_team, season_players, len(processed_set))
 
-        save_season_totals(team_key, season_team, season_players, games_played)
-
-        st.success("✅ Game processed and added to season totals.")
+        st.success("✅ Game processed and added to season totals (Supabase).")
         rerun_needed = True
 
     finally:
@@ -1115,10 +1216,8 @@ if st.button("📥 Process Game (ADD to Season Totals)"):
         st.session_state.processing_game = False
         st.session_state.processing_started_at = 0.0
 
-    # ✅ IMPORTANT: rerun AFTER finally so the lock can't get stuck
     if rerun_needed:
         st.rerun()
-
 
 # -----------------------------
 # SEASON OUTPUTS
@@ -1140,7 +1239,6 @@ for player in sorted(season_players.keys()):
 
 df_season = pd.DataFrame(season_rows)
 
-# scouting-friendly column order (ONLY what you already track)
 col_order = (
     ["Player"]
     + LOCATION_KEYS
@@ -1148,8 +1246,6 @@ col_order = (
     + COMBO_KEYS
     + RUN_KEYS
 )
-
-# safety: keep only columns that exist
 col_order = [c for c in col_order if c in df_season.columns]
 df_season = df_season[col_order]
 
@@ -1287,6 +1383,7 @@ else:
             indiv_rows.append({"Type": rk, "Count": stats.get(rk, 0)})
 
     st.table(indiv_rows)
+
 
 
 
