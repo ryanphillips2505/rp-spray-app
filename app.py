@@ -10,9 +10,11 @@ from typing import Optional, Tuple
 # PATHS / FOLDERS
 # -----------------------------
 SETTINGS_PATH = os.path.join("TEAM_CONFIG", "team_settings.json")
-ROSTERS_DIR = os.path.join("TEAM_CONFIG", "rosters")
+
+# NOTE: KEEP these as the "template" / repo folders (do NOT write team data here)
+ROSTERS_DIR = os.path.join("TEAM_CONFIG", "rosters")  # (legacy / admin-only)
 ASSETS_DIR = "assets"
-SEASON_DIR = os.path.join("data", "season_totals")
+SEASON_DIR = os.path.join("data", "season_totals")    # (legacy / admin-only)
 
 os.makedirs(ROSTERS_DIR, exist_ok=True)
 os.makedirs(ASSETS_DIR, exist_ok=True)
@@ -86,6 +88,18 @@ def require_team_access():
 
 TEAM_CODE, TEAM_CFG = require_team_access()
 TEAM_CFG = TEAM_CFG or {}
+
+# -----------------------------
+# ✅ TEAM-ISOLATED STORAGE (FIXES OCS vs CLAREMORE BLEED-OVER)
+# Put this RIGHT AFTER the access gate.
+# -----------------------------
+TEAM_CODE_SAFE = str(TEAM_CODE).strip().upper()
+TEAM_ROOT = os.path.join("data", "teams", TEAM_CODE_SAFE)
+TEAM_ROSTERS_DIR = os.path.join(TEAM_ROOT, "rosters")
+TEAM_SEASON_DIR = os.path.join(TEAM_ROOT, "season_totals")
+
+os.makedirs(TEAM_ROSTERS_DIR, exist_ok=True)
+os.makedirs(TEAM_SEASON_DIR, exist_ok=True)
 
 # -----------------------------
 # PAGE CONFIG
@@ -619,7 +633,8 @@ def classify_location(line_lower: str, strict_mode: bool = False):
 # -----------------------------
 def list_team_files():
     files = []
-    for fn in os.listdir(ROSTERS_DIR):
+    # ✅ CHANGED: read from TEAM_ROSTERS_DIR (isolated per access code)
+    for fn in os.listdir(TEAM_ROSTERS_DIR):
         if fn.lower().endswith(".txt"):
             files.append(fn)
     files.sort(key=lambda x: x.lower())
@@ -633,7 +648,8 @@ def safe_team_key(team_name: str) -> str:
     return key or "team"
 
 def roster_path_for_file(filename: str) -> str:
-    return os.path.join(ROSTERS_DIR, filename)
+    # ✅ CHANGED: write to TEAM_ROSTERS_DIR (isolated per access code)
+    return os.path.join(TEAM_ROSTERS_DIR, filename)
 
 def load_roster_text(path: str) -> str:
     if os.path.exists(path):
@@ -649,7 +665,8 @@ def save_roster_text(path: str, text: str):
 # SEASON FILES PER TEAM
 # -----------------------------
 def season_file_for_team(team_key: str) -> str:
-    return os.path.join(SEASON_DIR, f"{team_key}_spray_totals.json")
+    # ✅ CHANGED: season totals isolated per access code
+    return os.path.join(TEAM_SEASON_DIR, f"{team_key}_spray_totals.json")
 
 def load_season_totals(team_key: str, current_roster):
     filename = season_file_for_team(team_key)
@@ -721,7 +738,8 @@ with st.sidebar:
 
     st.markdown("---")
     st.write("**Add teams** by creating a `.txt` roster file in:")
-    st.code("TEAM_CONFIG/rosters/", language="text")
+    # ✅ CHANGED: show the isolated folder so each org knows where it is
+    st.code(f"{TEAM_ROSTERS_DIR}/", language="text")
 
 # -----------------------------
 # TEAM SELECTION (AUTO FROM FILES)
@@ -730,7 +748,7 @@ st.subheader("🏟️ Team Selection")
 
 team_files = list_team_files()
 if not team_files:
-    st.warning("No roster files found in TEAM_CONFIG/rosters/. Create one like 'My Team.txt' with 1 hitter per line.")
+    st.warning("No roster files found yet for THIS access code. Create one below.")
     st.stop()
 
 team_names = [team_name_from_file(f) for f in team_files]
@@ -739,7 +757,7 @@ selected_file = team_files[team_names.index(selected_team)]
 team_key = safe_team_key(selected_team)
 
 with st.expander("➕ Add a new team roster file"):
-    new_team_name = st.text_input("New team name (creates a .txt in TEAM_CONFIG/rosters/):")
+    new_team_name = st.text_input("New team name (creates a .txt in your private team folder):")
     if st.button("Create Team File"):
         if not new_team_name.strip():
             st.error("Enter a team name first.")
@@ -991,6 +1009,7 @@ else:
             indiv_rows.append({"Type": rk, "Count": stats.get(rk, 0)})
 
     st.table(indiv_rows)
+
 
 
 
