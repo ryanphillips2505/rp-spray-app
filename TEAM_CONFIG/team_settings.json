@@ -10,11 +10,10 @@
   "codes": {
     "OCS2026": {
       "team_name": "Oklahoma Christian Schools",
-      "team_slug": "ocs",
+      "team_slug": "ocs2026",
       "logo_path": "assets/ocs/ocslogo.png",
       "background_path": "assets/ocs/ocsbackground.jpg",
-      "roster_file": "TEAM_CONFIG/rosters/ocs.txt",
-      "data_folder": "data/OCS"
+      "data_folder": "data/teams/OCS2026"
     },
     "CLARE2026": {
       "team_name": "Claremore High School",
@@ -26,5 +25,6 @@
     }
   }
 }
+
 
 
