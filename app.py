@@ -1,4 +1,3 @@
-# force rebuild
 import streamlit as st
 import os
 import json
@@ -759,8 +758,7 @@ with st.sidebar:
 st.subheader("🏟️ Team Selection")
 
 team_files = list_team_files()
-# ---- DEBUG (TEMP): show where rosters are being read from ----
-with st.expander("🛠 Debug: Roster folder + files (TEMP)"):
+
     st.write("TEAM_CODE:", TEAM_CODE)
     st.write("Resolved ROSTERS_DIR:", ROSTERS_DIR)
     try:
@@ -1031,6 +1029,7 @@ else:
             indiv_rows.append({"Type": rk, "Count": stats.get(rk, 0)})
 
     st.table(indiv_rows)
+
 
 
 
