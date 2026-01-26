@@ -4,6 +4,7 @@ import json
 import base64
 import re
 import hashlib
+import httpx
 import time  # ✅ used for anti-stuck processing lock + failsafe unlock
 from datetime import datetime
 from typing import Optional, Tuple
@@ -206,6 +207,20 @@ def get_supabase() -> Client:
 
 supabase = get_supabase()
 
+def supa_execute_with_retry(builder, tries: int = 5):
+    """
+    Retries Supabase .execute() on transient network issues.
+    """
+    last_err = None
+    for i in range(tries):
+        try:
+            return builder.execute()
+        except (httpx.ReadError, httpx.ConnectError, httpx.ReadTimeout) as e:
+            last_err = e
+            time.sleep(0.6 * (i + 1))  # simple backoff
+    raise last_err
+
+
 
 def supabase_health_check_or_stop():
     """
@@ -214,8 +229,9 @@ def supabase_health_check_or_stop():
     """
     try:
         # Minimal probes
-        supabase.table("season_totals").select("id").limit(1).execute()
-        supabase.table("processed_games").select("id").limit(1).execute()
+        supa_execute_with_retry(supabase.table("season_totals").select("id").limit(1))
+        supa_execute_with_retry(supabase.table("processed_games").select("id").limit(1))
+
         return True
     except Exception as e:
         _show_db_error(e, "Supabase not ready")
@@ -1436,3 +1452,4 @@ else:
             indiv_rows.append({"Type": rk, "Count": stats.get(rk, 0)})
 
     st.table(indiv_rows)
+
