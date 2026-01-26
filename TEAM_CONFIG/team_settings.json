@@ -14,7 +14,7 @@
       "logo_path": "assets/ocs/ocslogo.png",
       "background_path": "assets/ocs/ocsbackground.jpg",
       "roster_file": "TEAM_CONFIG/rosters/ocs.txt",
-      "data_folder": "data/ocs"
+      "data_folder": "data/OCS"
     },
     "CLARE2026": {
       "team_name": "Claremore High School",
@@ -26,4 +26,5 @@
     }
   }
 }
+
 
