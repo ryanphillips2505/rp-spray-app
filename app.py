@@ -43,23 +43,27 @@ def load_settings():
 
 SETTINGS = load_settings()
 
-# ==============================
+# ============================
 # ACCESS CODE GATE
-# ==============================
+# ============================
 
 SETTINGS_PATH = os.path.join("TEAM_CONFIG", "team_settings.json")
 
-
-def load_team_codes():
+@st.cache_data(show_spinner=False)
+def load_team_codes() -> dict:
     if not os.path.exists(SETTINGS_PATH):
         return {}
-    with open(SETTINGS_PATH, "r", encoding="utf-8") as f:
-        data = json.load(f)
-        codes = data.get("codes", {})
+    try:
+        with open(SETTINGS_PATH, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        codes = data.get("codes", {}) or {}
+        # Normalize keys to uppercase with no spaces
         return {str(k).strip().upper(): v for k, v in codes.items()}
-        
-        def require_team_access():
-            codes = load_team_codes()
+    except Exception:
+        return {}
+
+def require_team_access():
+    codes = load_team_codes()
 
     if "team_code" not in st.session_state:
         st.session_state.team_code = None
@@ -84,6 +88,7 @@ def load_team_codes():
     st.stop()
 
 TEAM_CODE, TEAM_CFG = require_team_access()
+
 # -----------------------------
 # PAGE CONFIG
 # -----------------------------
@@ -1090,6 +1095,7 @@ else:
             indiv_rows.append({"Type": rk, "Count": stats.get(rk, 0)})
 
     st.table(indiv_rows)
+
 
 
 
