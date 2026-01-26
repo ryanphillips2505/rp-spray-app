@@ -57,7 +57,6 @@ def load_team_codes() -> dict:
         with open(SETTINGS_PATH, "r", encoding="utf-8") as f:
             data = json.load(f)
         codes = data.get("codes", {}) or {}
-        # Normalize keys to uppercase with no spaces
         return {str(k).strip().upper(): v for k, v in codes.items()}
     except Exception:
         return {}
@@ -68,11 +67,9 @@ def require_team_access():
     if "team_code" not in st.session_state:
         st.session_state.team_code = None
 
-    # Already unlocked
     if st.session_state.team_code in codes:
         return st.session_state.team_code, codes[st.session_state.team_code]
 
-    # Lock screen
     st.title("RP Spray Analytics")
     st.markdown("### Enter Access Code")
 
@@ -90,7 +87,6 @@ def require_team_access():
 TEAM_CODE, TEAM_CFG = require_team_access()
 TEAM_CFG = TEAM_CFG or {}
 
-
 # -----------------------------
 # PAGE CONFIG
 # -----------------------------
@@ -105,23 +101,19 @@ def get_base64_image(path: str) -> str:
         return ""
     with open(path, "rb") as f:
         return base64.b64encode(f.read()).decode("utf-8")
-    
+
 # --- Branding (fallback + team overrides) ---
 PRIMARY = SETTINGS["primary_color"]
 SECONDARY = SETTINGS["secondary_color"]
 
-# Defaults (fallback RP branding)
 LOGO_PATH = SETTINGS.get("logo_image", "assets/logo.png")
 BG_PATH = SETTINGS.get("background_image", "assets/background.jpg")
 
-# Team overrides (if unlocked)
 if TEAM_CFG:
     LOGO_PATH = TEAM_CFG.get("logo_path", LOGO_PATH)
     BG_PATH = TEAM_CFG.get("background_path", BG_PATH)
 
 BG_B64 = get_base64_image(BG_PATH)
-
-
 
 # -----------------------------
 # FONTS (force load)
@@ -148,17 +140,12 @@ st.markdown(
         text-align: center !important;
         letter-spacing: 0.20em !important;
         text-transform: uppercase !important;
-
-        /* CRISP BORDER */
         -webkit-text-stroke: 2.5px #000000;
-
-        /* NO BLUR — HARD SHADOW ONLY */
         text-shadow:
             2px 2px 0 #000000,
             -2px 2px 0 #000000,
             2px -2px 0 #000000,
             -2px -2px 0 #000000;
-
         margin-top: -10px !important;
         margin-bottom: 12px !important;
     }}
@@ -189,14 +176,8 @@ st.markdown(
 # -----------------------------
 # HEADER
 # -----------------------------
-st.markdown(
-    f"<h1 class='app-title'>{SETTINGS['app_title']}</h1>",
-    unsafe_allow_html=True,
-)
-st.markdown(
-    f"<div class='app-subtitle'>{SETTINGS['subtitle']}</div>",
-    unsafe_allow_html=True,
-)
+st.markdown(f"<h1 class='app-title'>{SETTINGS['app_title']}</h1>", unsafe_allow_html=True)
+st.markdown(f"<div class='app-subtitle'>{SETTINGS['subtitle']}</div>", unsafe_allow_html=True)
 st.markdown("---")
 
 # -----------------------------
@@ -207,7 +188,7 @@ BALLTYPE_KEYS = ["GB", "FB"]
 COMBO_LOCS = [loc for loc in LOCATION_KEYS if loc not in ["Bunt", "Sac Bunt", "UNKNOWN"]]
 COMBO_KEYS = [f"GB-{loc}" for loc in COMBO_LOCS] + [f"FB-{loc}" for loc in COMBO_LOCS]
 
-# Running event tracking (NOT balls in play)
+# Running event tracking (NOT balls in play) — PICKOFFS REMOVED
 RUN_KEYS = [
     # Stolen Bases
     "SB", "SB-2B", "SB-3B", "SB-H",
@@ -215,10 +196,6 @@ RUN_KEYS = [
     "CS", "CS-2B", "CS-3B", "CS-H",
     # Defensive Indifference
     "DI", "DI-2B", "DI-3B", "DI-H",
-    # Pickoffs
-    "PO", "PO-1B", "PO-2B", "PO-3B", "PO-H",
-    # Picked off + caught stealing
-    "POCS", "POCS-2B", "POCS-3B", "POCS-H",
 ]
 
 # -----------------------------
@@ -321,11 +298,11 @@ RIGHT_SIDE_PATTERNS = [
     "between first baseman and second baseman", "between 1st and 2nd",
     "between second and first"
 ]
+
 # -----------------------------
-# RUNNING EVENTS (SB / CS / DI / PO / POCS) — UPGRADED
+# RUNNING EVENTS (SB / CS / DI) — PICKOFFS REMOVED + FIXED
 # -----------------------------
 
-# SB: steals/stole/stolen base + optional wording + parentheses
 SB_ACTION_REGEX = re.compile(
     r"""
     \b(?:steals?|stole|stolen\s+base)\b
@@ -337,7 +314,6 @@ SB_ACTION_REGEX = re.compile(
     re.IGNORECASE | re.VERBOSE
 )
 
-# CS: caught stealing / out stealing + optional filler + optional base
 CS_ACTION_REGEX = re.compile(
     r"""
     \b(?:caught\s+stealing|out\s+stealing)\b
@@ -348,7 +324,6 @@ CS_ACTION_REGEX = re.compile(
     re.IGNORECASE | re.VERBOSE
 )
 
-# DI: defensive indifference with advance phrasing
 DI_REGEX_1 = re.compile(
     r"""
     \bdefensive\s+indifference\b
@@ -371,54 +346,15 @@ DI_REGEX_2 = re.compile(
     re.IGNORECASE | re.VERBOSE
 )
 
-DI_REGEX_BARE = re.compile(
-    r"\bdefensive\s+indifference\b",
-    re.IGNORECASE
-)
+DI_REGEX_BARE = re.compile(r"\bdefensive\s+indifference\b", re.IGNORECASE)
 
-# PO: picked off / pickoff + optional base
-PO_REGEX = re.compile(
-    r"""
-    \b(?:picked\s+off|pickoff)\b
-    (?:\s+(?:at|on|from))?
-    (?:\s+base)?
-    (?:\s*(\(?\s*(?:1st|2nd|3rd|home|first|second|third)\s*\)?))?
-    """,
-    re.IGNORECASE | re.VERBOSE
-)
-
-# POCS: pickoff + caught stealing (either order)
-POCS_REGEX = re.compile(
-    r"""
-    \b(?:picked\s+off|pickoff)\b
-    .*?
-    \b(?:caught\s+stealing|out\s+stealing)\b
-    (?:\s+(?:at|trying\s+for|attempting|to))?
-    (?:\s+base)?
-    (?:\s*(\(?\s*(?:2nd|3rd|home|second|third)\s*\)?))?
-
-    |
-
-    \b(?:caught\s+stealing|out\s+stealing)\b
-    .*?
-    \b(?:picked\s+off|pickoff)\b
-    (?:\s+(?:at|on|from))?
-    (?:\s+base)?
-    (?:\s*(\(?\s*(?:2nd|3rd|home|second|third)\s*\)?))?
-    """,
-    re.IGNORECASE | re.VERBOSE
-)
-# Runner notation (some exports): "R1 steals 2nd", "R2 picked off", etc.
 RUNNER_TAG_REGEX = re.compile(r"\bR([123])\b", re.IGNORECASE)
-
 PAREN_NAME_REGEX = re.compile(r"\(([^)]+)\)")
 
 def normalize_base_bucket(prefix: str, base_raw: Optional[str]) -> str:
     if not base_raw:
-        return prefix  # unknown base
+        return prefix
     b = base_raw.strip().lower()
-    if b in ["1st", "first"]:
-        return f"{prefix}-1B"
     if b in ["2nd", "second"]:
         return f"{prefix}-2B"
     if b in ["3rd", "third"]:
@@ -429,10 +365,11 @@ def normalize_base_bucket(prefix: str, base_raw: Optional[str]) -> str:
 
 BAD_FIRST_TOKENS = {
     "top","bottom","inning","pitch","ball","strike","foul",
-    "runner","runners","advances","advance","steals","stole","caught","picked","pick","pickoff",
+    "runner","runners","advances","advance","steals","stole","caught",
     "substitution","defensive","offensive","double","triple","single","home",
     "out","safe","error","no","one","two","three",
 }
+
 def starts_like_name(token: str) -> bool:
     if not token:
         return False
@@ -495,10 +432,6 @@ def get_batter_name(line: str, roster: set[str]):
     return None
 
 def extract_runner_name_near_event(clean_line: str, match_start: int, roster: set[str]) -> Optional[str]:
-    """
-    Best-effort: runner name often appears immediately before the event phrase after the last comma.
-    Example: 'Ball 1, Ball 2, J Smith steals 2nd, ...'
-    """
     left = (clean_line[:match_start] or "").strip()
     if not left:
         return None
@@ -518,11 +451,6 @@ def extract_runner_name_near_event(clean_line: str, match_start: int, roster: se
     return None
 
 def extract_runner_name_fallback(clean_line: str, roster: set[str]) -> Optional[str]:
-    """
-    Backup methods:
-    - If line starts with a name, get_batter_name catches it
-    - If parentheses contain a name, try that
-    """
     runner = get_batter_name(clean_line, roster)
     if runner:
         return runner
@@ -539,30 +467,19 @@ def extract_runner_name_fallback(clean_line: str, roster: set[str]) -> Optional[
 def parse_running_event(clean_line: str, roster: set[str]) -> Tuple[Optional[str], Optional[str], Optional[str]]:
     """
     Returns (runner_name, total_key, base_key) or (None, None, None).
+    PICKOFFS REMOVED.
     """
-    # --- POCS (check first so it doesn't get swallowed by PO or CS) ---
-    m = POCS_REGEX.search(clean_line)
-    if m:
-        base_raw = None
-        for gi in range(1, (m.lastindex or 0) + 1):
-            if m.group(gi):
-                base_raw = m.group(gi)
-                break
-        base_key = normalize_base_bucket("POCS", base_raw)
-        runner = extract_runner_name_near_event(clean_line, m.start(), roster) or extract_runner_name_fallback(clean_line, roster)
-        return runner, "POCS", base_key
-
     # --- SB ---
     m = SB_ACTION_REGEX.search(clean_line)
     if m:
-        base_key = normalize_base_bucket("SB", m.group(1))
+        base_key = normalize_base_bucket("SB", m.group(1) if (m.lastindex or 0) >= 1 else None)
         runner = extract_runner_name_near_event(clean_line, m.start(), roster) or extract_runner_name_fallback(clean_line, roster)
         return runner, "SB", base_key
 
     # --- CS ---
     m = CS_ACTION_REGEX.search(clean_line)
     if m:
-        base_raw = m.group(1) if m.lastindex and m.group(1) else None
+        base_raw = m.group(1) if (m.lastindex or 0) >= 1 else None
         base_key = normalize_base_bucket("CS", base_raw)
         runner = extract_runner_name_near_event(clean_line, m.start(), roster) or extract_runner_name_fallback(clean_line, roster)
         return runner, "CS", base_key
@@ -570,21 +487,13 @@ def parse_running_event(clean_line: str, roster: set[str]) -> Tuple[Optional[str
     # --- DI ---
     m = DI_REGEX_1.search(clean_line) or DI_REGEX_2.search(clean_line)
     if m:
-        base_key = normalize_base_bucket("DI", m.group(1))
+        base_key = normalize_base_bucket("DI", m.group(1) if (m.lastindex or 0) >= 1 else None)
         runner = extract_runner_name_near_event(clean_line, m.start(), roster) or extract_runner_name_fallback(clean_line, roster)
         return runner, "DI", base_key
 
     if DI_REGEX_BARE.search(clean_line):
         runner = extract_runner_name_fallback(clean_line, roster)
         return runner, "DI", "DI"
-
-    # --- PO ---
-    m = PO_REGEX.search(clean_line)
-    if m:
-        base_raw = m.group(2) if m.lastindex and m.group(2) else None
-        base_key = normalize_base_bucket("PO", base_raw)
-        runner = extract_runner_name_near_event(clean_line, m.start(), roster) or extract_runner_name_fallback(clean_line, roster)
-        return runner, "PO", base_key
 
     return None, None, None
 
@@ -602,9 +511,11 @@ def is_ball_in_play(line_lower: str) -> bool:
 
         # running events — we track separately
         "caught stealing","out stealing",
-        "picked off","pickoff",
         "steals","stole","stealing",
         "defensive indifference",
+
+        # pickoffs (we are NOT tracking them now)
+        "picked off","pickoff",
     ]):
         return False
 
@@ -639,7 +550,6 @@ def is_ball_in_play(line_lower: str) -> bool:
 
 def classify_ball_type(line_lower: str):
     reasons = []
-    ball_type = None
     conf = 0
 
     if "bunt" in line_lower:
@@ -664,10 +574,6 @@ def classify_ball_type(line_lower: str):
     return None, conf, reasons
 
 def classify_location(line_lower: str, strict_mode: bool = False):
-    reasons = []
-    loc = None
-    conf = 0
-
     if "sacrifice bunt" in line_lower or "sac bunt" in line_lower or "sacrifice hit" in line_lower:
         return "Sac Bunt", 3, ["Contains 'sacrifice bunt/sac bunt' → Sac Bunt"]
 
@@ -675,6 +581,7 @@ def classify_location(line_lower: str, strict_mode: bool = False):
         return "Bunt", 3, ["Contains 'bunt' → Bunt"]
 
     candidates = []
+
     def add_candidates(patterns, code, label):
         for kw in patterns:
             idx = line_lower.find(kw)
@@ -705,7 +612,7 @@ def classify_location(line_lower: str, strict_mode: bool = False):
         if kw in line_lower:
             return "2B", 1, [f"Matched right-side phrase: '{kw}' → approximate 2B"]
 
-    return None, 0, reasons
+    return None, 0, []
 
 # -----------------------------
 # UNLIMITED TEAMS: read roster files
@@ -796,7 +703,6 @@ with st.sidebar:
     if LOGO_PATH and os.path.exists(LOGO_PATH):
         st.image(LOGO_PATH, width=260)
 
-
     st.markdown("### ⚾ Spray Lab")
     st.markdown(
         """
@@ -862,7 +768,7 @@ roster_text = st.text_area(
     height=220,
 )
 
-col_a, col_b = st.columns([1, 3])
+col_a, _ = st.columns([1, 3])
 with col_a:
     if st.button("💾 Save Roster to File"):
         save_roster_text(roster_path, roster_text)
@@ -932,7 +838,7 @@ if st.button("📥 Process Game (ADD to Season Totals)"):
             clean_line = re.sub(r"\s+", " ", clean_line).strip()
             line_lower = clean_line.lower()
 
-            # ----- RUNNING EVENTS (SB / CS / DI / PO / POCS) -----
+            # ----- RUNNING EVENTS (SB / CS / DI) -----
             runner, total_key, base_key = parse_running_event(clean_line, current_roster)
             if runner and total_key:
                 game_team[total_key] += 1
@@ -1011,8 +917,6 @@ if st.button("📥 Process Game (ADD to Season Totals)"):
             {"Type": "SB", "Count": game_team.get("SB", 0)},
             {"Type": "CS", "Count": game_team.get("CS", 0)},
             {"Type": "DI", "Count": game_team.get("DI", 0)},
-            {"Type": "PO", "Count": game_team.get("PO", 0)},
-            {"Type": "POCS", "Count": game_team.get("POCS", 0)},
             {"Type": "SB-2B", "Count": game_team.get("SB-2B", 0)},
             {"Type": "SB-3B", "Count": game_team.get("SB-3B", 0)},
             {"Type": "SB-H", "Count": game_team.get("SB-H", 0)},
@@ -1022,13 +926,6 @@ if st.button("📥 Process Game (ADD to Season Totals)"):
             {"Type": "DI-2B", "Count": game_team.get("DI-2B", 0)},
             {"Type": "DI-3B", "Count": game_team.get("DI-3B", 0)},
             {"Type": "DI-H", "Count": game_team.get("DI-H", 0)},
-            {"Type": "PO-1B", "Count": game_team.get("PO-1B", 0)},
-            {"Type": "PO-2B", "Count": game_team.get("PO-2B", 0)},
-            {"Type": "PO-3B", "Count": game_team.get("PO-3B", 0)},
-            {"Type": "PO-H", "Count": game_team.get("PO-H", 0)},
-            {"Type": "POCS-2B", "Count": game_team.get("POCS-2B", 0)},
-            {"Type": "POCS-3B", "Count": game_team.get("POCS-3B", 0)},
-            {"Type": "POCS-H", "Count": game_team.get("POCS-H", 0)},
         ])
 
         st.subheader("👤 Per-Player Spray – THIS GAME")
@@ -1042,11 +939,8 @@ if st.button("📥 Process Game (ADD to Season Totals)"):
             row["FB"] = stats.get("FB", 0)
             for ck in COMBO_KEYS:
                 row[ck] = stats.get(ck, 0)
-
-            # Running events
             for rk in RUN_KEYS:
                 row[rk] = stats.get(rk, 0)
-
             rows.append(row)
         st.dataframe(rows)
 
@@ -1066,11 +960,8 @@ for player in sorted(season_players.keys()):
     row["FB"] = stats.get("FB", 0)
     for ck in COMBO_KEYS:
         row[ck] = stats.get(ck, 0)
-
-    # Running events
     for rk in RUN_KEYS:
         row[rk] = stats.get(rk, 0)
-
     season_rows.append(row)
 st.dataframe(season_rows)
 
@@ -1085,23 +976,22 @@ if not selectable_players:
 else:
     selected_player = st.selectbox("Choose a hitter:", selectable_players)
     stats = season_players[selected_player]
+
     indiv_rows = [{"Type": loc, "Count": stats.get(loc, 0)} for loc in LOCATION_KEYS]
     indiv_rows.append({"Type": "GB (total)", "Count": stats.get("GB", 0)})
     indiv_rows.append({"Type": "FB (total)", "Count": stats.get("FB", 0)})
     for ck in COMBO_KEYS:
         indiv_rows.append({"Type": ck, "Count": stats.get(ck, 0)})
 
-    # Running events
     indiv_rows.append({"Type": "SB", "Count": stats.get("SB", 0)})
     indiv_rows.append({"Type": "CS", "Count": stats.get("CS", 0)})
     indiv_rows.append({"Type": "DI", "Count": stats.get("DI", 0)})
-    indiv_rows.append({"Type": "PO", "Count": stats.get("PO", 0)})
-    indiv_rows.append({"Type": "POCS", "Count": stats.get("POCS", 0)})
     for rk in RUN_KEYS:
-        if rk not in ["SB", "CS", "DI", "PO", "POCS"]:
+        if rk not in ["SB", "CS", "DI"]:
             indiv_rows.append({"Type": rk, "Count": stats.get(rk, 0)})
 
     st.table(indiv_rows)
+
 
 
 
