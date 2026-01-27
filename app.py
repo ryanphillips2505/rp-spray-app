@@ -992,72 +992,58 @@ st.markdown(
 )
 
 # -----------------------------
-# STYLES (adds missing .badge + .spray-card too)
+# STYLES (sharp + bordered title)
 # -----------------------------
 st.markdown(
     f"""
-<style>
-h1.app-title {{
-    font-family: 'Black Ops One', 'Jersey 10', sans-serif !important;
-    font-size: 6.0rem !important;
-    color: {PRIMARY} !important;
-    text-align: center !important;
-    letter-spacing: 0.20em !important;
-    text-transform: uppercase !important;
-    -webkit-text-stroke: 2.5px #000000;
-    text-shadow:
-        2px 2px 0 #000000,
-        -2px 2px 0 #000000,
-        2px -2px 0 #000000,
-        -2px -2px 0 #000000;
-    margin-top: -10px !important;
-    margin-bottom: 12px !important;
-}}
+    <style>
+    h1.app-title {{
+        font-family: 'Black Ops One', 'Jersey 10', sans-serif !important;
+        font-size: 6.0rem !important;
+        color: {PRIMARY} !important;
+        text-align: center !important;
+        letter-spacing: 0.20em !important;
+        text-transform: uppercase !important;
+        -webkit-text-stroke: 2.5px #000000;
+        text-shadow:
+            2px 2px 0 #000000,
+            -2px 2px 0 #000000,
+            2px -2px 0 #000000,
+            -2px -2px 0 #000000;
+        margin-top: -10px !important;
+        margin-bottom: 12px !important;
+    }}
 
-.app-subtitle {{
-    font-size: 1.10rem !important;
-    font-weight: 700 !important;
-    letter-spacing: 0.05em !important;
-    color: #111827 !important;
-    opacity: 0.97 !important;
-    text-align: center !important;
-    margin-bottom: 18px !important;
-}}
+    .app-subtitle {{
+        font-size: 1.10rem !important;
+        font-weight: 700 !important;
+        letter-spacing: 0.05em !important;
+        color: #111827 !important;
+        opacity: 0.97 !important;
+        text-align: center !important;
+        margin-bottom: 18px !important;
+    }}
 
-.badge {{
-    display: inline-block;
-    padding: 4px 10px;
-    margin: 3px 4px 0 0;
-    border-radius: 999px;
-    font-size: 0.80rem;
-    font-weight: 700;
-    border: 1px solid rgba(17,24,39,0.20);
-    background: rgba(255,255,255,0.65);
-    color: #111827;
-}}
+    [data-testid="stAppViewContainer"] {{
+        background:
+            linear-gradient(rgba(229,231,235,0.90),
+                            rgba(229,231,235,0.90)),
+            url("data:image/jpeg;base64,{BG_B64}") no-repeat center fixed;
+        background-size: 600px;
+        color: #111827;
+    }}
 
-.spray-card {
-    padding: 12px 14px;
-    border-radius: 12px;
-    border: 1px solid rgba(17,24,39,0.15);
-    background: rgba(255,255,255,0.75);
-}
-
-[data-testid="stAppViewContainer"] {
-    background:
-        linear-gradient(rgba(229,231,235,0.90),
-                        rgba(229,231,235,0.90)),
-        url("data:image/jpeg;base64,{BG_B64}") no-repeat center fixed;
-    background-size: 600px;
-    color: #111827;
-}
-
-
-
-</style>
-""",
+    .spray-card {{
+        padding: 12px 14px;
+        border-radius: 12px;
+        border: 1px solid rgba(17,24,39,0.15);
+        background: rgba(255,255,255,0.75);
+    }}
+    </style>
+    """,
     unsafe_allow_html=True,
 )
+
 
 # -----------------------------
 # HEADER
@@ -1597,6 +1583,7 @@ else:
             indiv_rows.append({"Type": rk, "Count": stats.get(rk, 0)})
 
     st.table(indiv_rows)
+
 
 
 
