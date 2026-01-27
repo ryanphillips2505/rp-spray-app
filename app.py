@@ -140,11 +140,39 @@ def require_team_access():
     st.stop()
     return None, None
 
+TEAM_CODE, _ = require_team_access()
 
+# Load full team config (logo/background/data_folder) from TEAM_CONFIG/team_settings.json
+def _load_team_cfg_from_file(team_code: str) -> dict:
+    try:
+        with open(SETTINGS_PATH, "r", encoding="utf-8") as f:
+            data = json.load(f)
 
+        teams = data.get("teams", {}) or {}
+        branding = data.get("team_branding", {}) or {}
 
-TEAM_CODE, TEAM_CFG = require_team_access()
-TEAM_CFG = TEAM_CFG or {}
+        # Find the team entry whose team_code matches TEAM_CODE
+        cfg = None
+        for _, t in teams.items():
+            if str(t.get("team_code", "")).strip().upper() == str(team_code).strip().upper():
+                cfg = t
+                break
+
+        cfg = cfg or {}
+
+        # Apply branding override (your new source of truth)
+        b = branding.get(str(team_code).strip().upper(), {}) or {}
+        if b.get("logo_path"):
+            cfg["logo_path"] = b["logo_path"]
+        if b.get("background_path"):
+            cfg["background_path"] = b["background_path"]
+
+        return cfg
+    except Exception:
+        return {}
+
+TEAM_CFG = _load_team_cfg_from_file(TEAM_CODE) or {}
+
 
 # -----------------------------
 # ✅ TEAM-ISOLATED STORAGE (folders only for rosters; totals are in Supabase)
@@ -1616,6 +1644,7 @@ else:
             indiv_rows.append({"Type": rk, "Count": stats.get(rk, 0)})
 
     st.table(indiv_rows)
+
 
 
 
