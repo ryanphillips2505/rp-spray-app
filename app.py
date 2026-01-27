@@ -112,18 +112,26 @@ def require_team_access():
     st.title("Welcome to the Jungle of RP Spray Analytics")
     st.markdown("### Enter Access Code")
 
-    code = st.text_input("Access Code").strip().upper()
+    code_raw = st.text_input("Access Code", value="")
 
-    if st.button("Enter into the door of Success"):
-        hashed = hash_access_code(code)
+if st.button("Enter into the door of Success"):
+    code = code_raw.strip().upper()
 
-    stored = str(codes.get(code, {}).get("code_hash", "")).strip().lower()
-
-    if code in codes and hashed.strip().lower() == stored:
-        st.session_state.team_code = codes[code]["team_code"]
-        st.rerun()
+    if not code:
+        st.error("Enter an access code")
     else:
-        st.error("Invalid access code")
+        hashed = hash_access_code(code).strip().lower()
+        row = codes.get(code)
+
+        stored = str((row or {}).get("code_hash", "")).strip().lower()
+
+        if row and hashed == stored:
+            # store the real team_code (YUKON / OCS / CLAREMORE)
+            st.session_state.team_code = str(row.get("team_code", "")).strip().upper()
+            st.rerun()
+        else:
+            st.error("Invalid access code")
+
 
   
 
@@ -1606,6 +1614,7 @@ else:
             indiv_rows.append({"Type": rk, "Count": stats.get(rk, 0)})
 
     st.table(indiv_rows)
+
 
 
 
