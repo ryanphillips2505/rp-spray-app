@@ -79,29 +79,35 @@ st.set_page_config(
 
 @st.cache_data(show_spinner=False)
 def load_team_codes() -> dict:
-    if not os.path.exists(SETTINGS_PATH):
-        return {}
     try:
-        with open(SETTINGS_PATH, "r", encoding="utf-8") as f:
-            data = json.load(f)
-        codes = data.get("codes", {}) or {}
-        # normalize keys to uppercase
-        return {str(k).strip().upper(): v for k, v in codes.items()}
+        res = (
+            supabase.table("team_access")
+            .select("team_slug, team_code, team_name, code_hash, is_active")
+            .eq("is_active", True)
+            .execute()
+        )
+        rows = res.data or []
+        out = {}
+        for r in rows:
+            if r.get("team_code"):
+                out[str(r["team_code"]).strip().upper()] = r
+            if r.get("team_slug"):
+                out[str(r["team_slug"]).strip().upper()] = r
+        return out
     except Exception:
         return {}
 
-
-def require_team_access():
+     def require_team_access():
     codes = load_team_codes()
 
     if "team_code" not in st.session_state:
         st.session_state.team_code = None
 
-    # ✅ Already logged in
+    # Already logged in
     if st.session_state.team_code in codes:
         return st.session_state.team_code, codes[st.session_state.team_code]
 
-    # 🔒 Login screen
+    # Login screen
     st.title("Welcome to the Jungle of RP Spray Analytics")
     st.markdown("### Enter Access Code")
 
@@ -116,9 +122,9 @@ def require_team_access():
         else:
             st.error("Invalid access code")
 
-    # ⛔ Always stop execution AND return placeholders
     st.stop()
     return None, None
+
 
 
 TEAM_CODE, TEAM_CFG = require_team_access()
@@ -1594,6 +1600,7 @@ else:
             indiv_rows.append({"Type": rk, "Count": stats.get(rk, 0)})
 
     st.table(indiv_rows)
+
 
 
 
