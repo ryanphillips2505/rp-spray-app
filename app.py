@@ -1217,12 +1217,17 @@ st.markdown(
         color: #111827;
     }}
 
-    .spray-card {{
+    .spray-card {
         padding: 12px 14px;
         border-radius: 12px;
         border: 1px solid rgba(17,24,39,0.15);
         background: rgba(255,255,255,0.75);
-    }}
+    }
+    /* Make expander look tighter in sidebar */
+[data-testid="stExpander"] summary {
+    font-weight: 800 !important;
+}
+
     </style>
     """,
     unsafe_allow_html=True,
@@ -1281,33 +1286,6 @@ with st.sidebar:
         "STRICT MODE (only count plays with explicit fielder/location)",
         value=bool(SETTINGS.get("strict_mode_default", True)),
     )
-    st.markdown("---")
-    st.markdown("### 🔐 Admin: Change Access Code")
-
-    admin_pin_ok = st.text_input("Admin PIN", type="password") == st.secrets["ADMIN_PIN"]
-
-    if admin_pin_ok:
-        team_to_change = st.text_input("Team Code or Slug (e.g. MUSTANG)", value="")
-        new_code = st.text_input("New Access Code", type="password", value="")
-        new_code2 = st.text_input("Confirm New Access Code", type="password", value="")
-
-        if st.button("✅ Update Access Code"):
-            if not team_to_change.strip():
-                st.error("Enter a team code/slug.")
-            elif not new_code.strip():
-                st.error("Enter a new access code.")
-            elif new_code != new_code2:
-                st.error("Codes do not match.")
-            else:
-                ok = admin_set_access_code(team_to_change, new_code)
-                if ok:
-                    st.success("Access code updated.")
-                    load_team_codes.clear()  # clear cached codes
-                    st.rerun()
-                else:
-                    st.error("Update failed. Check team code/slug exists in Supabase.")
-    else:
-        st.caption("Admin PIN required.")
 
 
     st.markdown("---")
@@ -1336,6 +1314,70 @@ with st.sidebar:
         """,
         unsafe_allow_html=True,
     )
+        st.markdown("---")
+
+    # Small, native-looking admin panel (hidden unless opened)
+    with st.expander("🔐 Admin", expanded=False):
+        st.markdown(
+            """
+            <div style="
+                padding: 12px;
+                border-radius: 14px;
+                background: rgba(255,255,255,0.72);
+                border: 1px solid rgba(0,0,0,0.10);
+                box-shadow: 0 6px 18px rgba(0,0,0,0.06);
+                margin-bottom: 10px;
+            ">
+                <div style="font-size:0.92rem; font-weight:800; margin-bottom:6px;">
+                    Change Access Code
+                </div>
+                <div style="font-size:0.85rem; opacity:0.85;">
+                    Updates Supabase instantly. Coaches use the new code immediately.
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+        pin = st.text_input("Admin PIN", type="password", label_visibility="collapsed", placeholder="Admin PIN")
+
+        if pin != st.secrets.get("ADMIN_PIN", ""):
+            st.caption("Enter Admin PIN to unlock.")
+        else:
+            # Pull team list for dropdown (looks way more natural than typing)
+            codes_map = load_team_codes()
+            # only show unique team_code rows (avoid duplicates from slug+code mapping)
+            unique_codes = sorted({(v.get("team_code") or "").strip().upper() for v in codes_map.values() if v.get("team_code")})
+            team_pick = st.selectbox("Team", options=unique_codes, index=0 if unique_codes else None)
+
+            new_code = st.text_input("New Code", type="password", placeholder="New access code")
+            confirm = st.text_input("Confirm", type="password", placeholder="Confirm new access code")
+
+            col1, col2 = st.columns([1, 1])
+            with col1:
+                update_btn = st.button("Update", use_container_width=True)
+            with col2:
+                clear_btn = st.button("Clear", use_container_width=True)
+
+            if clear_btn:
+                st.rerun()
+
+            if update_btn:
+                if not team_pick:
+                    st.error("No team selected.")
+                elif not new_code.strip():
+                    st.error("Enter a new code.")
+                elif new_code != confirm:
+                    st.error("Codes don’t match.")
+                else:
+                    ok = admin_set_access_code(team_pick, new_code)
+                    if ok:
+                        st.success("✅ Access code updated.")
+                        load_team_codes.clear()  # clear cached codes
+                        st.rerun()
+                    else:
+                        st.error("Update failed. Team not found in team_access.")
+
 
 
    
@@ -1887,6 +1929,7 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
+
 
 
 
