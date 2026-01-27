@@ -97,7 +97,7 @@ def load_team_codes() -> dict:
     except Exception:
         return {}
 
-     def require_team_access():
+def require_team_access():
     codes = load_team_codes()
 
     if "team_code" not in st.session_state:
@@ -1600,6 +1600,7 @@ else:
             indiv_rows.append({"Type": rk, "Count": stats.get(rk, 0)})
 
     st.table(indiv_rows)
+
 
 
 
