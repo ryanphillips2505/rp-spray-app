@@ -1268,7 +1268,7 @@ st.markdown(
 <div class="spray-card">
     <strong>Active team:</strong> {selected_team}<br>
     <strong>Games processed:</strong> {games_played}<br>
-    <strong>Last updated:</strong> Supabase
+
 </div>
 """,
     unsafe_allow_html=True,
@@ -1660,6 +1660,7 @@ else:
             indiv_rows.append({"Type": rk, "Count": stats.get(rk, 0)})
 
     st.table(indiv_rows)
+
 
 
 
