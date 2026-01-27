@@ -117,11 +117,15 @@ def require_team_access():
     if st.button("Enter into the door of Success"):
         hashed = hash_access_code(code)
 
-        if code in codes and hashed == codes[code]["code_hash"]:
-            st.session_state.team_code = codes[code]["team_code"]
-            st.rerun()
-        else:
-            st.error("Invalid access code")
+    stored = str(codes.get(code, {}).get("code_hash", "")).strip().lower()
+
+    if code in codes and hashed.strip().lower() == stored:
+        st.session_state.team_code = codes[code]["team_code"]
+        st.rerun()
+    else:
+        st.error("Invalid access code")
+
+  
 
     st.stop()
     return None, None
@@ -1602,6 +1606,7 @@ else:
             indiv_rows.append({"Type": rk, "Count": stats.get(rk, 0)})
 
     st.table(indiv_rows)
+
 
 
 
