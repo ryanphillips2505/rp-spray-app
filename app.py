@@ -181,6 +181,39 @@ def _load_team_cfg_from_file(team_code: str) -> dict:
 TEAM_CFG = _load_team_cfg_from_file(TEAM_CODE) or {}
 
 # -----------------------------
+# TERMS OF USE (one-time per browser)
+# -----------------------------
+if "terms_accepted" not in st.session_state:
+    st.session_state.terms_accepted = False
+
+if not st.session_state.terms_accepted:
+    st.markdown("### Terms of Use")
+
+    st.markdown(
+        """
+By using **RP Spray Analytics**, you acknowledge that:
+
+- This software and its analytics models are **proprietary**
+- The logic, parsing rules, and reports may **not be copied, shared, or resold**
+- Data entered is provided by the user and analyzed by this application
+
+Unauthorized duplication or redistribution is prohibited.
+        """
+    )
+
+    agree = st.checkbox("I agree to the Terms of Use")
+
+    if st.button("Continue"):
+        if not agree:
+            st.error("You must agree to continue.")
+        else:
+            st.session_state.terms_accepted = True
+            st.rerun()
+
+    st.stop()
+
+
+# -----------------------------
 # RESOLVED TEAM BRANDING (logo + background)
 # -----------------------------
 LOGO_PATH = TEAM_CFG.get("logo_path") or SETTINGS.get("logo_image")
@@ -1735,6 +1768,7 @@ else:
             indiv_rows.append({"Type": rk, "Count": stats.get(rk, 0)})
 
     st.table(indiv_rows)
+
 
 
 
