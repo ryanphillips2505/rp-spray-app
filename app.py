@@ -95,12 +95,12 @@ def require_team_access():
     if st.session_state.team_code in codes:
         return st.session_state.team_code, codes[st.session_state.team_code]
 
-    st.title("RP Spray Analytics")
+    st.title("Welcome to the Jungle of RP Spray Analytics")
     st.markdown("### Enter Access Code")
 
     code = st.text_input("Access Code").strip().upper()
 
-    if st.button("Unlock"):
+    if st.button("Enter into the door of Success"):
         if code in codes:
             st.session_state.team_code = code
             st.rerun()
@@ -1593,6 +1593,7 @@ else:
             indiv_rows.append({"Type": rk, "Count": stats.get(rk, 0)})
 
     st.table(indiv_rows)
+
 
 
 
