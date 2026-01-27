@@ -48,7 +48,7 @@ except Exception:
 # -----------------------------
 def load_settings():
     defaults = {
-        "app_title": "RP Spray Analytics",
+        "app_title": "RP Spray Charts",
         "subtitle": "Coaches that want to win, WILL put in the time",
         "primary_color": "#b91c1c",
         "secondary_color": "#111111",
@@ -1661,6 +1661,7 @@ else:
             indiv_rows.append({"Type": rk, "Count": stats.get(rk, 0)})
 
     st.table(indiv_rows)
+
 
 
 
