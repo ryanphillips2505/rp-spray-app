@@ -697,9 +697,9 @@ def _show_db_error(e: Exception, label: str):
 
 def _render_supabase_fix_block():
     st.error("Supabase tables are missing or mismatched (season_totals / processed_games).")
-    st.markdown("### Fix (copy/paste into Supabase → SQL Editor → Run)")
+    ("### Fix (copy/paste into Supabase → SQL Editor → Run)")
     st.code(SUPABASE_SETUP_SQL, language="sql")
-    st.markdown(
+    (
         """
 **Then refresh your Streamlit app.**  
 If it still errors after running the SQL, your Streamlit **secrets** are wrong.
@@ -1050,6 +1050,12 @@ h1.app-title {{
     background-size: 600px;
     color: #111827;
 }}
+
+/* GRAPHITE BACKGROUND */
+[data-testid="stAppViewContainer"] {
+    background-color: #1f2933 !important;
+}
+
 </style>
 """,
     unsafe_allow_html=True,
@@ -1593,6 +1599,7 @@ else:
             indiv_rows.append({"Type": rk, "Count": stats.get(rk, 0)})
 
     st.table(indiv_rows)
+
 
 
 
