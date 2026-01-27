@@ -16,8 +16,7 @@
     "team_slug": "yukon",
     "team_code": "YUKON",
     "data_folder": "data/teams/YUKON"
-  }
-  ,
+  },
   "team_branding": {
     "YUKON": {
       "logo_path": "assets/yukon/logo.png",
@@ -33,6 +32,7 @@
     }
   }
 }
+
 
 
 
