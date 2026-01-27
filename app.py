@@ -1080,61 +1080,39 @@ with st.sidebar:
     st.write("**Add teams** by creating a `.txt` roster file in:")
     st.code(f"{TEAM_ROSTERS_DIR}/", language="text")
 
-
 # -----------------------------
-# TEAM SELECTION (AUTO FROM FILES)
-# -----------------------------
-st.subheader("🏟️ Team Selection")
-
-team_files = list_team_files()
-if not team_files:
-    st.warning("No roster files found yet for THIS access code. Create one below.")
-    st.stop()
-
-team_names = [team_name_from_file(f) for f in team_files]
-selected_team = st.selectbox("Choose a team (from roster files):", team_names)
-selected_file = team_files[team_names.index(selected_team)]
-team_key = safe_team_key(selected_team)
-
-with st.expander("➕ Add a new team roster file"):
-    new_team_name = st.text_input("New team name (creates a .txt in your private team folder):")
-    if st.button("Create Team File"):
-        if not new_team_name.strip():
-            st.error("Enter a team name first.")
-        else:
-            new_file = f"{new_team_name.strip()}.txt"
-            new_path = roster_path_for_file(new_file)
-            if os.path.exists(new_path):
-                st.error("That team file already exists.")
-            else:
-                save_roster_text(new_path, "")
-                st.success(f"Created: {new_path}. Select it in the dropdown above.")
-
-st.markdown("---")
-
-
-# -----------------------------
-# ROSTER UI (LOADS FROM TEAM FILE)
+# ROSTER UI (SUPABASE - PERSISTENT)
 # -----------------------------
 st.subheader(f"📝 {selected_team} Roster (Hitters)")
 
-roster_path = roster_path_for_file(selected_file)
-default_roster_text = load_roster_text(roster_path)
+# Load roster from Supabase
+roster_text = db_get_roster(TEAM_CODE_SAFE, team_key)
 
 roster_text = st.text_area(
     "One player per line EXACTLY like GameChanger shows them (e.g., 'J Smith')",
-    value=default_roster_text,
+    value=roster_text,
     height=220,
 )
 
 col_a, _ = st.columns([1, 3])
 with col_a:
-    if st.button("💾 Save Roster to File"):
-        save_roster_text(roster_path, roster_text)
-        st.success("Roster saved.")
+    if st.button("💾 Save Roster"):
+        db_upsert_team(
+            team_code=TEAM_CODE_SAFE,
+            team_key=team_key,
+            team_name=selected_team,
+            roster_text=roster_text,
+        )
+        st.success("Roster saved to Supabase.")
 
-current_roster = {line.strip().strip('"') for line in roster_text.split("\n") if line.strip()}
+current_roster = {
+    line.strip().strip('"')
+    for line in roster_text.split("\n")
+    if line.strip()
+}
+
 st.write(f"**Hitters loaded:** {len(current_roster)}")
+
 
 # ✅ LOAD FROM SUPABASE ONLY (source of truth)
 season_team, season_players, games_played, processed_set = db_load_season_totals(
@@ -1533,6 +1511,7 @@ else:
             indiv_rows.append({"Type": rk, "Count": stats.get(rk, 0)})
 
     st.table(indiv_rows)
+
 
 
 
