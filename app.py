@@ -1077,42 +1077,62 @@ with st.sidebar:
     )
 
     st.markdown("---")
-    st.write("**Add teams** by creating a `.txt` roster file in:")
+    st.write("**Teams + rosters are stored in Supabase (persistent).**")
     st.code(f"{TEAM_ROSTERS_DIR}/", language="text")
+
+# -----------------------------
+# TEAM SELECTION (SUPABASE - PERSISTENT)
+# -----------------------------
+st.subheader("🏟️ Team Selection")
+
+teams = db_list_teams(TEAM_CODE_SAFE)
+
+if not teams:
+    st.warning("No teams found yet for THIS access code. Create one below.")
+else:
+    team_names = [t.get("team_name", "Unnamed Team") for t in teams]
+    selected_team = st.selectbox("Choose a team:", team_names)
+
+    selected_row = next((t for t in teams if t.get("team_name") == selected_team), teams[0])
+    team_key = selected_row.get("team_key") or safe_team_key(selected_team)
+
+with st.expander("➕ Add a new team (stored in Supabase)"):
+    new_team_name = st.text_input("New team name:")
+    if st.button("Create Team"):
+        if not new_team_name.strip():
+            st.error("Enter a team name first.")
+        else:
+            new_key = safe_team_key(new_team_name)
+            db_upsert_team(TEAM_CODE_SAFE, new_key, new_team_name.strip(), "")
+            st.success("Team created. Reloading…")
+            st.rerun()
+
+if not teams:
+    st.stop()
+
+st.markdown("---")
 
 # -----------------------------
 # ROSTER UI (SUPABASE - PERSISTENT)
 # -----------------------------
 st.subheader(f"📝 {selected_team} Roster (Hitters)")
 
-# Load roster from Supabase
-roster_text = db_get_roster(TEAM_CODE_SAFE, team_key)
+default_roster_text = db_get_roster(TEAM_CODE_SAFE, team_key)
 
 roster_text = st.text_area(
     "One player per line EXACTLY like GameChanger shows them (e.g., 'J Smith')",
-    value=roster_text,
+    value=default_roster_text,
     height=220,
 )
 
 col_a, _ = st.columns([1, 3])
 with col_a:
     if st.button("💾 Save Roster"):
-        db_upsert_team(
-            team_code=TEAM_CODE_SAFE,
-            team_key=team_key,
-            team_name=selected_team,
-            roster_text=roster_text,
-        )
-        st.success("Roster saved to Supabase.")
+        db_upsert_team(TEAM_CODE_SAFE, team_key, selected_team, roster_text)
+        st.success("Roster saved (Supabase).")
 
-current_roster = {
-    line.strip().strip('"')
-    for line in roster_text.split("\n")
-    if line.strip()
-}
-
+current_roster = {line.strip().strip('"') for line in roster_text.split("\n") if line.strip()}
 st.write(f"**Hitters loaded:** {len(current_roster)}")
-
 
 # ✅ LOAD FROM SUPABASE ONLY (source of truth)
 season_team, season_players, games_played, processed_set = db_load_season_totals(
@@ -1511,6 +1531,7 @@ else:
             indiv_rows.append({"Type": rk, "Count": stats.get(rk, 0)})
 
     st.table(indiv_rows)
+
 
 
 
