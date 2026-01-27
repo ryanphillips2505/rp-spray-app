@@ -1066,6 +1066,28 @@ st.markdown("---")
 # -----------------------------
 # SIDEBAR
 # -----------------------------
+
+# -----------------------------
+# HALL OF FAME QUOTES (SIDEBAR)
+# -----------------------------
+HOF_QUOTES = [
+    ("Hank Aaron", "Failure is a part of success."),
+    ("Yogi Berra", "Baseball is 90% mental. The other half is physical."),
+    ("Babe Ruth", "Never let the fear of striking out get in your way."),
+    ("Ted Williams", "Hitting is timing. Pitching is upsetting timing."),
+    ("Willie Mays", "It isn’t difficult to be great from time to time. What’s difficult is to be great all the time."),
+    ("Cal Ripken Jr.", "Success is a process. You have to commit to the process."),
+    ("Sandy Koufax", "Pitching is the art of instilling fear."),
+    ("Nolan Ryan", "Enjoying success requires the ability to adapt."),
+    ("Lou Gehrig", "It’s the ballplayer’s job to always be ready to play."),
+    ("Jackie Robinson", "A life is not important except in the impact it has on other lives."),
+]
+
+def get_daily_quote(quotes):
+    idx = int(datetime.utcnow().strftime("%Y%m%d")) % len(quotes)
+    return quotes[idx]
+
+
 with st.sidebar:
     if LOGO_PATH and os.path.exists(LOGO_PATH):
         st.image(LOGO_PATH, width=260)
@@ -1093,13 +1115,13 @@ with st.sidebar:
     st.markdown(
         f"""
         <div style="
-            padding: 14px 14px;
+            padding: 14px;
             border-radius: 14px;
             background: rgba(255,255,255,0.72);
             border: 1px solid rgba(0,0,0,0.10);
             box-shadow: 0 6px 18px rgba(0,0,0,0.06);
         ">
-            <div style="font-size: 0.95rem; font-weight: 800; letter-spacing: 0.03em; margin-bottom: 8px;">
+            <div style="font-size: 0.95rem; font-weight: 800; margin-bottom: 8px;">
                 🏆 Hall of Fame Quote
             </div>
             <div style="font-size: 0.98rem; font-weight: 700; line-height: 1.35;">
@@ -1113,31 +1135,8 @@ with st.sidebar:
         unsafe_allow_html=True,
     )
 
-    st.markdown("<div style='height: 10px;'></div>", unsafe_allow_html=True)
 
-
-# -----------------------------
-# HALL OF FAME QUOTES (SIDEBAR)
-# -----------------------------
-HOF_QUOTES = [
-    ("Hank Aaron", "Failure is a part of success."),
-    ("Yogi Berra", "Baseball is 90% mental. The other half is physical."),
-    ("Babe Ruth", "Never let the fear of striking out get in your way."),
-    ("Ted Williams", "Hitting is timing. Pitching is upsetting timing."),
-    ("Willie Mays", "It isn’t difficult to be great from time to time. What’s difficult is to be great all the time."),
-    ("Cal Ripken Jr.", "Success is a process. You have to commit to the process."),
-    ("Sandy Koufax", "Pitching is the art of instilling fear."),
-    ("Nolan Ryan", "Enjoying success requires the ability to adapt."),
-    ("Lou Gehrig", "It’s the ballplayer’s job to always be ready to play."),
-    ("Jackie Robinson", "A life is not important except in the impact it has on other lives."),
-]
-
-def get_daily_quote(quotes):
-    # changes once per day; consistent for all users that day
-    idx = int(datetime.utcnow().strftime("%Y%m%d")) % len(quotes)
-    return quotes[idx]
-
-
+   
 # -----------------------------
 # TEAM SELECTION (SUPABASE - PERSISTENT)
 # -----------------------------
@@ -1594,6 +1593,7 @@ else:
             indiv_rows.append({"Type": rk, "Count": stats.get(rk, 0)})
 
     st.table(indiv_rows)
+
 
 
 
