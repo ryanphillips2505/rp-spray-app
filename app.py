@@ -1296,6 +1296,28 @@ st.markdown(
     unsafe_allow_html=True
 )
 
+# --- Reset button (Power Red, dynamic team name) ---
+ACTIVE_TEAM_NAME = TEAM_CFG.get("team_name", TEAM_CODE)
+reset_label = f"Reset SEASON totals — {ACTIVE_TEAM_NAME}"
+
+st.markdown(
+    """
+    <style>
+    button[aria-label^="Reset SEASON totals —"]{
+        background-color:#b91c1c !important; /* Power Red */
+        color:#ffffff !important;
+        border:0 !important;
+        font-weight:700 !important;
+    }
+    button[aria-label^="Reset SEASON totals —"]:hover{
+        background-color:#991b1b !important;
+        color:#ffffff !important;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True
+)
+
 col_reset, _ = st.columns([1, 3])
 
 with col_reset:
@@ -1309,6 +1331,7 @@ with col_reset:
         )
 
         st.rerun()
+
 
 
 
@@ -1684,6 +1707,7 @@ else:
             indiv_rows.append({"Type": rk, "Count": stats.get(rk, 0)})
 
     st.table(indiv_rows)
+
 
 
 
