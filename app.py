@@ -1241,7 +1241,6 @@ st.markdown(f"<h1 class='app-title'>{SETTINGS.get('app_title','RP Spray Analytic
 st.markdown(f"<div class='app-subtitle'>{SETTINGS.get('subtitle','')}</div>", unsafe_allow_html=True)
 st.markdown("---")
 
-
 # -----------------------------
 # SIDEBAR
 # -----------------------------
@@ -1268,9 +1267,11 @@ def get_daily_quote(quotes):
 
 
 with st.sidebar:
+    # Logo
     if LOGO_PATH and os.path.exists(LOGO_PATH):
         st.image(LOGO_PATH, width=260)
 
+    # Tags
     st.markdown("### ⚾ Spray Lab")
     st.markdown(
         """
@@ -1282,16 +1283,16 @@ with st.sidebar:
         unsafe_allow_html=True,
     )
 
+    # Strict mode
     strict_mode = st.checkbox(
         "STRICT MODE (only count plays with explicit fielder/location)",
         value=bool(SETTINGS.get("strict_mode_default", True)),
     )
 
-
     st.markdown("---")
 
+    # Daily quote card
     who, quote = get_daily_quote(HOF_QUOTES)
-
     st.markdown(
         f"""
         <div style="
@@ -1314,9 +1315,12 @@ with st.sidebar:
         """,
         unsafe_allow_html=True,
     )
-        st.markdown("---")
 
-    # Small, native-looking admin panel (hidden unless opened)
+    st.markdown("---")
+
+    # -----------------------------
+    # ADMIN: CHANGE ACCESS CODE (CLEAN + HIDDEN)
+    # -----------------------------
     with st.expander("🔐 Admin", expanded=False):
         st.markdown(
             """
@@ -1332,51 +1336,61 @@ with st.sidebar:
                     Change Access Code
                 </div>
                 <div style="font-size:0.85rem; opacity:0.85;">
-                    Updates Supabase instantly. Coaches use the new code immediately.
+                    Updates Supabase instantly.
                 </div>
             </div>
             """,
             unsafe_allow_html=True,
         )
 
-        pin = st.text_input("Admin PIN", type="password", label_visibility="collapsed", placeholder="Admin PIN")
+        pin = st.text_input(
+            "Admin PIN",
+            type="password",
+            label_visibility="collapsed",
+            placeholder="Admin PIN",
+        )
 
         if pin != st.secrets.get("ADMIN_PIN", ""):
-            st.caption("Enter Admin PIN to unlock.")
+            st.caption("Admin access only.")
         else:
-            # Pull team list for dropdown (looks way more natural than typing)
             codes_map = load_team_codes()
-            # only show unique team_code rows (avoid duplicates from slug+code mapping)
-            unique_codes = sorted({(v.get("team_code") or "").strip().upper() for v in codes_map.values() if v.get("team_code")})
-            team_pick = st.selectbox("Team", options=unique_codes, index=0 if unique_codes else None)
+            teams = sorted({
+                (v.get("team_code") or "").strip().upper()
+                for v in (codes_map.values() if isinstance(codes_map, dict) else [])
+                if v and v.get("team_code")
+            })
 
-            new_code = st.text_input("New Code", type="password", placeholder="New access code")
-            confirm = st.text_input("Confirm", type="password", placeholder="Confirm new access code")
+            if not teams:
+                st.error("No active teams found in team_access.")
+            else:
+                team_pick = st.selectbox("Team", options=teams)
 
-            col1, col2 = st.columns([1, 1])
-            with col1:
-                update_btn = st.button("Update", use_container_width=True)
-            with col2:
-                clear_btn = st.button("Clear", use_container_width=True)
+                new_code = st.text_input("New Code", type="password", placeholder="New access code")
+                confirm  = st.text_input("Confirm", type="password", placeholder="Confirm new access code")
 
-            if clear_btn:
-                st.rerun()
+                c1, c2 = st.columns(2)
+                with c1:
+                    update_btn = st.button("Update", use_container_width=True)
+                with c2:
+                    clear_btn = st.button("Clear", use_container_width=True)
 
-            if update_btn:
-                if not team_pick:
-                    st.error("No team selected.")
-                elif not new_code.strip():
-                    st.error("Enter a new code.")
-                elif new_code != confirm:
-                    st.error("Codes don’t match.")
-                else:
-                    ok = admin_set_access_code(team_pick, new_code)
-                    if ok:
-                        st.success("✅ Access code updated.")
-                        load_team_codes.clear()  # clear cached codes
-                        st.rerun()
+                if clear_btn:
+                    st.rerun()
+
+                if update_btn:
+                    if not new_code.strip():
+                        st.error("Enter a new code.")
+                    elif new_code != confirm:
+                        st.error("Codes don’t match.")
                     else:
-                        st.error("Update failed. Team not found in team_access.")
+                        ok = admin_set_access_code(team_pick, new_code)
+                        if ok:
+                            st.success("✅ Access code updated.")
+                            load_team_codes.clear()  # clear cached codes
+                            st.rerun()
+                        else:
+                            st.error("Update failed. Team not found in team_access.")
+
 
 
 
@@ -1929,6 +1943,7 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
+
 
 
 
