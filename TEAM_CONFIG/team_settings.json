@@ -7,31 +7,34 @@
   "logo_image": "assets/logo.png",
   "strict_mode_default": true,
 
-  "codes": {
-    "OCS2026": {
+  "teams": {
+    "ocs": {
       "team_name": "Oklahoma Christian Schools",
-      "team_slug": "ocs2026",
+      "team_slug": "ocs",
+      "team_code": "OCS",
       "logo_path": "assets/ocs/ocslogo.png",
       "background_path": "assets/ocs/ocsbackground.jpg",
-      "data_folder": "data/teams/OCS2026"
+      "data_folder": "data/teams/OCS"
     },
-    "CLARE2026": {
+    "claremore": {
       "team_name": "Claremore High School",
       "team_slug": "claremore",
+      "team_code": "CLARE2026",
       "logo_path": "assets/claremore/logo.png",
       "background_path": "assets/claremore/background.jpg",
-      "data_folder": "data/teams/clare2026"
+      "data_folder": "data/teams/CLARE2026"
     },
-    "YUKON2026": {
-  "team_name": "Yukon High School",
-  "team_slug": "yukon",
-  "logo_path": "assets/yukon/logo.png",
-  "background_path": "assets/yukon/background.jpg",
-  "data_folder": "data/teams/YUKON2026"
-}
-
+    "yukon": {
+      "team_name": "Yukon High School",
+      "team_slug": "yukon",
+      "team_code": "YUKON2026",
+      "logo_path": "assets/yukon/logo.png",
+      "background_path": "assets/yukon/background.jpg",
+      "data_folder": "data/teams/YUKON2026"
+    }
   }
 }
+
 
 
 
