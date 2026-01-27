@@ -1163,25 +1163,13 @@ st.markdown(
 col_reset, _ = st.columns([1, 3])
 
 with col_reset:
-    st.markdown("### ⚠️ Danger Zone")
-    confirm_text = st.text_input(
-        "To reset this team's season, type: RESET",
-        value="",
-        help="This will permanently delete season totals + processed games for this team.",
-    )
-
-    reset_clicked = st.button(f"❗ Reset SEASON totals for {selected_team}")
-
-    if reset_clicked:
-        if confirm_text.strip().upper() != "RESET":
-            st.error("Reset blocked. You must type RESET exactly to confirm.")
-            st.stop()
-
+    if st.button(f"❗ Reset SEASON totals for {selected_team}"):
         db_reset_season(TEAM_CODE_SAFE, team_key)
 
         season_team, season_players, games_played, processed_set = db_load_season_totals(
             TEAM_CODE_SAFE, team_key, current_roster
         )
+
         st.warning("Season totals reset for this team (Supabase).")
         st.rerun()
 
@@ -1558,6 +1546,7 @@ else:
             indiv_rows.append({"Type": rk, "Count": stats.get(rk, 0)})
 
     st.table(indiv_rows)
+
 
 
 
