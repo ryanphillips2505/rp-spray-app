@@ -143,6 +143,7 @@ def license_is_active(team_code: str) -> bool:
         return True
     except Exception:
         return False
+        
 
 def require_team_access():
     codes = load_team_codes()
@@ -179,6 +180,7 @@ def require_team_access():
 
                 st.session_state.team_code = team_code
                 st.rerun()
+
             else:
                 st.error("Invalid access code")
 
@@ -1830,6 +1832,7 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
+
 
 
 
