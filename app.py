@@ -207,6 +207,7 @@ def get_supabase() -> Client:
 
 supabase = get_supabase()
 
+
 def supa_execute_with_retry(builder, tries: int = 5):
     """
     Retries Supabase .execute() on transient network issues.
@@ -221,7 +222,6 @@ def supa_execute_with_retry(builder, tries: int = 5):
     raise last_err
 
 
-
 def supabase_health_check_or_stop():
     """
     Don’t let the whole app crash with a redacted error.
@@ -231,7 +231,6 @@ def supabase_health_check_or_stop():
         # Minimal probes
         supa_execute_with_retry(supabase.table("season_totals").select("id").limit(1))
         supa_execute_with_retry(supabase.table("processed_games").select("id").limit(1))
-
         return True
     except Exception as e:
         _show_db_error(e, "Supabase not ready")
@@ -347,6 +346,21 @@ def db_try_mark_game_processed(team_code: str, team_key: str, game_hash: str) ->
     except Exception:
         # Unique constraint trip => already processed (or any insert error)
         return False
+
+
+# ✅ 2A) ROLLBACK HELPER (UNMARK GAME IF PROCESSING FAILS)
+def db_unmark_game_processed(team_code: str, team_key: str, game_hash: str):
+    try:
+        supa_execute_with_retry(
+            supabase.table("processed_games")
+            .delete()
+            .eq("team_code", team_code)
+            .eq("team_key", team_key)
+            .eq("game_hash", game_hash)
+        )
+    except Exception:
+        # Worst case: row stays marked; you can reset season for that team if needed.
+        pass
 
 
 def db_reset_season(team_code: str, team_key: str):
@@ -1211,6 +1225,11 @@ if st.button("📥 Process Game (ADD to Season Totals)"):
     st.session_state.processing_started_at = time.time()
 
     rerun_needed = False
+
+    # ✅ 2B) Track whether we successfully "marked processed" so we can rollback if anything fails.
+    marked_processed = False
+    gkey = None
+
     try:
         if not raw_text.strip():
             st.error("Paste play-by-play first.")
@@ -1227,6 +1246,7 @@ if st.button("📥 Process Game (ADD to Season Totals)"):
             st.stop()
 
         processed_set.add(gkey)
+        marked_processed = True  # ✅ we inserted the row; rollback if anything below fails
 
         lines = [line.strip() for line in raw_text.split("\n") if line.strip()]
 
@@ -1301,6 +1321,18 @@ if st.button("📥 Process Game (ADD to Season Totals)"):
 
         st.success("✅ Game processed and added to season totals (Supabase).")
         rerun_needed = True
+
+    except Exception as e:
+        # ✅ 2B) ROLLBACK: if we marked the game processed but anything failed, UNMARK it so you can retry.
+        if marked_processed and gkey:
+            try:
+                processed_set.discard(gkey)
+            except Exception:
+                pass
+            db_unmark_game_processed(TEAM_CODE_SAFE, team_key, gkey)
+
+        _show_db_error(e, "Processing failed (rolled back dedupe mark so you can retry)")
+        st.stop()
 
     finally:
         st.session_state.processing_game = False
@@ -1452,4 +1484,5 @@ else:
             indiv_rows.append({"Type": rk, "Count": stats.get(rk, 0)})
 
     st.table(indiv_rows)
+
 
