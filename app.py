@@ -1036,25 +1036,21 @@ h1.app-title {{
     color: #111827;
 }}
 
-.spray-card {{
+.spray-card {
     padding: 12px 14px;
     border-radius: 12px;
     border: 1px solid rgba(17,24,39,0.15);
     background: rgba(255,255,255,0.75);
-}}
-
-[data-testid="stAppViewContainer"] {{
-    background:
-        linear-gradient(rgba(229,231,235,0.90), rgba(229,231,235,0.90)),
-        url("data:image/jpeg;base64,{BG_B64}") no-repeat center fixed;
-    background-size: 600px;
-    color: #111827;
-}}
-
-/* GRAPHITE BACKGROUND */
-[data-testid="stAppViewContainer"] {
-    background-color: #1f2933 !important;
 }
+
+[data-testid="stAppViewContainer"] {
+  background:
+    linear-gradient(rgba(31,41,51,0.92), rgba(31,41,51,0.92)),
+    url("data:image/jpeg;base64,{BG_B64}") no-repeat center fixed !important;
+  background-size: 600px !important;
+  color: #f3f4f6 !important;
+}
+
 
 </style>
 """,
@@ -1599,6 +1595,7 @@ else:
             indiv_rows.append({"Type": rk, "Count": stats.get(rk, 0)})
 
     st.table(indiv_rows)
+
 
 
 
