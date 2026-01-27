@@ -643,6 +643,24 @@ create unique index if not exists season_totals_unique
 
 create index if not exists season_totals_team_idx
   on public.season_totals (team_code, team_key);
+  -- ============================
+-- TEAM ROSTERS (persistent, per team_code)
+-- ============================
+create table if not exists public.team_rosters (
+  id bigserial primary key,
+  team_code   text not null,
+  team_key    text not null,
+  team_name   text not null,
+  roster_text text not null default '',
+  updated_at  timestamptz not null default now()
+);
+
+create unique index if not exists team_rosters_unique
+  on public.team_rosters (team_code, team_key);
+
+create index if not exists team_rosters_team_idx
+  on public.team_rosters (team_code, team_name);
+
 
 -- ============================
 -- PROCESSED GAMES (hard dedupe)
@@ -720,6 +738,8 @@ def supabase_health_check_or_stop():
     try:
         supa_execute_with_retry(supabase.table("season_totals").select("id").limit(1))
         supa_execute_with_retry(supabase.table("processed_games").select("id").limit(1))
+        supa_execute_with_retry(supabase.table("team_rosters").select("id").limit(1))
+
         return True
     except Exception as e:
         _show_db_error(e, "Supabase not ready")
@@ -835,8 +855,7 @@ def db_unmark_game_processed(team_code: str, team_key: str, game_hash: str):
         )
     except Exception:
         pass
-
-
+        
 def db_reset_season(team_code: str, team_key: str):
     try:
         supabase.table("season_totals").delete().eq("team_code", team_code).eq("team_key", team_key).execute()
@@ -846,6 +865,85 @@ def db_reset_season(team_code: str, team_key: str):
         _render_supabase_fix_block()
         st.stop()
 
+      # -----------------------------
+# TEAM ROSTERS (SUPABASE - PERSISTENT)
+# -----------------------------
+def db_list_teams(team_code: str):
+    """
+    Returns list of dicts: [{team_key, team_name, roster_text, updated_at}]
+    """
+    try:
+        res = (
+            supabase.table("team_rosters")
+            .select("team_key, team_name, roster_text, updated_at")
+            .eq("team_code", team_code)
+            .order("team_name")
+            .execute()
+        )
+        return res.data or []
+    except Exception as e:
+        _show_db_error(e, "Supabase SELECT failed on team_rosters")
+        _render_supabase_fix_block()
+        st.stop()
+
+
+def db_get_team(team_code: str, team_key: str):
+    try:
+        res = (
+            supabase.table("team_rosters")
+            .select("team_key, team_name, roster_text, updated_at")
+            .eq("team_code", team_code)
+            .eq("team_key", team_key)
+            .limit(1)
+            .execute()
+        )
+        if res.data:
+            return res.data[0]
+        return None
+    except Exception as e:
+        _show_db_error(e, "Supabase SELECT failed on team_rosters (single)")
+        _render_supabase_fix_block()
+        st.stop()
+
+
+def db_upsert_team(team_code: str, team_key: str, team_name: str, roster_text: str):
+    """
+    Upserts one roster row per (team_code, team_key).
+    Requires unique(team_code, team_key) on team_rosters.
+    """
+    try:
+        (
+            supabase.table("team_rosters")
+            .upsert(
+                {
+                    "team_code": team_code,
+                    "team_key": team_key,
+                    "team_name": team_name,
+                    "roster_text": roster_text or "",
+                    "updated_at": datetime.utcnow().isoformat(),
+                },
+                on_conflict="team_code,team_key",
+            )
+            .execute()
+        )
+    except Exception as e:
+        _show_db_error(e, "Supabase UPSERT failed on team_rosters")
+        _render_supabase_fix_block()
+        st.stop()
+
+
+def db_delete_team(team_code: str, team_key: str):
+    """
+    Optional: delete a team roster row.
+    (Season totals are separate; you can reset season with your reset button.)
+    """
+    try:
+        supabase.table("team_rosters").delete().eq("team_code", team_code).eq("team_key", team_key).execute()
+    except Exception as e:
+        _show_db_error(e, "Supabase DELETE failed on team_rosters")
+        _render_supabase_fix_block()
+        st.stop()
+  
 
 # -----------------------------
 # BRANDING + BACKGROUND
@@ -1434,5 +1532,6 @@ else:
             indiv_rows.append({"Type": rk, "Count": stats.get(rk, 0)})
 
     st.table(indiv_rows)
+
 
 
