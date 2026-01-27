@@ -1086,6 +1086,36 @@ with st.sidebar:
         value=bool(SETTINGS.get("strict_mode_default", True)),
     )
 
+    st.markdown("---")
+
+    who, quote = get_daily_quote(HOF_QUOTES)
+
+    st.markdown(
+        f"""
+        <div style="
+            padding: 14px 14px;
+            border-radius: 14px;
+            background: rgba(255,255,255,0.72);
+            border: 1px solid rgba(0,0,0,0.10);
+            box-shadow: 0 6px 18px rgba(0,0,0,0.06);
+        ">
+            <div style="font-size: 0.95rem; font-weight: 800; letter-spacing: 0.03em; margin-bottom: 8px;">
+                🏆 Hall of Fame Quote
+            </div>
+            <div style="font-size: 0.98rem; font-weight: 700; line-height: 1.35;">
+                “{quote}”
+            </div>
+            <div style="margin-top: 10px; font-size: 0.90rem; font-weight: 800; opacity: 0.85;">
+                — {who}
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    st.markdown("<div style='height: 10px;'></div>", unsafe_allow_html=True)
+
+
 # -----------------------------
 # HALL OF FAME QUOTES (SIDEBAR)
 # -----------------------------
@@ -1564,6 +1594,7 @@ else:
             indiv_rows.append({"Type": rk, "Count": stats.get(rk, 0)})
 
     st.table(indiv_rows)
+
 
 
 
