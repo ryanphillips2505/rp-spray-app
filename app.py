@@ -174,14 +174,12 @@ def _load_team_cfg_from_file(team_code: str) -> dict:
         return {}
 
 TEAM_CFG = _load_team_cfg_from_file(TEAM_CODE) or {}
-st.write("TEAM_CODE:", TEAM_CODE)
-st.write("TEAM_CFG:", TEAM_CFG)
-st.write("TEAM_CFG logo exists:", os.path.exists(str(TEAM_CFG.get("logo_path",""))))
-st.write("TEAM_CFG bg exists:", os.path.exists(str(TEAM_CFG.get("background_path",""))))
-st.write("Resolved logo:", LOGO_PATH if "LOGO_PATH" in globals() else "LOGO_PATH not set yet")
-st.write("Resolved bg:", BG_PATH if "BG_PATH" in globals() else "BG_PATH not set yet")
-st.stop()
 
+# -----------------------------
+# RESOLVED TEAM BRANDING (logo + background)
+# -----------------------------
+LOGO_PATH = TEAM_CFG.get("logo_path") or SETTINGS.get("logo_image")
+BG_PATH   = TEAM_CFG.get("background_path") or SETTINGS.get("background_image")
 
 
 # -----------------------------
@@ -1663,6 +1661,7 @@ else:
             indiv_rows.append({"Type": rk, "Count": stats.get(rk, 0)})
 
     st.table(indiv_rows)
+
 
 
 
