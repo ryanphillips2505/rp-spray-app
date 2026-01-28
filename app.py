@@ -1453,47 +1453,46 @@ with col_a:
         # Build the NEW roster from the text box (this is what coach just edited)
         new_roster = {ln.strip().strip('"') for ln in (roster_text or "").split("\n") if ln.strip()}
 
-    # Save roster text
-    db_upsert_team(TEAM_CODE_SAFE, team_key, selected_team, roster_text)
+        # Save roster text
+        db_upsert_team(TEAM_CODE_SAFE, team_key, selected_team, roster_text)
 
-    # Reload season from DB (source of truth)
-    season_team, season_players, games_played, processed_set = db_load_season_totals(
-        TEAM_CODE_SAFE, team_key, new_roster
-    )
+        # Reload season from DB (source of truth) — includes archived_players
+        season_team, season_players, games_played, processed_set, archived_players = db_load_season_totals(
+            TEAM_CODE_SAFE, team_key, new_roster
+        )
 
-    # Archive anyone removed from roster
-    removed = set(season_players.keys()) - set(new_roster)
-    archived_players = set(archived_players or set())
-    archived_players.update(removed)
+        # Archive anyone removed from roster (but KEEP their stats in DB)
+        removed = set(season_players.keys()) - set(new_roster)
+        archived_players = set(archived_players or set())
+        archived_players.update(removed)
 
-    # Unarchive anyone re-added
-    archived_players = {p for p in archived_players if p not in new_roster}
+        # Unarchive anyone re-added
+        archived_players = {p for p in archived_players if p not in new_roster}
 
-    # Ensure new roster players exist in season_players
-    for p in new_roster:
-        season_players.setdefault(p, empty_stat_dict())
+        # Ensure new roster players exist in season_players
+        for p in new_roster:
+            season_players.setdefault(p, empty_stat_dict())
 
-    # Save back with updated archived list
-    db_save_season_totals(TEAM_CODE_SAFE, team_key, season_team, season_players, games_played, archived_players)
+        # Save back with updated archived list
+        db_save_season_totals(TEAM_CODE_SAFE, team_key, season_team, season_players, games_played, archived_players)
 
-    st.success("Roster saved + removed players archived (reports will match roster).")
-    st.rerun()
+        st.success("Roster saved + removed players archived (reports will match roster).")
+        st.rerun()
 
 
 current_roster = {line.strip().strip('"') for line in roster_text.split("\n") if line.strip()}
 st.write(f"**Hitters loaded:** {len(current_roster)}")
 
-season_team, season_players, games_played, processed_set = db_load_season_totals(
+# ✅ LOAD FROM SUPABASE ONLY (source of truth) — includes archived_players
+season_team, season_players, games_played, processed_set, archived_players = db_load_season_totals(
     TEAM_CODE_SAFE, team_key, current_roster
 )
-
 
 st.markdown(
     f"""
 <div class="spray-card">
     <strong>Active team:</strong> {selected_team}<br>
     <strong>Games processed:</strong> {games_played}<br>
-
 </div>
 """,
     unsafe_allow_html=True,
@@ -1528,7 +1527,7 @@ with col_reset:
         # Supabase is the source of truth now
         db_reset_season(TEAM_CODE_SAFE, team_key)
 
-        season_team, season_players, games_played, processed_set = db_load_season_totals(
+        season_team, season_players, games_played, processed_set, archived_players = db_load_season_totals(
             TEAM_CODE_SAFE, team_key, current_roster
         )
 
@@ -1543,6 +1542,7 @@ with st.expander("🛟 Backup / Restore (Coach-Proof) — Download + Upload Seas
         "meta": {"games_played": games_played},
         "team": season_team,
         "players": season_players,
+        "archived_players": sorted(list(archived_players or set())),
     }
 
     backup_bytes = json.dumps(raw_payload, indent=2).encode("utf-8")
@@ -1578,6 +1578,7 @@ with st.expander("🛟 Backup / Restore (Coach-Proof) — Download + Upload Seas
             incoming_team = incoming.get("team", {})
             incoming_players = incoming.get("players", {})
             incoming_meta = incoming.get("meta", {})
+            incoming_archived = incoming.get("archived_players", [])
 
             if not isinstance(incoming_team, dict) or not isinstance(incoming_players, dict) or not isinstance(incoming_meta, dict):
                 raise ValueError("Backup JSON is missing required sections: meta/team/players.")
@@ -1593,6 +1594,11 @@ with st.expander("🛟 Backup / Restore (Coach-Proof) — Download + Upload Seas
 
             restored_games_played = int(incoming_meta.get("games_played", 0) or 0)
 
+            # Archived players set
+            restored_archived = set()
+            if isinstance(incoming_archived, list):
+                restored_archived = {str(x).strip().strip('"') for x in incoming_archived if str(x).strip()}
+
             legacy_processed = incoming_team.get("_processed_game_keys", [])
             legacy_hashes = []
             if isinstance(legacy_processed, list):
@@ -1600,7 +1606,7 @@ with st.expander("🛟 Backup / Restore (Coach-Proof) — Download + Upload Seas
                 restored_games_played = len(set(legacy_hashes))
 
             db_reset_season(TEAM_CODE_SAFE, team_key)
-            db_save_season_totals(TEAM_CODE_SAFE, team_key, incoming_team, fixed_players, restored_games_played)
+            db_save_season_totals(TEAM_CODE_SAFE, team_key, incoming_team, fixed_players, restored_games_played, restored_archived)
 
             if legacy_hashes:
                 for h in set(legacy_hashes):
@@ -1687,7 +1693,6 @@ process_clicked = st.button("📥 Process Game (ADD to Season Totals)", key="pro
 st.markdown("</div>", unsafe_allow_html=True)
 
 if process_clicked:
-
 
     if st.session_state.processing_game:
         st.warning("Already processing… please wait.")
@@ -1780,7 +1785,9 @@ if process_clicked:
                 game_players[batter][combo_key] += 1
 
         add_game_to_season(season_team, season_players, game_team, game_players)
-        db_save_season_totals(TEAM_CODE_SAFE, team_key, season_team, season_players, len(processed_set))
+
+        # ✅ Save with archived_players too
+        db_save_season_totals(TEAM_CODE_SAFE, team_key, season_team, season_players, len(processed_set), archived_players)
 
         st.success("✅ Game processed and added to season totals (Supabase).")
         rerun_needed = True
@@ -1815,9 +1822,11 @@ season_rows = []
 
 active_players = sorted([p for p in current_roster if p in season_players])
 
+# ✅ archived list comes from DB (NOT recomputed)
+archived_list = sorted([p for p in (archived_players or set()) if p in season_players and p not in current_roster])
+
 if show_archived:
-    archived_players = sorted([p for p in season_players.keys() if p not in current_roster])
-    display_players = active_players + archived_players
+    display_players = active_players + archived_list
 else:
     display_players = active_players
 
@@ -1833,7 +1842,6 @@ for player in display_players:
     for rk in RUN_KEYS:
         row[rk] = stats.get(rk, 0)
     season_rows.append(row)
-
 
 df_season = pd.DataFrame(season_rows)
 col_order = (["Player"] + LOCATION_KEYS + ["GB", "FB"] + COMBO_KEYS + RUN_KEYS)
@@ -1935,12 +1943,17 @@ with col_dl2:
     )
 
 st.subheader(f"🎯 Individual Spray – SEASON TO DATE ({selected_team})")
-selectable_players = sorted(
-    [
-        p for p in season_players.keys()
-        if any(season_players[p].get(k, 0) > 0 for k in (LOCATION_KEYS + BALLTYPE_KEYS + COMBO_KEYS + RUN_KEYS))
-    ]
-)
+
+# ✅ Individual dropdown matches roster by default; archived optional
+if show_archived:
+    indiv_candidates = sorted(set(active_players + archived_list))
+else:
+    indiv_candidates = active_players
+
+selectable_players = [
+    p for p in indiv_candidates
+    if p in season_players and any(season_players[p].get(k, 0) > 0 for k in (LOCATION_KEYS + BALLTYPE_KEYS + COMBO_KEYS + RUN_KEYS))
+]
 
 if not selectable_players:
     st.info("No hitters have recorded balls in play yet.")
@@ -1965,6 +1978,7 @@ else:
 
     st.table(indiv_rows)
 
+
 # -----------------------------
 # FOOTER (Copyright)
 # -----------------------------
@@ -1987,6 +2001,7 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
+
 
 
 
