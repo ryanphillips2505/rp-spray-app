@@ -1457,7 +1457,7 @@ with col_a:
     db_upsert_team(TEAM_CODE_SAFE, team_key, selected_team, roster_text)
 
     # Reload season from DB (source of truth)
-    season_team, season_players, games_played, processed_set, archived_players = db_load_season_totals(
+    season_team, season_players, games_played, processed_set = db_load_season_totals(
         TEAM_CODE_SAFE, team_key, new_roster
     )
 
@@ -1987,6 +1987,7 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
+
 
 
 
