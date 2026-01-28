@@ -924,27 +924,37 @@ def supabase_health_check_or_stop():
 supabase_health_check_or_stop()
 
 
-def db_load_season_totals(team_code: str, team_key: str, current_roster: set[str]):
-    """
-    Returns (season_team, season_players, games_played, processed_hashes_set)
-    """
-    season_team = empty_stat_dict()
-    season_players = {p: empty_stat_dict() for p in current_roster}
-    games_played = 0
+def db_save_season_totals(team_code: str, team_key: str, season_team: dict, season_players: dict, games_played: int, archived_players: set[str] | list[str] | None = None):
+    archived_list = []
+    if archived_players:
+        archived_list = sorted({str(x).strip().strip('"') for x in archived_players if str(x).strip()})
+
+    payload = {
+        "team": season_team,
+        "players": season_players,
+        "meta": {"archived_players": archived_list},
+    }
 
     try:
-        res = (
+        (
             supabase.table("season_totals")
-            .select("data, games_played")
-            .eq("team_code", team_code)
-            .eq("team_key", team_key)
-            .limit(1)
+            .upsert(
+                {
+                    "team_code": team_code,
+                    "team_key": team_key,
+                    "data": payload,
+                    "games_played": int(games_played),
+                    "updated_at": datetime.utcnow().isoformat(),
+                },
+                on_conflict="team_code,team_key",
+            )
             .execute()
         )
     except Exception as e:
-        _show_db_error(e, "Supabase SELECT failed on season_totals")
+        _show_db_error(e, "Supabase UPSERT failed on season_totals")
         _render_supabase_fix_block()
         st.stop()
+
 
     if res.data:
         row = res.data[0]
@@ -1440,16 +1450,43 @@ roster_text = st.text_area(
 col_a, _ = st.columns([1, 3])
 with col_a:
     if st.button("💾 Save Roster"):
-        db_upsert_team(TEAM_CODE_SAFE, team_key, selected_team, roster_text)
-        st.success("Roster saved (Supabase).")
+    # Build the NEW roster from the text box (this is what coach just edited)
+    new_roster = {ln.strip().strip('"') for ln in (roster_text or "").split("\n") if ln.strip()}
+
+    # Save roster text
+    db_upsert_team(TEAM_CODE_SAFE, team_key, selected_team, roster_text)
+
+    # Reload season from DB (source of truth)
+    season_team, season_players, games_played, processed_set, archived_players = db_load_season_totals(
+        TEAM_CODE_SAFE, team_key, new_roster
+    )
+
+    # Archive anyone removed from roster
+    removed = set(season_players.keys()) - set(new_roster)
+    archived_players = set(archived_players or set())
+    archived_players.update(removed)
+
+    # Unarchive anyone re-added
+    archived_players = {p for p in archived_players if p not in new_roster}
+
+    # Ensure new roster players exist in season_players
+    for p in new_roster:
+        season_players.setdefault(p, empty_stat_dict())
+
+    # Save back with updated archived list
+    db_save_season_totals(TEAM_CODE_SAFE, team_key, season_team, season_players, games_played, archived_players)
+
+    st.success("Roster saved + removed players archived (reports will match roster).")
+    st.rerun()
+
 
 current_roster = {line.strip().strip('"') for line in roster_text.split("\n") if line.strip()}
 st.write(f"**Hitters loaded:** {len(current_roster)}")
 
-# ✅ LOAD FROM SUPABASE ONLY (source of truth)
-season_team, season_players, games_played, processed_set = db_load_season_totals(
+season_team, season_players, games_played, processed_set, archived_players = db_load_season_totals(
     TEAM_CODE_SAFE, team_key, current_roster
 )
+
 
 st.markdown(
     f"""
@@ -1772,18 +1809,27 @@ if process_clicked:
 # -----------------------------
 st.subheader(f"📔 Per-Player Spray – SEASON TO DATE ({selected_team})")
 
+show_archived = st.checkbox("Show archived players (not on current roster)", value=False)
+
 season_rows = []
-for player in sorted(season_players.keys()):
+
+active_players = sorted([p for p in current_roster if p in season_players])
+
+for player in active_players:
     stats = season_players[player]
     row = {"Player": player}
+    
     for loc in LOCATION_KEYS:
         row[loc] = stats.get(loc, 0)
+        
     row["GB"] = stats.get("GB", 0)
     row["FB"] = stats.get("FB", 0)
+    
     for ck in COMBO_KEYS:
         row[ck] = stats.get(ck, 0)
     for rk in RUN_KEYS:
         row[rk] = stats.get(rk, 0)
+        
     season_rows.append(row)
 
 df_season = pd.DataFrame(season_rows)
@@ -1938,6 +1984,7 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
+
 
 
 
