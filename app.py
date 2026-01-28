@@ -1450,8 +1450,8 @@ roster_text = st.text_area(
 col_a, _ = st.columns([1, 3])
 with col_a:
     if st.button("💾 Save Roster"):
-    # Build the NEW roster from the text box (this is what coach just edited)
-    new_roster = {ln.strip().strip('"') for ln in (roster_text or "").split("\n") if ln.strip()}
+        # Build the NEW roster from the text box (this is what coach just edited)
+        new_roster = {ln.strip().strip('"') for ln in (roster_text or "").split("\n") if ln.strip()}
 
     # Save roster text
     db_upsert_team(TEAM_CODE_SAFE, team_key, selected_team, roster_text)
@@ -1984,6 +1984,7 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
+
 
 
 
