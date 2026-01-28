@@ -1815,22 +1815,25 @@ season_rows = []
 
 active_players = sorted([p for p in current_roster if p in season_players])
 
-for player in active_players:
+if show_archived:
+    archived_players = sorted([p for p in season_players.keys() if p not in current_roster])
+    display_players = active_players + archived_players
+else:
+    display_players = active_players
+
+for player in display_players:
     stats = season_players[player]
     row = {"Player": player}
-    
     for loc in LOCATION_KEYS:
         row[loc] = stats.get(loc, 0)
-        
     row["GB"] = stats.get("GB", 0)
     row["FB"] = stats.get("FB", 0)
-    
     for ck in COMBO_KEYS:
         row[ck] = stats.get(ck, 0)
     for rk in RUN_KEYS:
         row[rk] = stats.get(rk, 0)
-        
     season_rows.append(row)
+
 
 df_season = pd.DataFrame(season_rows)
 col_order = (["Player"] + LOCATION_KEYS + ["GB", "FB"] + COMBO_KEYS + RUN_KEYS)
@@ -1984,6 +1987,7 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
+
 
 
 
