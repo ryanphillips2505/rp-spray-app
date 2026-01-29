@@ -1911,7 +1911,69 @@ col_order = (["Player"] + LOCATION_KEYS + ["GB", "FB"] + COMBO_KEYS + RUN_KEYS)
 col_order = [c for c in col_order if c in df_season.columns]
 df_season = df_season[col_order]
 
-st.dataframe(df_season, use_container_width=True)
+# -----------------------------
+# 👁️ Column Visibility (per selected opponent/team)
+# -----------------------------
+# Hide Streamlit's built-in dataframe download icon (you already have download buttons below)
+st.markdown(
+    """
+    <style>
+      /* Try multiple selectors because Streamlit versions vary */
+      [data-testid="stDataFrameToolbar"] button[title="Download data as CSV"] { display: none !important; }
+      [data-testid="stDataFrameToolbar"] button[aria-label="Download data as CSV"] { display: none !important; }
+      [data-testid="stDataFrameToolbar"] button[title="Download data"] { display: none !important; }
+      [data-testid="stDataFrameToolbar"] button[aria-label="Download data"] { display: none !important; }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
+# Keyed by team/opponent so each opponent can have its own preferred view
+cols_key = f"season_cols__{TEAM_CODE_SAFE}__{team_key}"
+
+# Default: show everything
+if cols_key not in st.session_state:
+    st.session_state[cols_key] = list(df_season.columns)
+
+# Force Player to always stay visible
+all_cols = list(df_season.columns)
+default_cols = st.session_state[cols_key]
+
+# Keep only columns that still exist (safe if you add/remove stats later)
+default_cols = [c for c in default_cols if c in all_cols]
+if "Player" in all_cols and "Player" not in default_cols:
+    default_cols = ["Player"] + default_cols
+
+# UI row (puts the eyeball control above the table, like a “toolbar”)
+left_spacer, right_controls = st.columns([6, 2])
+with right_controls:
+    # Prefer popover (newer Streamlit). Fallback to expander if popover isn't available.
+    if hasattr(st, "popover"):
+        with st.popover("👁️ Columns"):
+            picked = st.multiselect(
+                "Show these columns",
+                options=all_cols,
+                default=default_cols,
+            )
+    else:
+        with st.expander("👁️ Columns", expanded=False):
+            picked = st.multiselect(
+                "Show these columns",
+                options=all_cols,
+                default=default_cols,
+            )
+
+    # Always keep Player
+    if "Player" in all_cols and "Player" not in picked:
+        picked = ["Player"] + picked
+
+    st.session_state[cols_key] = picked
+
+# Apply the selection
+picked_cols = [c for c in st.session_state[cols_key] if c in all_cols]
+df_show = df_season[picked_cols] if picked_cols else df_season
+
+st.dataframe(df_show, use_container_width=True)
 
 # -----------------------------
 # 📝 COACHES SCOUTING NOTES (per selected opponent/team)
