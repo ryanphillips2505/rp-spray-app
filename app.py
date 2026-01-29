@@ -1299,12 +1299,12 @@ h1.app-title {{
 </style>
 
 <style>
-/* Stat Edit wrapper: tight, right-aligned */
+/* Pull the Stat Edit control up to visually align with the section header */
 .stat-edit-wrap {{
     display: flex;
     justify-content: flex-end;
-    margin-top: 0px !important;
-    margin-bottom: 4px !important;
+    margin-top: -22px !important;
+    margin-bottom: 6px !important;
 }}
 </style>
 """,
@@ -1890,9 +1890,7 @@ if process_clicked:
 st.subheader(f"📔 Per-Player Spray – SEASON TO DATE ({selected_team})")
 
 show_archived = st.checkbox("Show archived players (not on current roster)", value=False)
-
-# season_spacing_shim: tighten space between header/checkbox and the table controls
-st.markdown("<div style='margin-top:-18px'></div>", unsafe_allow_html=True)
+st.markdown("<div style='margin-top:-14px'></div>", unsafe_allow_html=True)
 
 season_rows = []
 
@@ -1944,7 +1942,7 @@ st.markdown(
 st.markdown("""
     <style>
       /* Tighten and right-align the Stat Edit button row */
-      .stat-edit-wrap { display: flex; justify-content: flex-end; margin-top: -6px; margin-bottom: 6px; }
+      .stat-edit-wrap { display: flex; justify-content: flex-end; margin-top: -10px; margin-bottom: 2px; }
       .stat-edit-wrap [data-testid="stPopoverButton"] { border-radius: 10px !important; }
     </style>
 """, unsafe_allow_html=True)
@@ -1962,12 +1960,9 @@ default_cols = st.session_state[cols_key]
 
 # Keep only columns that still exist (safe if you add/remove stats later)
 default_cols = [c for c in default_cols if c in all_cols]
-if "Player" in all_cols and "Player" not in default_cols:
-    default_cols = ["Player"] + default_cols
-
-# UI row (puts the eyeball control above the table, like a “toolbar”)
-left_spacer, right_controls = st.columns([9, 2])
-with right_controls:
+if "Player" in all_cols and # UI row (top-right Stat Edit above the table)
+ctrl_left, ctrl_right = st.columns([10, 2])
+with ctrl_right:
     st.markdown('<div class="stat-edit-wrap">', unsafe_allow_html=True)
     # Prefer popover (newer Streamlit). Fallback to expander if popover isn't available.
     if hasattr(st, "popover"):
@@ -1997,6 +1992,8 @@ with right_controls:
 # Apply the selection
 picked_cols = [c for c in st.session_state[cols_key] if c in all_cols]
 df_show = df_season[picked_cols] if picked_cols else df_season
+
+st.dataframe(df_show, use_container_width=True) picked_cols else df_season
 
 st.dataframe(df_show, use_container_width=True)
 
