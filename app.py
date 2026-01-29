@@ -12,7 +12,6 @@ import re
 import hashlib
 import httpx
 import time  # anti-stuck processing lock + failsafe unlock
-import traceback
 from datetime import datetime
 from typing import Optional, Tuple
 
@@ -307,238 +306,10 @@ COMBO_KEYS = [f"GB-{loc}" for loc in COMBO_LOCS] + [f"FB-{loc}" for loc in COMBO
 # Running event tracking (NOT balls in play)
 RUN_KEYS = [
     # Stolen Bases
-    "SB", "SB-2B", "SB-3B", "SB-H",
+    "SB", "SB-2B", "SB-3B",
     # Caught Stealing
-    "CS", "CS-2B", "CS-3B", "CS-H",
+    "CS", "CS-2B", "CS-3B",
 ]
-# -----------------------------
-# PITCHING (YUKON) — IP / K / BB / STRIKE%
-# -----------------------------
-HALF_INNING_RE = re.compile(r"^(Top|Bottom)\s+\d+(?:st|nd|rd|th)?\s*-\s*(.+?)\s*$", re.IGNORECASE)
-OUTS_MARKER_RE = re.compile(r"\b([123])\s+Outs?\b", re.IGNORECASE)
-
-PBP_PITCHER_RE = re.compile(r"\b([A-Z]\s+[A-Za-z][A-Za-z'\-\.#0-9]+)\s+pitching\b")
-PBP_NOW_PITCHING_RE = re.compile(r"\b([A-Z]\s+[A-Za-z][A-Za-z'\-\.#0-9]+)\s+(?:now\s+)?pitching\b")
-PBP_IN_FOR_PITCHER_RE = re.compile(r"\b([A-Z]\s+[A-Za-z][A-Za-z'\-\.#0-9]+)\s+in\s+for\s+pitcher\b")
-# GameChanger often uses: "Lineup changed: J Smith in at pitcher"
-PBP_IN_AT_PITCHER_RE = re.compile(r"\b([A-Z]\s+[A-Za-z][A-Za-z'\-\.#0-9]+)\s+in\s+at\s+pitcher\b", re.IGNORECASE)
-# Another variant: "Lineup changed: J Smith in for A Brown, pitching"
-PBP_IN_FOR_X_PITCHING_RE = re.compile(r"\b([A-Z]\s+[A-Za-z][A-Za-z'\-\.#0-9]+)\s+in\s+for\s+[A-Z]\s+[A-Za-z][A-Za-z'\-\.#0-9]+,\s*pitching\b", re.IGNORECASE)
-
-BALL_TOK_RE = re.compile(r"\bBall\s+[1234]\b", re.IGNORECASE)
-STRIKE_TOK_RE = re.compile(r"\bStrike\s+[123]\b", re.IGNORECASE)
-FOUL_TOK_RE = re.compile(r"\bFoul\b", re.IGNORECASE)
-INPLAY_TOK_RE = re.compile(r"\bIn\s+play\b", re.IGNORECASE)
-
-def parse_batting_team_from_half(line: str) -> Optional[str]:
-    s = (line or "").strip().strip('"')
-    m = HALF_INNING_RE.match(s)
-    return m.group(2).strip() if m else None
-
-
-
-# -----------------------------
-# PITCHING OUTS (PBP-ONLY, BIP-STYLE)
-# -----------------------------
-# We DO NOT trust GC scoreboard lines ("| 2 Outs") for IP.
-# We count outs from consistent result headers + detail phrases.
-_OUT_EVENT_HEADER_MAP = {
-    "strikeout": 1,
-    "ground out": 1,
-    "fly out": 1,
-    "line out": 1,
-    "pop out": 1,
-    "bunt out": 1,
-    "runner out": 1,
-    "sacrifice fly": 1,
-    "sac fly": 1,
-    "double play": 2,
-    "triple play": 3,
-}
-
-# Detail phrases that indicate an out happened (used only when header line wasn't available)
-_OUT_DETAIL_PATTERNS_1 = [
-    r"\bgrounds out\b",
-    r"\bflies out\b",
-    r"\bflied out\b",
-    r"\blines out\b",
-    r"\bpops out\b",
-    r"\bbunts out\b",
-    r"\bout at first\b",
-    r"\bout at second\b",
-    r"\bout at third\b",
-    r"\bout at home\b",
-    r"\bis out\b",
-    r"\bcalled out\b",
-]
-
-# Basepath outs
-_OUT_DETAIL_PATTERNS_BASEPATH = [
-    r"\bpicked off\b",
-    r"\bpickoff\b",
-    r"\bcaught stealing\b",
-    r"\bout stealing\b",
-]
-
-# Avoid double counting from narration-only lines
-_OUT_IGNORE_PHRASES = [
-    "half-inning ended by out on the base paths",
-]
-
-def outs_from_result_header(clean_line: str) -> int:
-    """Count outs from GC event header lines (e.g., 'Strikeout', 'Ground Out')."""
-    s = (clean_line or "").strip().strip('"').lower()
-    return int(_OUT_EVENT_HEADER_MAP.get(s, 0) or 0)
-
-def outs_from_event_detail(clean_line: str) -> int:
-    """Fallback out detection from detail lines (only used when header line isn't present)."""
-    s = (clean_line or "").strip().strip('"').lower()
-    if not s:
-        return 0
-    for bad in _OUT_IGNORE_PHRASES:
-        if bad in s:
-            return 0
-
-    # Double/triple play phrases in detail
-    if "triple play" in s:
-        return 3
-    if "double play" in s:
-        return 2
-
-    # Dropped 3rd strike out-at-first is an out
-    if "dropped 3rd strike" in s and ("out at first" in s or "out at" in s):
-        return 1
-
-    # Strikeout detail line
-    if ("strikes out" in s) or ("called out on strikes" in s):
-        return 1
-
-    # Basepath outs (Runner Out header usually exists, but this catches phrasing inside pitch lines)
-    for p in _OUT_DETAIL_PATTERNS_BASEPATH:
-        if re.search(p, s):
-            return 1
-
-    # Generic out phrases
-    for p in _OUT_DETAIL_PATTERNS_1:
-        if re.search(p, s):
-            return 1
-
-    return 0
-def parse_outs_marker(line: str) -> Optional[int]:
-    s = (line or "").strip().strip('"')
-    m = OUTS_MARKER_RE.search(s)
-    return int(m.group(1)) if m else None
-
-def parse_pitcher_change_from_line(line: str) -> Optional[str]:
-    """Detect explicit pitcher CHANGE lines (substitutions)."""
-    s = (line or "").strip().strip('"')
-
-    # GC substitutions / lineup changes
-    for rx in (PBP_IN_AT_PITCHER_RE, PBP_IN_FOR_X_PITCHING_RE, PBP_IN_FOR_PITCHER_RE):
-        m = rx.search(s)
-        if m:
-            return m.group(1).strip()
-    return None
-
-
-def parse_pitcher_mention_from_line(line: str) -> Optional[str]:
-    """Detect pitcher identity mentions (not necessarily a change), e.g. 'X pitching'."""
-    s = (line or "").strip().strip('"')
-
-    for rx in (PBP_NOW_PITCHING_RE, PBP_PITCHER_RE):
-        m = rx.search(s)
-        if m:
-            return m.group(1).strip()
-    return None
-
-
-def parse_pitcher_from_line(line: str) -> Optional[str]:
-    """Backward-compatible helper: returns pitcher from either change or mention."""
-    return parse_pitcher_change_from_line(line) or parse_pitcher_mention_from_line(line)
-
-def count_pitch_tokens(line: str) -> Tuple[int, int]:
-    """Returns (pitches, strikes) from visible pitch tokens in GC pitch strings."""
-    s = line or ""
-    balls = len(BALL_TOK_RE.findall(s))
-    strikes = len(STRIKE_TOK_RE.findall(s))
-    fouls = len(FOUL_TOK_RE.findall(s))
-    inplay = len(INPLAY_TOK_RE.findall(s))
-    pitches = balls + strikes + fouls + inplay
-    strike_ct = strikes + fouls + inplay
-    return pitches, strike_ct
-
-def is_strikeout_detail(line: str) -> bool:
-    s = (line or "").lower()
-    if s.strip() == "strikeout":
-        return False
-    return (" strikes out" in s) or ("called out on strikes" in s)
-
-def is_walk_detail(line: str) -> bool:
-    s = (line or "").lower().strip()
-    if s == "walk":
-        return False
-    # includes intentional walk lines as well
-    return (" walks" in s) or ("intentionally walked" in s) or ("base on balls" in s)
-
-def is_hbp_detail(line: str) -> bool:
-    s = (line or "").lower().strip()
-    if s in {"hit by pitch", "hit-by-pitch"}:
-        return False
-    return ("hit by pitch" in s) or ("is hit by pitch" in s)
-
-def empty_pitching_stat() -> dict:
-    return {"OUTS": 0, "K": 0, "BB": 0, "PITCHES": 0, "STRIKES": 0}
-
-def ensure_pitching_keys(d: dict) -> dict:
-    d.setdefault("OUTS", 0)
-    d.setdefault("K", 0)
-    d.setdefault("BB", 0)
-    d.setdefault("PITCHES", 0)
-    d.setdefault("STRIKES", 0)
-    return d
-
-def outs_to_ip_str(outs: int) -> str:
-    inn = int(outs or 0) // 3
-    rem = int(outs or 0) % 3
-    return f"{inn}.{rem}"
-
-# -----------------------------
-# TEAM NAME MATCHING (PBP) — for reliable defense/offense detection
-# -----------------------------
-_TEAM_STOPWORDS = {"varsity","jv","freshman","frosh","hs","high","school","baseball"}
-
-def _team_tokens(name: str):
-    s = (name or "").lower()
-    toks = re.findall(r"[a-z0-9]+", s)
-    toks = [t for t in toks if t and t not in _TEAM_STOPWORDS and len(t) >= 3]
-    return set(toks)
-
-def _norm_team(s: str) -> str:
-    s = (s or "").strip().lower()
-    s = re.sub(r"\s+", " ", s)
-    # drop common suffix words that GC appends
-    for w in sorted(_TEAM_STOPWORDS, key=len, reverse=True):
-        s = re.sub(rf"\b{re.escape(w)}\b", "", s).strip()
-        s = re.sub(r"\s+", " ", s).strip()
-    return s
-
-def team_matches_pbp(batting_team: str, our_team_name: str, exact: bool = False) -> bool:
-    """
-    True if the half-inning header team name appears to be OUR team.
-
-    - exact=True: use normalized string equality (best when we've inferred the exact header string)
-    - exact=False: token overlap fallback (robust but less precise)
-    """
-    if exact:
-        return _norm_team(batting_team) == _norm_team(our_team_name)
-
-    bt = _team_tokens(batting_team)
-    ot = _team_tokens(our_team_name)
-    if not bt or not ot:
-        return False
-    return len(bt.intersection(ot)) > 0
-
-
 
 
 
@@ -683,7 +454,7 @@ RIGHT_SIDE_PATTERNS = [
 ]
 
 # -----------------------------
-# RUNNING EVENTS (SB / CS) — PICKOFFS REMOVED + FIXED
+# RUNNING EVENTS (SB / CS / DI) — PICKOFFS REMOVED + FIXED
 # -----------------------------
 SB_ACTION_REGEX = re.compile(
     r"""
@@ -706,6 +477,29 @@ CS_ACTION_REGEX = re.compile(
     re.IGNORECASE | re.VERBOSE
 )
 
+DI_REGEX_1 = re.compile(
+    r"""
+    \bdefensive\s+indifference\b
+    .*?
+    \b(?:to|advances?\s+to|takes)\b
+    (?:\s+base)?
+    \s*(\(?\s*(?:2nd|3rd|home|second|third)\s*\)?)
+    """,
+    re.IGNORECASE | re.VERBOSE
+)
+
+DI_REGEX_2 = re.compile(
+    r"""
+    \b(?:to|advances?\s+to|takes)\b
+    (?:\s+base)?
+    \s*(\(?\s*(?:2nd|3rd|home|second|third)\s*\)?)
+    .*?
+    \bdefensive\s+indifference\b
+    """,
+    re.IGNORECASE | re.VERBOSE
+)
+
+DI_REGEX_BARE = re.compile(r"\bdefensive\s+indifference\b", re.IGNORECASE)
 PAREN_NAME_REGEX = re.compile(r"\(([^)]+)\)")
 
 
@@ -773,24 +567,6 @@ def get_batter_name(line: str, roster: set[str]):
     return None
 
 
-def infer_our_team_name_from_pbp(lines, roster):
-    """Infer OUR team name as it appears in half-inning headers by finding a header followed by a roster batter."""
-    current_batting = None
-    for raw in lines:
-        s = (raw or "").strip().strip('"')
-        s = re.sub(r"\([^)]*\)", "", s)
-        s = re.sub(r"\s+", " ", s).strip()
-        maybe = parse_batting_team_from_half(s)
-        if maybe:
-            current_batting = maybe
-            continue
-        if current_batting:
-            b = get_batter_name(s, roster)
-            if b:
-                return current_batting
-    return None
-
-
 def extract_runner_name_near_event(clean_line: str, match_start: int, roster: set[str]) -> Optional[str]:
     left = (clean_line[:match_start] or "").strip()
     if not left:
@@ -844,6 +620,16 @@ def parse_running_event(clean_line: str, roster: set[str]) -> Tuple[Optional[str
         runner = extract_runner_name_near_event(clean_line, m.start(), roster) or extract_runner_name_fallback(clean_line, roster)
         return runner, "CS", base_key
 
+    m = DI_REGEX_1.search(clean_line) or DI_REGEX_2.search(clean_line)
+    if m:
+        base_key = normalize_base_bucket("DI", m.group(1) if (m.lastindex or 0) >= 1 else None)
+        runner = extract_runner_name_near_event(clean_line, m.start(), roster) or extract_runner_name_fallback(clean_line, roster)
+        return runner, "DI", base_key
+
+    if DI_REGEX_BARE.search(clean_line):
+        runner = extract_runner_name_fallback(clean_line, roster)
+        return runner, "DI", "DI"
+
     return None, None, None
 
 
@@ -860,6 +646,7 @@ def is_ball_in_play(line_lower: str) -> bool:
         "reaches on catcher interference", "catcher's interference",
         "caught stealing", "out stealing",
         "steals", "stole", "stealing",
+        "defensive indifference",
         "picked off", "pickoff",
     ]):
         return False
@@ -1067,18 +854,21 @@ create index if not exists processed_games_team_idx
 """.strip()
 
 
-
 def _show_db_error(e: Exception, label: str):
-    st.error(f"{label}")
+    st.error(f"**{label}**")
     try:
-        st.code(f"type: {type(e)}\\nrepr: {e!r}", language="text")
-        st.code(traceback.format_exc(), language="text")
+        parts = [f"type: {type(e)}"]
+        for attr in ("message", "details", "hint", "code"):
+            if hasattr(e, attr):
+                val = getattr(e, attr)
+                if val:
+                    parts.append(f"{attr}: {val}")
+        st.code("\n".join(parts), language="text")
     except Exception:
         st.write(str(e))
 
 
 def _render_supabase_fix_block():
-
     st.error("Supabase tables are missing or mismatched (season_totals / processed_games).")
     ("### Fix (copy/paste into Supabase → SQL Editor → Run)")
     st.code(SUPABASE_SETUP_SQL, language="sql")
@@ -1093,7 +883,7 @@ If it still errors after running the SQL, your Streamlit **secrets** are wrong.
 @st.cache_resource(show_spinner=False)
 def get_supabase() -> Client:
     url = st.secrets.get("SUPABASE_URL", "").strip()
-    key = (st.secrets.get("SUPABASE_SERVICE_ROLE_KEY") or st.secrets.get("SUPABASE_SERVICE_KEY") or "").strip()  # service role key
+    key = st.secrets.get("SUPABASE_SERVICE_KEY", "").strip()  # service role key (server-side only)
     if not url or not key:
         raise RuntimeError("Missing SUPABASE_URL or SUPABASE_SERVICE_KEY in Streamlit secrets.")
     return create_client(url, key)
@@ -1136,7 +926,7 @@ supabase_health_check_or_stop()
 
 def db_load_season_totals(team_code: str, team_key: str, current_roster: set[str]):
     """
-    Returns (season_team, season_players, games_played, processed_hashes_set, archived_players_set, season_pitching_dict)
+    Returns (season_team, season_players, games_played, processed_hashes_set, archived_players_set)
     archived_players are players who exist in DB totals but are not on the current roster (or were removed).
     """
     season_team = empty_stat_dict()
@@ -1144,7 +934,6 @@ def db_load_season_totals(team_code: str, team_key: str, current_roster: set[str
     games_played = 0
     archived_players = set()
 
-    season_pitching = {}
     try:
         res = (
             supabase.table("season_totals")
@@ -1167,8 +956,6 @@ def db_load_season_totals(team_code: str, team_key: str, current_roster: set[str
         raw_players = payload.get("players") or {}
         raw_meta = payload.get("meta") or {}
 
-
-        raw_pitching = payload.get("pitching") or {}
         season_team = ensure_all_keys(raw_team if isinstance(raw_team, dict) else {})
         season_players = {}
 
@@ -1180,16 +967,6 @@ def db_load_season_totals(team_code: str, team_key: str, current_roster: set[str
         for p in current_roster:
             if p not in season_players:
                 season_players[p] = empty_stat_dict()
-
-
-        # Pitching totals (optional, backward compatible)
-        season_pitching = {}
-        if isinstance(raw_pitching, dict):
-            for pn, pst in raw_pitching.items():
-                if isinstance(pst, dict):
-                    season_pitching[str(pn).strip().strip('\"')] = ensure_pitching_keys(pst)
-                else:
-                    season_pitching[str(pn).strip().strip('\"')] = empty_pitching_stat()
 
         games_played = int(row.get("games_played") or 0)
 
@@ -1215,7 +992,7 @@ def db_load_season_totals(team_code: str, team_key: str, current_roster: set[str
     if pres.data:
         processed_set = {r["game_hash"] for r in pres.data if r.get("game_hash")}
 
-    return season_team, season_players, games_played, processed_set, archived_players, season_pitching
+    return season_team, season_players, games_played, processed_set, archived_players
 
 
 def db_save_season_totals(
@@ -1225,7 +1002,6 @@ def db_save_season_totals(
     season_players: dict,
     games_played: int,
     archived_players: set[str] | list[str] | None = None,
-    season_pitching: dict | None = None,
 ):
     archived_list = []
     if archived_players:
@@ -1234,7 +1010,6 @@ def db_save_season_totals(
     payload = {
         "team": season_team,
         "players": season_players,
-        "pitching": season_pitching or {},
         "meta": {"archived_players": archived_list},
     }
 
@@ -1698,7 +1473,7 @@ with col_a:
         db_upsert_team(TEAM_CODE_SAFE, team_key, selected_team, roster_text)
 
         # Reload season from DB (source of truth) – includes archived_players
-        season_team, season_players, games_played, processed_set, archived_players, season_pitching = db_load_season_totals(
+        season_team, season_players, games_played, processed_set, archived_players = db_load_season_totals(
             TEAM_CODE_SAFE, team_key, new_roster
         )
 
@@ -1716,7 +1491,7 @@ with col_a:
 
         # Save back with updated archived list
         db_save_season_totals(
-            TEAM_CODE_SAFE, team_key, season_team, season_players, games_played, archived_players, season_pitching
+            TEAM_CODE_SAFE, team_key, season_team, season_players, games_played, archived_players
         )
 
         st.success("Roster saved + removed players archived (reports will match roster).")
@@ -1727,7 +1502,7 @@ st.write(f"**Hitters loaded:** {len(current_roster)}")
 
 
 # ✅ LOAD FROM SUPABASE ONLY (source of truth) — includes archived_players
-season_team, season_players, games_played, processed_set, archived_players, season_pitching = db_load_season_totals(
+season_team, season_players, games_played, processed_set, archived_players = db_load_season_totals(
     TEAM_CODE_SAFE, team_key, current_roster
 )
 
@@ -1770,7 +1545,7 @@ with col_reset:
         # Supabase is the source of truth now
         db_reset_season(TEAM_CODE_SAFE, team_key)
 
-        season_team, season_players, games_played, processed_set, archived_players, season_pitching = db_load_season_totals(
+        season_team, season_players, games_played, processed_set, archived_players = db_load_season_totals(
             TEAM_CODE_SAFE, team_key, current_roster
         )
 
@@ -1785,7 +1560,6 @@ with st.expander("🛟 Backup / Restore (Coach-Proof) — Download + Upload Seas
         "meta": {"games_played": games_played},
         "team": season_team,
         "players": season_players,
-        "pitching": season_pitching,
         "archived_players": sorted(list(archived_players or set())),
     }
 
@@ -1821,7 +1595,6 @@ with st.expander("🛟 Backup / Restore (Coach-Proof) — Download + Upload Seas
 
             incoming_team = incoming.get("team", {})
             incoming_players = incoming.get("players", {})
-            incoming_pitching = incoming.get("pitching", {})
             incoming_meta = incoming.get("meta", {})
             incoming_archived = incoming.get("archived_players", [])
 
@@ -1837,13 +1610,6 @@ with st.expander("🛟 Backup / Restore (Coach-Proof) — Download + Upload Seas
                 if p not in fixed_players:
                     fixed_players[p] = empty_stat_dict()
 
-            # Pitching (optional)
-            fixed_pitching = {}
-            if isinstance(incoming_pitching, dict):
-                for pn, pst in incoming_pitching.items():
-                    fixed_pitching[str(pn).strip().strip('"')] = ensure_pitching_keys(pst) if isinstance(pst, dict) else empty_pitching_stat()
-            incoming_pitching = fixed_pitching
-
             restored_games_played = int(incoming_meta.get("games_played", 0) or 0)
 
             # Archived players set
@@ -1858,7 +1624,7 @@ with st.expander("🛟 Backup / Restore (Coach-Proof) — Download + Upload Seas
                 restored_games_played = len(set(legacy_hashes))
 
             db_reset_season(TEAM_CODE_SAFE, team_key)
-            db_save_season_totals(TEAM_CODE_SAFE, team_key, incoming_team, fixed_players, restored_games_played, restored_archived, incoming_pitching)
+            db_save_season_totals(TEAM_CODE_SAFE, team_key, incoming_team, fixed_players, restored_games_played, restored_archived)
 
             if legacy_hashes:
                 for h in set(legacy_hashes):
@@ -1980,158 +1746,11 @@ if process_clicked:
         game_team = empty_stat_dict()
         game_players = {p: empty_stat_dict() for p in current_roster}
 
-        # --- Yukon pitching (IP / K / BB / Strike%) ---
-        game_pitching = {}
-        current_pitcher = "UNKNOWN_P"
-        last_def_pitcher = None  # persist our pitcher across innings when GC stops naming him
-        current_batting_team = None
-        last_outs_in_half = 0
-        team_pbp_name = (TEAM_CFG.get("team_name", "") or "").strip()
-        inferred_pbp_team = infer_our_team_name_from_pbp(lines, current_roster)
-
-        # If we can infer OUR exact half-inning header label from roster batters,
-        # use exact match mode for defense/offense (much more accurate).
-        team_name_exact = ""
-        exact_match_mode = False
-        if inferred_pbp_team:
-            team_name_exact = inferred_pbp_team.strip()
-            exact_match_mode = True
-        elif team_pbp_name:
-            team_name_exact = team_pbp_name
-        else:
-            team_name_exact = (selected_team or "").strip()
-
-        # keep legacy variable for downstream code
-        team_pbp_name = team_name_exact
-        pending_unknown_outs = 0
-        pending_unknown_pitches = 0
-        pending_unknown_strikes = 0
-
         for line in lines:
             clean_line = line.strip().strip('"')
             clean_line = re.sub(r"\([^)]*\)", "", clean_line)
             clean_line = re.sub(r"\s+", " ", clean_line).strip()
             line_lower = clean_line.lower()
-
-            # --- Track half inning + current pitcher (for Yukon pitching) ---
-            maybe_batting = parse_batting_team_from_half(clean_line)
-            if maybe_batting:
-                current_batting_team = maybe_batting
-                last_outs_in_half = 0
-                # New half-inning:
-                # - If we are on DEFENSE and we already know our pitcher from a prior inning,
-                #   keep him until a pitcher-change is detected (GC often doesn't repeat the name).
-                # - Otherwise start unknown until GC reveals pitcher (K/BB/ball hit to pitcher/sub line).
-                try:
-                    _def_now = bool(current_batting_team) and (not team_matches_pbp(current_batting_team, team_pbp_name, exact=exact_match_mode))
-                except Exception:
-                    _def_now = False
-
-                if _def_now and last_def_pitcher:
-                    current_pitcher = last_def_pitcher
-                else:
-                    current_pitcher = "UNKNOWN_P"
-
-            # Defense/offense detection: we only credit Yukon pitching when the OTHER team is batting
-            # Defense/offense detection:
-            #  - Primary: half-inning header team name (Top/Bottom ... - TEAM)
-            #  - Failsafe: if we see one of OUR roster hitters in the line, we are on offense even if header was missed
-            _our_batter = get_batter_name(clean_line, current_roster)
-            if _our_batter:
-                is_team_defense = False
-            else:
-                is_team_defense = bool(current_batting_team) and (not team_matches_pbp(current_batting_team, team_pbp_name, exact=exact_match_mode))
-
-            # Only update *our* current pitcher while on defense (prevents opponent pitcher bleed)
-            # Only update *our* current pitcher while on defense (prevents opponent pitcher bleed)
-            if is_team_defense:
-                p_change = parse_pitcher_change_from_line(clean_line)
-                p_mention = parse_pitcher_mention_from_line(clean_line)
-
-                # Explicit pitcher change (sub)
-                if p_change:
-                    # If we still haven't identified the starter, flush pending unknown-starter stats to UNKNOWN_P.
-                    if (current_pitcher == "UNKNOWN_P") and (last_def_pitcher is None) and (
-                        pending_unknown_outs > 0 or pending_unknown_pitches > 0
-                    ):
-                        game_pitching.setdefault("UNKNOWN_P", empty_pitching_stat())
-                        game_pitching["UNKNOWN_P"]["OUTS"] += int(pending_unknown_outs)
-                        game_pitching["UNKNOWN_P"]["PITCHES"] += int(pending_unknown_pitches)
-                        game_pitching["UNKNOWN_P"]["STRIKES"] += int(pending_unknown_strikes)
-                        pending_unknown_outs = 0
-                        pending_unknown_pitches = 0
-                        pending_unknown_strikes = 0
-
-                    current_pitcher = p_change
-                    last_def_pitcher = current_pitcher
-
-                # Pitcher mention (e.g., 'B Trogdon pitching')
-                elif p_mention:
-                    # First time we learn the starter: backfill all prior unknown-starter stats (can span innings).
-                    if (current_pitcher == "UNKNOWN_P") and (last_def_pitcher is None) and (
-                        pending_unknown_outs > 0 or pending_unknown_pitches > 0
-                    ):
-                        game_pitching.setdefault(p_mention, empty_pitching_stat())
-                        game_pitching[p_mention]["OUTS"] += int(pending_unknown_outs)
-                        game_pitching[p_mention]["PITCHES"] += int(pending_unknown_pitches)
-                        game_pitching[p_mention]["STRIKES"] += int(pending_unknown_strikes)
-                        pending_unknown_outs = 0
-                        pending_unknown_pitches = 0
-                        pending_unknown_strikes = 0
-
-                    current_pitcher = p_mention
-                    last_def_pitcher = current_pitcher
-# Outs (IP accuracy) — derive from play results (like BIP), not the scoreboard "2 Outs" line.
-            outs_add = outs_from_result_header(clean_line)
-            if outs_add == 0:
-                outs_add = outs_from_event_detail(clean_line)
-
-            if is_team_defense and outs_add > 0:
-                if (not current_pitcher) or (current_pitcher == "UNKNOWN_P"):
-                    pending_unknown_outs += int(outs_add)
-                else:
-                    pname = current_pitcher
-                    game_pitching.setdefault(pname, empty_pitching_stat())
-                    game_pitching[pname]["OUTS"] += int(outs_add)
-
-            # Optional: if GC prints "3 Outs" anywhere, use it only to end-of-half resync
-            outs_now = parse_outs_marker(clean_line)
-            if outs_now == 3:
-                last_outs_in_half = 3
-            # K / BB from event detail lines (avoid header double-count)
-            if is_team_defense:
-                pname = current_pitcher or "UNKNOWN_P"
-
-                if is_strikeout_detail(clean_line):
-                    game_pitching.setdefault(pname, empty_pitching_stat())
-                    game_pitching[pname]["K"] += 1
-
-                if is_walk_detail(clean_line):
-                    game_pitching.setdefault(pname, empty_pitching_stat())
-                    game_pitching[pname]["BB"] += 1
-
-                # Strike% from visible pitch tokens
-                p_ct, s_ct = (0, 0)
-                if ("Ball " in clean_line) or ("Strike " in clean_line) or ("Foul" in clean_line) or ("In play" in clean_line):
-                    p_ct, s_ct = count_pitch_tokens(clean_line)
-                if p_ct > 0:
-                    # If pitcher not known yet in this defensive segment, hold pitches and assign once pitcher appears.
-                    if (not pname) or (pname == "UNKNOWN_P"):
-                        pending_unknown_pitches += int(p_ct)
-                        pending_unknown_strikes += int(s_ct)
-                    else:
-                        game_pitching.setdefault(pname, empty_pitching_stat())
-                        game_pitching[pname]["PITCHES"] += int(p_ct)
-                        game_pitching[pname]["STRIKES"] += int(s_ct)
-
-                # HBP: add +1 pitch only if the line doesn't already include visible pitch tokens
-                # HBP: add +1 pitch only if the line doesn't already include visible pitch tokens
-                if is_hbp_detail(clean_line) and p_ct == 0:
-                    if (not pname) or (pname == "UNKNOWN_P"):
-                        pending_unknown_pitches += 1
-                    else:
-                        game_pitching.setdefault(pname, empty_pitching_stat())
-                        game_pitching[pname]["PITCHES"] += 1
 
             # running events (not BIP)
             runner, total_key, base_key = parse_running_event(clean_line, current_roster)
@@ -2183,32 +1802,10 @@ if process_clicked:
                 game_team[combo_key] += 1
                 game_players[batter][combo_key] += 1
 
-
-        # If GC never named the starting pitcher, flush any held starter stats to UNKNOWN_P (game-level).
-        if pending_unknown_outs > 0 or pending_unknown_pitches > 0:
-            game_pitching.setdefault("UNKNOWN_P", empty_pitching_stat())
-            game_pitching["UNKNOWN_P"]["OUTS"] += int(pending_unknown_outs)
-            game_pitching["UNKNOWN_P"]["PITCHES"] += int(pending_unknown_pitches)
-            game_pitching["UNKNOWN_P"]["STRIKES"] += int(pending_unknown_strikes)
-            pending_unknown_outs = 0
-            pending_unknown_pitches = 0
-            pending_unknown_strikes = 0
-
         add_game_to_season(season_team, season_players, game_team, game_players)
 
-        # --- Merge game pitching into season pitching ---
-        if "season_pitching" not in locals() or season_pitching is None:
-            season_pitching = {}
-        for pn, pst in (game_pitching or {}).items():
-            pname = str(pn).strip().strip('"') or "UNKNOWN_P"
-            season_pitching.setdefault(pname, empty_pitching_stat())
-            ensure_pitching_keys(season_pitching[pname])
-            ensure_pitching_keys(pst)
-            for k in ["OUTS", "K", "BB", "PITCHES", "STRIKES"]:
-                season_pitching[pname][k] = int(season_pitching[pname].get(k, 0)) + int(pst.get(k, 0) or 0)
-
         # ✅ Save with archived_players too
-        db_save_season_totals(TEAM_CODE_SAFE, team_key, season_team, season_players, len(processed_set), archived_players, season_pitching)
+        db_save_season_totals(TEAM_CODE_SAFE, team_key, season_team, season_players, len(processed_set), archived_players)
 
         st.success("✅ Game processed and added to season totals (Supabase).")
         rerun_needed = True
@@ -2271,39 +1868,6 @@ df_season = df_season[col_order]
 
 st.dataframe(df_season, use_container_width=True)
 
-# -----------------------------
-# YUKON PITCHING – SEASON TO DATE
-# -----------------------------
-st.subheader("⚾ Pitching – SEASON TO DATE")
-
-pitch_rows = []
-for pname in sorted((season_pitching or {}).keys(), key=lambda x: x.lower()):
-    pst = ensure_pitching_keys((season_pitching or {}).get(pname, {}))
-    # skip any empty / accidental entries
-    if sum(int(pst.get(k, 0) or 0) for k in ["OUTS","K","BB","PITCHES","STRIKES"]) == 0:
-        continue
-    outs = int(pst.get("OUTS", 0) or 0)
-    pitches = int(pst.get("PITCHES", 0) or 0)
-    strikes = int(pst.get("STRIKES", 0) or 0)
-    k = int(pst.get("K", 0) or 0)
-    bb = int(pst.get("BB", 0) or 0)
-    spct = (strikes / pitches) if pitches else None
-    pitch_rows.append({
-        "Pitcher": pname,
-        "IP": outs_to_ip_str(outs),
-        "K": k,
-        "BB": bb,
-        "Pitches": pitches,
-        "Strikes": strikes,
-        "Strike%": spct,
-    })
-
-df_pitching = pd.DataFrame(pitch_rows)
-if df_pitching.empty:
-    st.info("No pitching data found yet (requires opponent half-innings + pitching lines in GC play-by-play).")
-else:
-    st.dataframe(df_pitching, use_container_width=True)
-
 csv_bytes = df_season.to_csv(index=False).encode("utf-8")
 safe_team = re.sub(r"[^A-Za-z0-9_-]+", "_", selected_team).strip("_")
 
@@ -2311,11 +1875,6 @@ out = BytesIO()
 with pd.ExcelWriter(out, engine="openpyxl") as writer:
     sheet_name = "Season"
     df_season.to_excel(writer, index=False, sheet_name=sheet_name)
-
-    # Pitching sheet
-    if "df_pitching" in locals() and isinstance(df_pitching, pd.DataFrame) and not df_pitching.empty:
-        p_sheet = "Yukon Pitching"
-        df_pitching.to_excel(writer, index=False, sheet_name=p_sheet)
 
     ws = writer.book[sheet_name]
     ws.freeze_panes = "A2"
@@ -2382,41 +1941,6 @@ with pd.ExcelWriter(out, engine="openpyxl") as writer:
             if isinstance(cell.value, (int, float)):
                 cell.alignment = num_align
 
-    # Format pitching sheet (if present)
-    if "df_pitching" in locals() and isinstance(df_pitching, pd.DataFrame) and not df_pitching.empty:
-        p_sheet = "Yukon Pitching"
-        if p_sheet in writer.book.sheetnames:
-            wp = writer.book[p_sheet]
-            wp.freeze_panes = "A2"
-
-            # Header style
-            for cell in wp[1]:
-                cell.font = header_font
-                cell.alignment = header_align
-                cell.fill = header_fill
-
-            # Column widths
-            for col_idx, col_name in enumerate(df_pitching.columns, start=1):
-                col_letter = get_column_letter(col_idx)
-                max_len = len(str(col_name))
-                sample = df_pitching[col_name].astype(str).head(80).tolist()
-                for v in sample:
-                    max_len = max(max_len, len(v))
-                wp.column_dimensions[col_letter].width = min(max(max_len + 2, 8), 20)
-
-            # Center numeric columns
-            for row in wp.iter_rows(min_row=2, max_row=wp.max_row):
-                for cell in row:
-                    if isinstance(cell.value, (int, float)):
-                        cell.alignment = num_align
-
-            # Percent format for Strike%
-            if "Strike%" in df_pitching.columns:
-                col_idx = list(df_pitching.columns).index("Strike%") + 1
-                col_letter = get_column_letter(col_idx)
-                for r in range(2, wp.max_row + 1):
-                    wp[f"{col_letter}{r}"].number_format = "0.0%"
-
 excel_bytes = out.getvalue()
 
 col_dl1, col_dl2 = st.columns(2)
@@ -2465,8 +1989,9 @@ else:
     # running events
     indiv_rows.append({"Type": "SB", "Count": stats.get("SB", 0)})
     indiv_rows.append({"Type": "CS", "Count": stats.get("CS", 0)})
+    indiv_rows.append({"Type": "DI", "Count": stats.get("DI", 0)})
     for rk in RUN_KEYS:
-        if rk not in ["SB", "CS"]:
+        if rk not in ["SB", "CS", "DI"]:
             indiv_rows.append({"Type": rk, "Count": stats.get(rk, 0)})
 
     st.table(indiv_rows)
@@ -2494,9 +2019,6 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
-
-
-
 
 
 
