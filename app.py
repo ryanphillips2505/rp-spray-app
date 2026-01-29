@@ -1977,76 +1977,90 @@ with stat_edit_slot.container():
     st.markdown('<div class="stat-edit-wrap">', unsafe_allow_html=True)
     if hasattr(st, "popover"):
         with st.popover("Stat Edit"):
-            st.caption("Check/uncheck stats to show in the table")
+            st.caption("Toggle which stats show in the table")
+            flt = st.text_input("Search", value="", placeholder="Type to filter stats...", key=f"{cols_key}__flt")
 
-            # Quick actions
-            c1, c2, _c3 = st.columns([1, 1, 2])
+            c1, c2, c3 = st.columns([1, 1, 2])
             with c1:
-                if st.button("All", key=f"{cols_key}__all"):
+                if st.button("All", key=f"{cols_key}__all", use_container_width=True):
                     st.session_state[cols_key] = list(all_cols)
             with c2:
-                if st.button("None", key=f"{cols_key}__none"):
+                if st.button("None", key=f"{cols_key}__none", use_container_width=True):
                     st.session_state[cols_key] = ["Player"] if "Player" in all_cols else []
+            with c3:
+                st.caption(" ")
 
             picked_set = set(st.session_state.get(cols_key, default_cols))
-
-            # Always keep Player visible
             if "Player" in all_cols:
-                picked_set.add("Player")
+                picked_set.add("Player")  # lock Player ON
 
-            cb_left, cb_right = st.columns(2)
-            for i, col in enumerate(all_cols):
-                target = cb_left if i % 2 == 0 else cb_right
-                safe_col = re.sub(r"[^A-Za-z0-9_]+", "_", str(col))
+            view_cols = list(all_cols)
+            if flt.strip():
+                q = flt.strip().lower()
+                view_cols = [c for c in view_cols if q in str(c).lower()]
 
-                if col == "Player":
-                    target.checkbox(col, value=True, disabled=True, key=f"{cols_key}__cb__{safe_col}")
-                    continue
+            # Scroll so the popover stays compact
+            with st.container(height=360):
+                if "Player" in view_cols:
+                    st.checkbox("Player", value=True, disabled=True, key=f"{cols_key}__cb__Player")
+                    view_cols = [c for c in view_cols if c != "Player"]
 
-                cur_val = col in picked_set
-                new_val = target.checkbox(col, value=cur_val, key=f"{cols_key}__cb__{safe_col}")
-                if new_val:
-                    picked_set.add(col)
-                else:
-                    picked_set.discard(col)
+                colA, colB, colC = st.columns(3)
+                grid = [colA, colB, colC]
+                for i, col in enumerate(view_cols):
+                    target = grid[i % 3]
+                    safe_col = re.sub(r"[^A-Za-z0-9_]+", "_", str(col))
+                    cur_val = col in picked_set
+                    new_val = target.checkbox(str(col), value=cur_val, key=f"{cols_key}__cb__{safe_col}")
+                    if new_val:
+                        picked_set.add(col)
+                    else:
+                        picked_set.discard(col)
 
             picked = [c for c in all_cols if c in picked_set]
             st.session_state[cols_key] = picked
 
     else:
         with st.expander("Stat Edit", expanded=False):
-            st.caption("Check/uncheck stats to show in the table")
+            st.caption("Toggle which stats show in the table")
+            flt = st.text_input("Search", value="", placeholder="Type to filter stats...", key=f"{cols_key}__flt")
 
-            # Quick actions
-            c1, c2, _c3 = st.columns([1, 1, 2])
+            c1, c2, c3 = st.columns([1, 1, 2])
             with c1:
-                if st.button("All", key=f"{cols_key}__all"):
+                if st.button("All", key=f"{cols_key}__all", use_container_width=True):
                     st.session_state[cols_key] = list(all_cols)
             with c2:
-                if st.button("None", key=f"{cols_key}__none"):
+                if st.button("None", key=f"{cols_key}__none", use_container_width=True):
                     st.session_state[cols_key] = ["Player"] if "Player" in all_cols else []
+            with c3:
+                st.caption(" ")
 
             picked_set = set(st.session_state.get(cols_key, default_cols))
-
-            # Always keep Player visible
             if "Player" in all_cols:
-                picked_set.add("Player")
+                picked_set.add("Player")  # lock Player ON
 
-            cb_left, cb_right = st.columns(2)
-            for i, col in enumerate(all_cols):
-                target = cb_left if i % 2 == 0 else cb_right
-                safe_col = re.sub(r"[^A-Za-z0-9_]+", "_", str(col))
+            view_cols = list(all_cols)
+            if flt.strip():
+                q = flt.strip().lower()
+                view_cols = [c for c in view_cols if q in str(c).lower()]
 
-                if col == "Player":
-                    target.checkbox(col, value=True, disabled=True, key=f"{cols_key}__cb__{safe_col}")
-                    continue
+            # Scroll so the popover stays compact
+            with st.container(height=360):
+                if "Player" in view_cols:
+                    st.checkbox("Player", value=True, disabled=True, key=f"{cols_key}__cb__Player")
+                    view_cols = [c for c in view_cols if c != "Player"]
 
-                cur_val = col in picked_set
-                new_val = target.checkbox(col, value=cur_val, key=f"{cols_key}__cb__{safe_col}")
-                if new_val:
-                    picked_set.add(col)
-                else:
-                    picked_set.discard(col)
+                colA, colB, colC = st.columns(3)
+                grid = [colA, colB, colC]
+                for i, col in enumerate(view_cols):
+                    target = grid[i % 3]
+                    safe_col = re.sub(r"[^A-Za-z0-9_]+", "_", str(col))
+                    cur_val = col in picked_set
+                    new_val = target.checkbox(str(col), value=cur_val, key=f"{cols_key}__cb__{safe_col}")
+                    if new_val:
+                        picked_set.add(col)
+                    else:
+                        picked_set.discard(col)
 
             picked = [c for c in all_cols if c in picked_set]
             st.session_state[cols_key] = picked
