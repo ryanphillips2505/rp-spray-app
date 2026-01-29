@@ -1973,24 +1973,87 @@ with stat_edit_slot.container():
     st.markdown('<div class="stat-edit-wrap">', unsafe_allow_html=True)
     if hasattr(st, "popover"):
         with st.popover("Stat Edit"):
-            st.caption("Show / hide stats in this table")
-            picked = st.multiselect(
-                "Show these columns",
-                options=all_cols,
-                default=default_cols,
-            )
+            st.caption("Check/uncheck stats to show in the table")
+
+            # Quick actions
+            c1, c2, _c3 = st.columns([1, 1, 2])
+            with c1:
+                if st.button("All", key=f"{cols_key}__all"):
+                    st.session_state[cols_key] = list(all_cols)
+            with c2:
+                if st.button("None", key=f"{cols_key}__none"):
+                    st.session_state[cols_key] = ["Player"] if "Player" in all_cols else []
+
+            picked_set = set(st.session_state.get(cols_key, default_cols))
+
+            # Always keep Player visible
+            if "Player" in all_cols:
+                picked_set.add("Player")
+
+            cb_left, cb_right = st.columns(2)
+            for i, col in enumerate(all_cols):
+                target = cb_left if i % 2 == 0 else cb_right
+                safe_col = re.sub(r"[^A-Za-z0-9_]+", "_", str(col))
+
+                if col == "Player":
+                    target.checkbox(col, value=True, disabled=True, key=f"{cols_key}__cb__{safe_col}")
+                    continue
+
+                cur_val = col in picked_set
+                new_val = target.checkbox(col, value=cur_val, key=f"{cols_key}__cb__{safe_col}")
+                if new_val:
+                    picked_set.add(col)
+                else:
+                    picked_set.discard(col)
+
+            picked = [c for c in all_cols if c in picked_set]
+            st.session_state[cols_key] = picked
+
     else:
         with st.expander("Stat Edit", expanded=False):
-            st.caption("Show / hide stats in this table")
-            picked = st.multiselect(
-                "Show these columns",
-                options=all_cols,
-                default=default_cols,
-            )
+            st.caption("Check/uncheck stats to show in the table")
 
+            # Quick actions
+            c1, c2, _c3 = st.columns([1, 1, 2])
+            with c1:
+                if st.button("All", key=f"{cols_key}__all"):
+                    st.session_state[cols_key] = list(all_cols)
+            with c2:
+                if st.button("None", key=f"{cols_key}__none"):
+                    st.session_state[cols_key] = ["Player"] if "Player" in all_cols else []
+
+            picked_set = set(st.session_state.get(cols_key, default_cols))
+
+            # Always keep Player visible
+            if "Player" in all_cols:
+                picked_set.add("Player")
+
+            cb_left, cb_right = st.columns(2)
+            for i, col in enumerate(all_cols):
+                target = cb_left if i % 2 == 0 else cb_right
+                safe_col = re.sub(r"[^A-Za-z0-9_]+", "_", str(col))
+
+                if col == "Player":
+                    target.checkbox(col, value=True, disabled=True, key=f"{cols_key}__cb__{safe_col}")
+                    continue
+
+                cur_val = col in picked_set
+                new_val = target.checkbox(col, value=cur_val, key=f"{cols_key}__cb__{safe_col}")
+                if new_val:
+                    picked_set.add(col)
+                else:
+                    picked_set.discard(col)
+
+            picked = [c for c in all_cols if c in picked_set]
+            st.session_state[cols_key] = picked
+
+
+    # Ensure Player stays visible (failsafe)
+    picked = list(st.session_state.get(cols_key, default_cols))
     if "Player" in all_cols and "Player" not in picked:
         picked = ["Player"] + picked
-    st.session_state[cols_key] = picked
+        st.session_state[cols_key] = picked
+
     st.markdown("</div>", unsafe_allow_html=True)
 
 # Apply the selection
