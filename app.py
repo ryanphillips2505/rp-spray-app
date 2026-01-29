@@ -2131,7 +2131,7 @@ with st.expander("📝 Coaches Scouting Notes (prints on Excel/CSV)", expanded=F
 
 notes_box_text = str(st.session_state.get(notes_key, "") or "").strip()
 
-_csv_text = df_season.to_csv(index=False)
+_csv_text = df_season[visible_cols].to_csv(index=False)
 
 # CSV can't merge cells, but we can push notes to the bottom for printing
 if notes_box_text:
@@ -2162,7 +2162,30 @@ if notes_box_text:
 csv_bytes = _csv_text.encode("utf-8")
 safe_team = re.sub(r"[^A-Za-z0-9_-]+", "_", selected_team).strip("_")
 
-df_xl = df_season[visible_cols].copy()
+# --- Download should match current Stat Edit view ---
+# Build a safe visible_cols list (prevents NameError and handles empty seasons cleanly)
+try:
+    _vc = st.session_state.get(cols_key, list(df_season.columns))
+except Exception:
+    _vc = list(df_season.columns)
+
+if not isinstance(_vc, (list, tuple)):
+    _vc = list(df_season.columns)
+
+visible_cols = [c for c in _vc if c in df_season.columns]
+
+# Always keep Player if it exists
+if "Player" in df_season.columns and "Player" not in visible_cols:
+    visible_cols = ["Player"] + visible_cols
+
+no_season_data = (df_season is None) or (getattr(df_season, "empty", True)) or (len(getattr(df_season, "columns", [])) == 0)
+
+if no_season_data:
+    st.info("No season stats to download yet. Process at least one game to generate season totals.")
+    # Fallback so the app doesn't crash — still allows the page to load.
+    df_xl = df_season.copy() if df_season is not None else None
+else:
+    df_xl = df_season[visible_cols].copy()
 
 out = BytesIO()
 with pd.ExcelWriter(out, engine="openpyxl") as writer:
@@ -2208,6 +2231,7 @@ with pd.ExcelWriter(out, engine="openpyxl") as writer:
             fill=zero_fill,
             stopIfTrue=True,
         )
+        if not no_season_data:
         ws.conditional_formatting.add(data_range, zero_rule)
 
         # heatmap
