@@ -1890,127 +1890,125 @@ if process_clicked:
         lines = [line.strip() for line in raw_text.split("\n") if line.strip()]
 
         game_team = empty_stat_dict()
-        game_players = {p: empty_stat_dict() for p in current_roster}
-
-        # --- Yukon pitching (IP / K / BB / Strike%) ---
+        game_players = {p: empty_stat_dict() for p in current_roster}        # --- Yukon pitching (IP / K / BB / Strike%) ---
+        # GameChanger PBPs are messy: '3 Outs' often appears BEFORE the line that states 'X pitching'.
+        # To keep IP accurate, we HOLD outs/pitches/K/BB until we know the pitcher, and only flush to UNKNOWN
+        # at the NEXT half-inning header (or end of file) if GC never states the pitcher.
         game_pitching = {}
         current_pitcher = "UNKNOWN_P"
         current_batting_team = None
+        half_is_defense = False
         last_outs_in_half = 0
+
+        # Determine how OUR team name appears in the PBP half-inning headers
         team_pbp_name = (TEAM_CFG.get("team_name", "") or "").strip().lower()
         inferred_pbp_team = infer_our_team_name_from_pbp(lines, current_roster)
         if inferred_pbp_team:
             team_pbp_name = inferred_pbp_team.strip().lower()
         if not team_pbp_name:
             team_pbp_name = (selected_team or "").strip().lower()
-        pending_outs = 0
-        pending_pitches = 0
-        pending_strikes = 0
+
+        # Pending stats for a defensive segment before pitcher is known
+        pending = {"OUTS": 0, "PITCHES": 0, "STRIKES": 0, "K": 0, "BB": 0}
+
+        def flush_pending_to(pname: str):
+            pname = pname or "UNKNOWN_P"
+            game_pitching.setdefault(pname, empty_pitching_stat())
+            for k in ["OUTS", "PITCHES", "STRIKES", "K", "BB"]:
+                if pending.get(k, 0):
+                    game_pitching[pname][k] += int(pending.get(k, 0) or 0)
+            for k in pending.keys():
+                pending[k] = 0
 
         for line in lines:
             clean_line = line.strip().strip('"')
             clean_line = re.sub(r"\([^)]*\)", "", clean_line)
             clean_line = re.sub(r"\s+", " ", clean_line).strip()
-            line_lower = clean_line.lower()
 
-            # --- Track half inning + current pitcher (for Yukon pitching) ---
+            # --- Half inning header ---
             maybe_batting = parse_batting_team_from_half(clean_line)
             if maybe_batting:
+                # Before switching halves, if we were on defense and still have pending stats,
+                # assign them to the last known pitcher if we have one; otherwise UNKNOWN.
+                if half_is_defense and any(int(pending.get(k, 0) or 0) > 0 for k in pending):
+                    if current_pitcher and current_pitcher != "UNKNOWN_P":
+                        flush_pending_to(current_pitcher)
+                    else:
+                        flush_pending_to("UNKNOWN_P")
+
                 current_batting_team = maybe_batting
+                half_is_defense = bool(current_batting_team) and (not team_matches_pbp(current_batting_team, team_pbp_name))
+
                 last_outs_in_half = 0
-                pending_outs = 0
-                pending_pitches = 0
-                pending_strikes = 0
-                # New half-inning: don't carry pitcher forward implicitly
-                current_pitcher = "UNKNOWN_P"
+                for k in pending.keys():
+                    pending[k] = 0
+                # IMPORTANT: do NOT reset current_pitcher here (GC may not restate pitcher next inning)
 
-            # Defense/offense detection: we only credit Yukon pitching when the OTHER team is batting
-            # Defense/offense detection:
-            #  - Primary: half-inning header team name (Top/Bottom ... - TEAM)
-            #  - Failsafe: if we see one of OUR roster hitters in the line, we are on offense even if header was missed
-            _our_batter = get_batter_name(clean_line, current_roster)
-            if _our_batter:
-                is_team_defense = False
-            else:
-                is_team_defense = bool(current_batting_team) and (not team_matches_pbp(current_batting_team, team_pbp_name))
+            # Only track pitching when OUR team is on defense
+            if not half_is_defense:
+                continue
 
-            # Only update *our* current pitcher while on defense (prevents opponent pitcher bleed)
+            # Pitcher updates (only while on defense)
             maybe_p = parse_pitcher_from_line(clean_line)
-            if is_team_defense and maybe_p:
+            if maybe_p:
                 current_pitcher = maybe_p
-
-                # If we previously saw outs before GC stated the pitcher, assign them now
-                # If we previously saw outs/pitches before GC stated the pitcher, assign them now
-                if (current_pitcher and current_pitcher != "UNKNOWN_P") and (pending_outs > 0 or pending_pitches > 0):
-                    game_pitching.setdefault(current_pitcher, empty_pitching_stat())
-                    if pending_outs > 0:
-                        game_pitching[current_pitcher]["OUTS"] += int(pending_outs)
-                        pending_outs = 0
-                    if pending_pitches > 0:
-                        game_pitching[current_pitcher]["PITCHES"] += int(pending_pitches)
-                        game_pitching[current_pitcher]["STRIKES"] += int(pending_strikes)
-                        pending_pitches = 0
-                        pending_strikes = 0
+                # If we had pending stats waiting for a pitcher name, assign them now
+                if any(int(pending.get(k, 0) or 0) > 0 for k in pending) and current_pitcher != "UNKNOWN_P":
+                    flush_pending_to(current_pitcher)
 
             # Outs by delta (IP accuracy)
             outs_now = parse_outs_marker(clean_line)
             if outs_now is not None:
                 delta_outs = max(0, int(outs_now) - int(last_outs_in_half))
                 last_outs_in_half = int(outs_now)
-                if is_team_defense and delta_outs > 0:
-                    # GC often prints '3 Outs' BEFORE the line that contains 'X pitching'.
-                    # If we don't know the pitcher yet, hold outs and assign once pitcher appears.
+                if delta_outs > 0:
                     if (not current_pitcher) or (current_pitcher == "UNKNOWN_P"):
-                        pending_outs += int(delta_outs)
+                        pending["OUTS"] += int(delta_outs)
                     else:
-                        pname = current_pitcher
-                        game_pitching.setdefault(pname, empty_pitching_stat())
-                        game_pitching[pname]["OUTS"] += int(delta_outs)
+                        game_pitching.setdefault(current_pitcher, empty_pitching_stat())
+                        game_pitching[current_pitcher]["OUTS"] += int(delta_outs)
 
-            # If the half-inning ended (3 outs) and we still never saw a pitcher line,
-            # bucket any held outs/pitches to UNKNOWN_P for that half (so IP stays correct).
-            if is_team_defense and outs_now == 3 and (pending_outs > 0 or pending_pitches > 0) and (current_pitcher == "UNKNOWN_P"):
-                game_pitching.setdefault("UNKNOWN_P", empty_pitching_stat())
-                if pending_outs > 0:
-                    game_pitching["UNKNOWN_P"]["OUTS"] += int(pending_outs)
-                    pending_outs = 0
-                if pending_pitches > 0:
-                    game_pitching["UNKNOWN_P"]["PITCHES"] += int(pending_pitches)
-                    game_pitching["UNKNOWN_P"]["STRIKES"] += int(pending_strikes)
-                    pending_pitches = 0
-                    pending_strikes = 0
             # K / BB from event detail lines (avoid header double-count)
-            if is_team_defense:
-                pname = current_pitcher or "UNKNOWN_P"
+            if is_strikeout_detail(clean_line):
+                if (not current_pitcher) or (current_pitcher == "UNKNOWN_P"):
+                    pending["K"] += 1
+                else:
+                    game_pitching.setdefault(current_pitcher, empty_pitching_stat())
+                    game_pitching[current_pitcher]["K"] += 1
 
-                if is_strikeout_detail(clean_line):
-                    game_pitching.setdefault(pname, empty_pitching_stat())
-                    game_pitching[pname]["K"] += 1
+            if is_walk_detail(clean_line):
+                if (not current_pitcher) or (current_pitcher == "UNKNOWN_P"):
+                    pending["BB"] += 1
+                else:
+                    game_pitching.setdefault(current_pitcher, empty_pitching_stat())
+                    game_pitching[current_pitcher]["BB"] += 1
 
-                if is_walk_detail(clean_line):
-                    game_pitching.setdefault(pname, empty_pitching_stat())
-                    game_pitching[pname]["BB"] += 1
+            # Strike% from visible pitch tokens
+            p_ct, s_ct = count_pitch_tokens(clean_line)
+            if p_ct > 0:
+                if (not current_pitcher) or (current_pitcher == "UNKNOWN_P"):
+                    pending["PITCHES"] += int(p_ct)
+                    pending["STRIKES"] += int(s_ct)
+                else:
+                    game_pitching.setdefault(current_pitcher, empty_pitching_stat())
+                    game_pitching[current_pitcher]["PITCHES"] += int(p_ct)
+                    game_pitching[current_pitcher]["STRIKES"] += int(s_ct)
 
-                # Strike% from visible pitch tokens
-                p_ct, s_ct = count_pitch_tokens(clean_line)
-                if p_ct > 0:
-                    # If pitcher not known yet in this defensive segment, hold pitches and assign once pitcher appears.
-                    if (not pname) or (pname == "UNKNOWN_P"):
-                        pending_pitches += int(p_ct)
-                        pending_strikes += int(s_ct)
-                    else:
-                        game_pitching.setdefault(pname, empty_pitching_stat())
-                        game_pitching[pname]["PITCHES"] += int(p_ct)
-                        game_pitching[pname]["STRIKES"] += int(s_ct)
+            # HBP: add +1 pitch only if the line doesn't already include visible pitch tokens
+            if is_hbp_detail(clean_line) and p_ct == 0:
+                if (not current_pitcher) or (current_pitcher == "UNKNOWN_P"):
+                    pending["PITCHES"] += 1
+                else:
+                    game_pitching.setdefault(current_pitcher, empty_pitching_stat())
+                    game_pitching[current_pitcher]["PITCHES"] += 1
 
-                # HBP: add +1 pitch only if the line doesn't already include visible pitch tokens
-                # HBP: add +1 pitch only if the line doesn't already include visible pitch tokens
-                if is_hbp_detail(clean_line) and p_ct == 0:
-                    if (not pname) or (pname == "UNKNOWN_P"):
-                        pending_pitches += 1
-                    else:
-                        game_pitching.setdefault(pname, empty_pitching_stat())
-                        game_pitching[pname]["PITCHES"] += 1
+        # End-of-file flush (last half)
+        if half_is_defense and any(int(pending.get(k, 0) or 0) > 0 for k in pending):
+            if current_pitcher and current_pitcher != "UNKNOWN_P":
+                flush_pending_to(current_pitcher)
+            else:
+                flush_pending_to("UNKNOWN_P")
+
 
             # running events (not BIP)
             runner, total_key, base_key = parse_running_event(clean_line, current_roster)
@@ -2363,6 +2361,7 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
+
 
 
 
