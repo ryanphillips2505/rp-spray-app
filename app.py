@@ -1885,8 +1885,6 @@ with row_left:
     show_archived = st.checkbox("Show archived players (not on current roster)", value=False)
 with row_right:
     stat_edit_slot = st.empty()  # filled after df_season is built
-st.markdown("<div style='margin-top:-14px'></div>", unsafe_allow_html=True)
-
 season_rows = []
 
 active_players = sorted([p for p in current_roster if p in season_players])
