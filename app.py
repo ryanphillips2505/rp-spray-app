@@ -2016,7 +2016,7 @@ if notes_text:
     ws.merge_cells(box_range)
     cell = ws[start_cell]
     cell.value = "COACH NOTES:"
-    {notes_text}"
+{notes_text}"
     cell.alignment = Alignment(wrap_text=True, vertical="top")
 
     # Make the box a little taller
@@ -2117,6 +2117,7 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
+
 
 
 
