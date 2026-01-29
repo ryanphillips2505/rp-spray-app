@@ -933,6 +933,8 @@ def db_load_season_totals(team_code: str, team_key: str, current_roster: set[str
     season_players = {p: empty_stat_dict() for p in current_roster}
     games_played = 0
     archived_players = set()
+    coach_notes = ""
+
 
     try:
         res = (
@@ -975,6 +977,9 @@ def db_load_season_totals(team_code: str, team_key: str, current_roster: set[str
         if isinstance(ap, list):
             archived_players = {str(x).strip().strip('"') for x in ap if str(x).strip()}
 
+        # Coach notes stored in meta (optional)
+        coach_notes = raw_meta.get("coach_notes", "") if isinstance(raw_meta, dict) else ""
+
     try:
         pres = (
             supabase.table("processed_games")
@@ -992,7 +997,7 @@ def db_load_season_totals(team_code: str, team_key: str, current_roster: set[str
     if pres.data:
         processed_set = {r["game_hash"] for r in pres.data if r.get("game_hash")}
 
-    return season_team, season_players, games_played, processed_set, archived_players
+    return season_team, season_players, games_played, processed_set, archived_players, coach_notes
 
 
 def db_save_season_totals(
@@ -1002,6 +1007,7 @@ def db_save_season_totals(
     season_players: dict,
     games_played: int,
     archived_players: set[str] | list[str] | None = None,
+    coach_notes: str = "",
 ):
     archived_list = []
     if archived_players:
@@ -1010,7 +1016,7 @@ def db_save_season_totals(
     payload = {
         "team": season_team,
         "players": season_players,
-        "meta": {"archived_players": archived_list},
+        "meta": {"archived_players": archived_list, "coach_notes": str(coach_notes or "").strip()},
     }
 
     try:
@@ -1473,7 +1479,7 @@ with col_a:
         db_upsert_team(TEAM_CODE_SAFE, team_key, selected_team, roster_text)
 
         # Reload season from DB (source of truth) – includes archived_players
-        season_team, season_players, games_played, processed_set, archived_players = db_load_season_totals(
+        season_team, season_players, games_played, processed_set, archived_players, coach_notes = db_load_season_totals(
             TEAM_CODE_SAFE, team_key, new_roster
         )
 
@@ -1491,7 +1497,7 @@ with col_a:
 
         # Save back with updated archived list
         db_save_season_totals(
-            TEAM_CODE_SAFE, team_key, season_team, season_players, games_played, archived_players
+            TEAM_CODE_SAFE, team_key, season_team, season_players, games_played, archived_players, coach_notes=coach_notes
         )
 
         st.success("Roster saved + removed players archived (reports will match roster).")
@@ -1502,7 +1508,7 @@ st.write(f"**Hitters loaded:** {len(current_roster)}")
 
 
 # ✅ LOAD FROM SUPABASE ONLY (source of truth) — includes archived_players
-season_team, season_players, games_played, processed_set, archived_players = db_load_season_totals(
+season_team, season_players, games_played, processed_set, archived_players, coach_notes = db_load_season_totals(
     TEAM_CODE_SAFE, team_key, current_roster
 )
 
@@ -1545,7 +1551,7 @@ with col_reset:
         # Supabase is the source of truth now
         db_reset_season(TEAM_CODE_SAFE, team_key)
 
-        season_team, season_players, games_played, processed_set, archived_players = db_load_season_totals(
+        season_team, season_players, games_played, processed_set, archived_players, coach_notes = db_load_season_totals(
             TEAM_CODE_SAFE, team_key, current_roster
         )
 
@@ -1557,7 +1563,7 @@ with col_reset:
 # -----------------------------
 with st.expander("🛟 Backup / Restore (Coach-Proof) — Download + Upload Season Totals"):
     raw_payload = {
-        "meta": {"games_played": games_played},
+        "meta": {"games_played": games_played, "coach_notes": str(coach_notes or "").strip()},
         "team": season_team,
         "players": season_players,
         "archived_players": sorted(list(archived_players or set())),
@@ -1611,6 +1617,7 @@ with st.expander("🛟 Backup / Restore (Coach-Proof) — Download + Upload Seas
                     fixed_players[p] = empty_stat_dict()
 
             restored_games_played = int(incoming_meta.get("games_played", 0) or 0)
+            restored_coach_notes = incoming_meta.get("coach_notes", "") if isinstance(incoming_meta, dict) else ""
 
             # Archived players set
             restored_archived = set()
@@ -1624,11 +1631,13 @@ with st.expander("🛟 Backup / Restore (Coach-Proof) — Download + Upload Seas
                 restored_games_played = len(set(legacy_hashes))
 
             db_reset_season(TEAM_CODE_SAFE, team_key)
-            db_save_season_totals(TEAM_CODE_SAFE, team_key, incoming_team, fixed_players, restored_games_played, restored_archived)
+            db_save_season_totals(TEAM_CODE_SAFE, team_key, incoming_team, fixed_players, restored_games_played, restored_archived, coach_notes=incoming_meta.get('coach_notes','') if isinstance(incoming_meta, dict) else '')
 
             if legacy_hashes:
                 for h in set(legacy_hashes):
                     db_try_mark_game_processed(TEAM_CODE_SAFE, team_key, h)
+
+            coach_notes = restored_coach_notes
 
             st.success("✅ Restore complete (Supabase). Reloading…")
             st.rerun()
@@ -1805,7 +1814,7 @@ if process_clicked:
         add_game_to_season(season_team, season_players, game_team, game_players)
 
         # ✅ Save with archived_players too
-        db_save_season_totals(TEAM_CODE_SAFE, team_key, season_team, season_players, len(processed_set), archived_players)
+        db_save_season_totals(TEAM_CODE_SAFE, team_key, season_team, season_players, len(processed_set), archived_players, coach_notes=coach_notes)
 
         st.success("✅ Game processed and added to season totals (Supabase).")
         rerun_needed = True
@@ -1868,13 +1877,43 @@ df_season = df_season[col_order]
 
 st.dataframe(df_season, use_container_width=True)
 
-csv_bytes = df_season.to_csv(index=False).encode("utf-8")
+# -----------------------------
+# 📝 COACHES SCOUTING NOTES (Saved in Supabase + included in exports)
+# -----------------------------
+with st.expander("📝 Coaches Scouting Notes (prints on Excel/CSV)"):
+    notes_key = f"coach_notes__{TEAM_CODE_SAFE}__{team_key}"
+    st.session_state.setdefault(notes_key, coach_notes or "")
+    st.text_area(
+        "Type any scouting notes you want saved with this team’s season report:",
+        key=notes_key,
+        height=160,
+        placeholder="Example: 'We are attacking 1st-pitch fastballs. #12 is late on velo. Bunt coverage notes…'",
+    )
+
+    col_n1, col_n2 = st.columns([1, 3])
+    with col_n1:
+        if st.button("💾 Save Notes", key=f"save_notes__{TEAM_CODE_SAFE}__{team_key}", type="primary"):
+            coach_notes = str(st.session_state.get(notes_key, "") or "").strip()
+            db_save_season_totals(
+                TEAM_CODE_SAFE, team_key, season_team, season_players, games_played, archived_players, coach_notes=coach_notes
+            )
+            st.success("Saved.")
+
+    with col_n2:
+        st.caption("These notes are private to this team + access code, saved in Supabase, and will be embedded into your Excel/CSV export.")
+
+df_export = df_season.copy()
+# Include notes on export so a printed sheet includes them
+notes_text = str(coach_notes or "").strip()
+df_export["Coach Notes"] = notes_text
+
+csv_bytes = df_export.to_csv(index=False).encode("utf-8")
 safe_team = re.sub(r"[^A-Za-z0-9_-]+", "_", selected_team).strip("_")
 
 out = BytesIO()
 with pd.ExcelWriter(out, engine="openpyxl") as writer:
     sheet_name = "Season"
-    df_season.to_excel(writer, index=False, sheet_name=sheet_name)
+    df_export.to_excel(writer, index=False, sheet_name=sheet_name)
 
     ws = writer.book[sheet_name]
     ws.freeze_panes = "A2"
@@ -1890,10 +1929,10 @@ with pd.ExcelWriter(out, engine="openpyxl") as writer:
         cell.alignment = header_align
         cell.fill = header_fill
 
-    for col_idx, col_name in enumerate(df_season.columns, start=1):
+    for col_idx, col_name in enumerate(df_export.columns, start=1):
         col_letter = get_column_letter(col_idx)
         max_len = len(str(col_name))
-        sample = df_season[col_name].astype(str).head(60).tolist()
+        sample = df_export[col_name].astype(str).head(60).tolist()
         for v in sample:
             max_len = max(max_len, len(v))
         ws.column_dimensions[col_letter].width = min(max(max_len + 2, 8), 22)
@@ -1926,8 +1965,8 @@ with pd.ExcelWriter(out, engine="openpyxl") as writer:
         ws.conditional_formatting.add(data_range, heat_rule)
 
     # highlight UNKNOWN > 0
-    if "UNKNOWN" in df_season.columns:
-        unk_idx = list(df_season.columns).index("UNKNOWN") + 1
+    if "UNKNOWN" in df_export.columns:
+        unk_idx = list(df_export.columns).index("UNKNOWN") + 1
         unk_col = get_column_letter(unk_idx)
         unk_range = f"{unk_col}{start_row}:{unk_col}{end_row}"
         unk_fill = OPFill("solid", fgColor="FFC7CE")
@@ -1940,6 +1979,16 @@ with pd.ExcelWriter(out, engine="openpyxl") as writer:
         for cell in row:
             if isinstance(cell.value, (int, float)):
                 cell.alignment = num_align
+
+# Add a dedicated Notes sheet too (helps when printing)
+if notes_text:
+    notes_sheet_name = "Notes"
+    pd.DataFrame([{"Coach Notes": notes_text}]).to_excel(writer, index=False, sheet_name=notes_sheet_name)
+    ws2 = writer.book[notes_sheet_name]
+    ws2.column_dimensions["A"].width = 110
+    ws2["A1"].font = Font(bold=True)
+    ws2["A2"].alignment = Alignment(wrap_text=True, vertical="top")
+    ws2.row_dimensions[2].height = 120
 
 excel_bytes = out.getvalue()
 
@@ -2019,7 +2068,6 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
-
 
 
 
