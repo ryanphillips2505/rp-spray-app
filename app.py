@@ -671,6 +671,24 @@ def get_batter_name(line: str, roster: set[str]):
     return None
 
 
+def infer_our_team_name_from_pbp(lines, roster):
+    """Infer OUR team name as it appears in half-inning headers by finding a header followed by a roster batter."""
+    current_batting = None
+    for raw in lines:
+        s = (raw or "").strip().strip('"')
+        s = re.sub(r"\([^)]*\)", "", s)
+        s = re.sub(r"\s+", " ", s).strip()
+        maybe = parse_batting_team_from_half(s)
+        if maybe:
+            current_batting = maybe
+            continue
+        if current_batting:
+            b = get_batter_name(s, roster)
+            if b:
+                return current_batting
+    return None
+
+
 def extract_runner_name_near_event(clean_line: str, match_start: int, roster: set[str]) -> Optional[str]:
     left = (clean_line[:match_start] or "").strip()
     if not left:
@@ -1879,7 +1897,12 @@ if process_clicked:
         current_pitcher = "UNKNOWN_P"
         current_batting_team = None
         last_outs_in_half = 0
-        team_pbp_name = (TEAM_CFG.get("team_name", selected_team) or "").strip().lower()
+        team_pbp_name = (TEAM_CFG.get("team_name", "") or "").strip().lower()
+        inferred_pbp_team = infer_our_team_name_from_pbp(lines, current_roster)
+        if inferred_pbp_team:
+            team_pbp_name = inferred_pbp_team.strip().lower()
+        if not team_pbp_name:
+            team_pbp_name = (selected_team or "").strip().lower()
         pending_outs = 0
 
         for line in lines:
@@ -2083,6 +2106,9 @@ st.subheader("⚾ Pitching – SEASON TO DATE")
 pitch_rows = []
 for pname in sorted((season_pitching or {}).keys(), key=lambda x: x.lower()):
     pst = ensure_pitching_keys((season_pitching or {}).get(pname, {}))
+    # skip any empty / accidental entries
+    if sum(int(pst.get(k, 0) or 0) for k in ["OUTS","K","BB","PITCHES","STRIKES"]) == 0:
+        continue
     outs = int(pst.get("OUTS", 0) or 0)
     pitches = int(pst.get("PITCHES", 0) or 0)
     strikes = int(pst.get("STRIKES", 0) or 0)
@@ -2296,6 +2322,8 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
+
+
 
 
 
