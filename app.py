@@ -1903,11 +1903,26 @@ with st.expander("📝 Coaches Scouting Notes (prints on Excel/CSV)"):
         st.caption("These notes are private to this team + access code, saved in Supabase, and will be embedded into your Excel/CSV export.")
 
 df_export = df_season.copy()
-# Include notes on export so a printed sheet includes them
 notes_text = str(coach_notes or "").strip()
-df_export["Coach Notes"] = notes_text
 
-csv_bytes = df_export.to_csv(index=False).encode("utf-8")
+# -----------------------------
+# EXPORTS (CSV + Excel)
+# -----------------------------
+# CSV can't "merge cells", so we append a notes footer section beneath the table.
+df_csv = df_export.copy()
+if notes_text:
+    blank = {c: "" for c in df_csv.columns}
+    footer_rows = [blank.copy() for _ in range(5)]  # 5 blank rows after last player
+    note_row = blank.copy()
+    cols = list(df_csv.columns)
+    note_row[cols[0]] = "COACH NOTES"
+    if len(cols) > 1:
+        note_row[cols[1]] = notes_text
+    else:
+        note_row[cols[0]] = f"COACH NOTES: {notes_text}"
+    df_csv = pd.concat([df_csv, pd.DataFrame(footer_rows + [note_row])], ignore_index=True)
+
+csv_bytes = df_csv.to_csv(index=False).encode("utf-8")
 safe_team = re.sub(r"[^A-Za-z0-9_-]+", "_", selected_team).strip("_")
 
 out = BytesIO()
@@ -1980,15 +1995,49 @@ with pd.ExcelWriter(out, engine="openpyxl") as writer:
             if isinstance(cell.value, (int, float)):
                 cell.alignment = num_align
 
-# Add a dedicated Notes sheet too (helps when printing)
+
+# -----------------------------
+# Excel: add a merged "Coach Notes" box 5 rows below the table (single printable page)
+# -----------------------------
 if notes_text:
-    notes_sheet_name = "Notes"
-    pd.DataFrame([{"Coach Notes": notes_text}]).to_excel(writer, index=False, sheet_name=notes_sheet_name)
-    ws2 = writer.book[notes_sheet_name]
-    ws2.column_dimensions["A"].width = 110
-    ws2["A1"].font = Font(bold=True)
-    ws2["A2"].alignment = Alignment(wrap_text=True, vertical="top")
-    ws2.row_dimensions[2].height = 120
+    from openpyxl.styles import Border, Side
+
+    last_data_row = 1 + len(df_export)  # header is row 1
+    top_row = last_data_row + 5
+    box_height = 10  # rows tall
+    left_col = 1
+    right_col = ws.max_column
+
+    start_cell = f"{get_column_letter(left_col)}{top_row}"
+    end_cell = f"{get_column_letter(right_col)}{top_row + box_height - 1}"
+    box_range = f"{start_cell}:{end_cell}"
+
+    # Merge and write notes
+    ws.merge_cells(box_range)
+    cell = ws[start_cell]
+    cell.value = f"COACH NOTES:
+{notes_text}"
+    cell.alignment = Alignment(wrap_text=True, vertical="top")
+
+    # Make the box a little taller
+    for r in range(top_row, top_row + box_height):
+        ws.row_dimensions[r].height = 20
+
+    # Thick border around the whole box
+    thick = Side(style="thick")
+    thin = Side(style="thin")
+    border_thick = Border(left=thick, right=thick, top=thick, bottom=thick)
+
+    # Apply borders to perimeter cells
+    for r in range(top_row, top_row + box_height):
+        for c in range(left_col, right_col + 1):
+            addr = f"{get_column_letter(c)}{r}"
+            cur = ws[addr].border
+            left = thick if c == left_col else cur.left
+            right = thick if c == right_col else cur.right
+            top = thick if r == top_row else cur.top
+            bottom = thick if r == top_row + box_height - 1 else cur.bottom
+            ws[addr].border = Border(left=left, right=right, top=top, bottom=bottom)
 
 excel_bytes = out.getvalue()
 
