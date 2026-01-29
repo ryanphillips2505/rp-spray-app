@@ -1906,6 +1906,7 @@ if process_clicked:
         pending_outs = 0
         pending_pitches = 0
         pending_strikes = 0
+        prev_is_team_defense = False  # track defense state across half-innings for safe flushing
 
         for line in lines:
             clean_line = line.strip().strip('"')
@@ -1916,27 +1917,20 @@ if process_clicked:
             # --- Track half inning + current pitcher (for Yukon pitching) ---
             maybe_batting = parse_batting_team_from_half(clean_line)
             if maybe_batting:
-                # Finalize any pending defense stats from the PREVIOUS half-inning.
-                # IMPORTANT: GC sometimes prints the '... pitching' line AFTER '3 Outs'.
-                # So we do NOT flush pending at '3 Outs' — we flush only when the next half starts (or EOF).
-                if (pending_outs > 0 or pending_pitches > 0) and current_batting_team:
-                    prev_half_defense = (not team_matches_pbp(current_batting_team, team_pbp_name))
-                    if prev_half_defense:
-                        flush_p = current_pitcher if (current_pitcher and current_pitcher != "UNKNOWN_P") else "UNKNOWN_P"
-                        game_pitching.setdefault(flush_p, empty_pitching_stat())
-                        if pending_outs > 0:
-                            game_pitching[flush_p]["OUTS"] += int(pending_outs)
-                        if pending_pitches > 0:
-                            game_pitching[flush_p]["PITCHES"] += int(pending_pitches)
-                            game_pitching[flush_p]["STRIKES"] += int(pending_strikes)
-
-                # Start new half-inning
+                # Half-inning boundary: if we were on defense and GC never stated the pitcher, flush held stats now
+                if prev_is_team_defense and (pending_outs > 0 or pending_pitches > 0) and (current_pitcher == "UNKNOWN_P"):
+                    game_pitching.setdefault("UNKNOWN_P", empty_pitching_stat())
+                    if pending_outs > 0:
+                        game_pitching["UNKNOWN_P"]["OUTS"] += int(pending_outs)
+                    if pending_pitches > 0:
+                        game_pitching["UNKNOWN_P"]["PITCHES"] += int(pending_pitches)
+                        game_pitching["UNKNOWN_P"]["STRIKES"] += int(pending_strikes)
                 current_batting_team = maybe_batting
                 last_outs_in_half = 0
                 pending_outs = 0
                 pending_pitches = 0
                 pending_strikes = 0
-                current_pitcher = "UNKNOWN_P"
+                # IMPORTANT: do NOT reset current_pitcher here; GC often does not restate the pitcher each inning
 
             # Defense/offense detection: we only credit Yukon pitching when the OTHER team is batting
             # Defense/offense detection:
@@ -1947,6 +1941,7 @@ if process_clicked:
                 is_team_defense = False
             else:
                 is_team_defense = bool(current_batting_team) and (not team_matches_pbp(current_batting_team, team_pbp_name))
+            prev_is_team_defense = is_team_defense
 
             # Only update *our* current pitcher while on defense (prevents opponent pitcher bleed)
             maybe_p = parse_pitcher_from_line(clean_line)
@@ -1981,8 +1976,7 @@ if process_clicked:
                         game_pitching.setdefault(pname, empty_pitching_stat())
                         game_pitching[pname]["OUTS"] += int(delta_outs)
 
-            # K / BB / pitch counts
-            # B from event detail lines (avoid header double-count)
+            # K / BB from event detail lines (avoid header double-count)
             if is_team_defense:
                 pname = current_pitcher or "UNKNOWN_P"
 
@@ -2065,21 +2059,17 @@ if process_clicked:
                 game_team[combo_key] += 1
                 game_players[batter][combo_key] += 1
 
-        # Finalize any pending defense stats at end-of-file (last half-inning)
-        if (pending_outs > 0 or pending_pitches > 0) and current_batting_team:
-            last_half_defense = (not team_matches_pbp(current_batting_team, team_pbp_name))
-            if last_half_defense:
-                flush_p = current_pitcher if (current_pitcher and current_pitcher != "UNKNOWN_P") else "UNKNOWN_P"
-                game_pitching.setdefault(flush_p, empty_pitching_stat())
-                if pending_outs > 0:
-                    game_pitching[flush_p]["OUTS"] += int(pending_outs)
-                if pending_pitches > 0:
-                    game_pitching[flush_p]["PITCHES"] += int(pending_pitches)
-                    game_pitching[flush_p]["STRIKES"] += int(pending_strikes)
-            pending_outs = 0
-            pending_pitches = 0
-            pending_strikes = 0
-
+        # Final flush: if we ended a defensive half-inning with held stats and never saw a pitcher name, bucket to UNKNOWN_P
+        if prev_is_team_defense and (pending_outs > 0 or pending_pitches > 0) and (current_pitcher == "UNKNOWN_P"):
+            game_pitching.setdefault("UNKNOWN_P", empty_pitching_stat())
+            if pending_outs > 0:
+                game_pitching["UNKNOWN_P"]["OUTS"] += int(pending_outs)
+            if pending_pitches > 0:
+                game_pitching["UNKNOWN_P"]["PITCHES"] += int(pending_pitches)
+                game_pitching["UNKNOWN_P"]["STRIKES"] += int(pending_strikes)
+        pending_outs = 0
+        pending_pitches = 0
+        pending_strikes = 0
         add_game_to_season(season_team, season_players, game_team, game_players)
 
         # --- Merge game pitching into season pitching ---
