@@ -13,6 +13,44 @@ import hashlib
 import httpx
 import time  # anti-stuck processing lock + failsafe unlock
 from datetime import datetime
+
+def _write_table_two_blocks(ws, start_row, cols, row_values, split_at=None, gap=2):
+    """Write a header + rows into two side-by-side blocks for landscape printing.
+    - cols: list of column names
+    - row_values: list of lists (each list aligns to cols)
+    - split_at: index to split columns. If None, split roughly in half.
+    """
+    if not cols:
+        return start_row
+
+    if split_at is None:
+        split_at = max(1, (len(cols) + 1) // 2)
+
+    left_cols = cols[:split_at]
+    right_cols = cols[split_at:]
+
+    left_start_col = 1
+    right_start_col = 1 + len(left_cols) + gap
+
+    # Header
+    for j, c in enumerate(left_cols, start=0):
+        ws.cell(row=start_row, column=left_start_col + j, value=c)
+    for j, c in enumerate(right_cols, start=0):
+        ws.cell(row=start_row, column=right_start_col + j, value=c)
+
+    # Rows
+    r = start_row + 1
+    for vals in row_values:
+        left_vals = vals[:split_at]
+        right_vals = vals[split_at:]
+        for j, v in enumerate(left_vals, start=0):
+            ws.cell(row=r, column=left_start_col + j, value=v)
+        for j, v in enumerate(right_vals, start=0):
+            ws.cell(row=r, column=right_start_col + j, value=v)
+        r += 1
+
+    return r
+
 from typing import Optional, Tuple
 
 import pandas as pd
