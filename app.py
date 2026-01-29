@@ -311,6 +311,110 @@ RUN_KEYS = [
     "CS", "CS-2B", "CS-3B",
 ]
 
+# -----------------------------
+# PITCHING (YUKON) — IP / K / BB / STRIKE%
+# -----------------------------
+HALF_INNING_RE = re.compile(r"^(Top|Bottom)\s+\d+(?:st|nd|rd|th)?\s*-\s*(.+?)\s*$", re.IGNORECASE)
+OUTS_MARKER_RE = re.compile(r"^\s*([123])\s+Outs?\s*$", re.IGNORECASE)
+
+PBP_PITCHER_RE = re.compile(r"\b([A-Z]\s+[A-Za-z][A-Za-z'\-\.#0-9]+)\s+pitching\b")
+PBP_IN_FOR_PITCHER_RE = re.compile(r"\b([A-Z]\s+[A-Za-z][A-Za-z'\-\.#0-9]+)\s+in\s+for\s+pitcher\b")
+
+BALL_TOK_RE = re.compile(r"\bBall\s+[1234]\b", re.IGNORECASE)
+STRIKE_TOK_RE = re.compile(r"\bStrike\s+[123]\b", re.IGNORECASE)
+FOUL_TOK_RE = re.compile(r"\bFoul\b", re.IGNORECASE)
+INPLAY_TOK_RE = re.compile(r"\bIn\s+play\b", re.IGNORECASE)
+
+def parse_batting_team_from_half(line: str) -> Optional[str]:
+    s = (line or "").strip().strip('"')
+    m = HALF_INNING_RE.match(s)
+    return m.group(2).strip() if m else None
+
+def parse_outs_marker(line: str) -> Optional[int]:
+    s = (line or "").strip().strip('"')
+    m = OUTS_MARKER_RE.match(s)
+    return int(m.group(1)) if m else None
+
+def parse_pitcher_from_line(line: str) -> Optional[str]:
+    s = (line or "").strip().strip('"')
+    m = PBP_PITCHER_RE.search(s)
+    if m:
+        return m.group(1).strip()
+    m = PBP_IN_FOR_PITCHER_RE.search(s)
+    if m:
+        return m.group(1).strip()
+    return None
+
+def count_pitch_tokens(line: str) -> Tuple[int, int]:
+    """Returns (pitches, strikes) from visible pitch tokens in GC pitch strings."""
+    s = line or ""
+    balls = len(BALL_TOK_RE.findall(s))
+    strikes = len(STRIKE_TOK_RE.findall(s))
+    fouls = len(FOUL_TOK_RE.findall(s))
+    inplay = len(INPLAY_TOK_RE.findall(s))
+    pitches = balls + strikes + fouls + inplay
+    strike_ct = strikes + fouls + inplay
+    return pitches, strike_ct
+
+def is_strikeout_detail(line: str) -> bool:
+    s = (line or "").lower()
+    if s.strip() == "strikeout":
+        return False
+    return (" strikes out" in s) or ("called out on strikes" in s)
+
+def is_walk_detail(line: str) -> bool:
+    s = (line or "").lower().strip()
+    if s == "walk":
+        return False
+    # includes intentional walk lines as well
+    return (" walks" in s) or ("intentionally walked" in s) or ("base on balls" in s)
+
+def is_hbp_detail(line: str) -> bool:
+    s = (line or "").lower().strip()
+    if s in {"hit by pitch", "hit-by-pitch"}:
+        return False
+    return ("hit by pitch" in s) or ("is hit by pitch" in s)
+
+def empty_pitching_stat() -> dict:
+    return {"OUTS": 0, "K": 0, "BB": 0, "PITCHES": 0, "STRIKES": 0}
+
+def ensure_pitching_keys(d: dict) -> dict:
+    d.setdefault("OUTS", 0)
+    d.setdefault("K", 0)
+    d.setdefault("BB", 0)
+    d.setdefault("PITCHES", 0)
+    d.setdefault("STRIKES", 0)
+    return d
+
+def outs_to_ip_str(outs: int) -> str:
+    inn = int(outs or 0) // 3
+    rem = int(outs or 0) % 3
+    return f"{inn}.{rem}"
+
+# -----------------------------
+# TEAM NAME MATCHING (PBP) — for reliable defense/offense detection
+# -----------------------------
+_TEAM_STOPWORDS = {"varsity","jv","freshman","frosh","hs","high","school","baseball"}
+
+def _team_tokens(name: str):
+    s = (name or "").lower()
+    toks = re.findall(r"[a-z0-9]+", s)
+    toks = [t for t in toks if t and t not in _TEAM_STOPWORDS and len(t) >= 3]
+    return set(toks)
+
+def team_matches_pbp(batting_team: str, our_team_name: str) -> bool:
+    """
+    True if the half-inning header team name appears to be OUR team.
+    Uses token overlap (robust to 'Varsity', spacing, etc.).
+    """
+    bt = _team_tokens(batting_team)
+    ot = _team_tokens(our_team_name)
+    if not bt or not ot:
+        return False
+    return len(bt.intersection(ot)) > 0
+
+
+
 
 
 # -----------------------------
@@ -564,6 +668,24 @@ def get_batter_name(line: str, roster: set[str]):
     if len(last_matches) == 1:
         return last_matches[0]
 
+    return None
+
+
+def infer_our_team_name_from_pbp(lines, roster):
+    """Infer OUR team name as it appears in half-inning headers by finding a header followed by a roster batter."""
+    current_batting = None
+    for raw in lines:
+        s = (raw or "").strip().strip('"')
+        s = re.sub(r"\([^)]*\)", "", s)
+        s = re.sub(r"\s+", " ", s).strip()
+        maybe = parse_batting_team_from_half(s)
+        if maybe:
+            current_batting = maybe
+            continue
+        if current_batting:
+            b = get_batter_name(s, roster)
+            if b:
+                return current_batting
     return None
 
 
@@ -926,16 +1048,15 @@ supabase_health_check_or_stop()
 
 def db_load_season_totals(team_code: str, team_key: str, current_roster: set[str]):
     """
-    Returns (season_team, season_players, games_played, processed_hashes_set, archived_players_set)
+    Returns (season_team, season_players, games_played, processed_hashes_set, archived_players_set, season_pitching_dict)
     archived_players are players who exist in DB totals but are not on the current roster (or were removed).
     """
     season_team = empty_stat_dict()
     season_players = {p: empty_stat_dict() for p in current_roster}
     games_played = 0
     archived_players = set()
-    coach_notes = ""
 
-
+    season_pitching = {}
     try:
         res = (
             supabase.table("season_totals")
@@ -958,6 +1079,8 @@ def db_load_season_totals(team_code: str, team_key: str, current_roster: set[str
         raw_players = payload.get("players") or {}
         raw_meta = payload.get("meta") or {}
 
+
+        raw_pitching = payload.get("pitching") or {}
         season_team = ensure_all_keys(raw_team if isinstance(raw_team, dict) else {})
         season_players = {}
 
@@ -970,15 +1093,22 @@ def db_load_season_totals(team_code: str, team_key: str, current_roster: set[str
             if p not in season_players:
                 season_players[p] = empty_stat_dict()
 
+
+        # Pitching totals (optional, backward compatible)
+        season_pitching = {}
+        if isinstance(raw_pitching, dict):
+            for pn, pst in raw_pitching.items():
+                if isinstance(pst, dict):
+                    season_pitching[str(pn).strip().strip('\"')] = ensure_pitching_keys(pst)
+                else:
+                    season_pitching[str(pn).strip().strip('\"')] = empty_pitching_stat()
+
         games_played = int(row.get("games_played") or 0)
 
         # Archived list stored in meta (optional)
         ap = raw_meta.get("archived_players", []) if isinstance(raw_meta, dict) else []
         if isinstance(ap, list):
             archived_players = {str(x).strip().strip('"') for x in ap if str(x).strip()}
-
-        # Coach notes stored in meta (optional)
-        coach_notes = raw_meta.get("coach_notes", "") if isinstance(raw_meta, dict) else ""
 
     try:
         pres = (
@@ -997,7 +1127,28 @@ def db_load_season_totals(team_code: str, team_key: str, current_roster: set[str
     if pres.data:
         processed_set = {r["game_hash"] for r in pres.data if r.get("game_hash")}
 
-    return season_team, season_players, games_played, processed_set, archived_players, coach_notes
+    return season_team, season_players, games_played, processed_set, archived_players, season_pitching
+def db_get_coach_notes(team_code: str, team_key: str) -> str:
+    """Returns coach notes saved for this team_key (per opponent)."""
+    try:
+        res = (
+            supabase.table("season_totals")
+            .select("data")
+            .eq("team_code", team_code)
+            .eq("team_key", team_key)
+            .limit(1)
+            .execute()
+        )
+        if res.data:
+            payload = res.data[0].get("data") or {}
+            meta = payload.get("meta") or {}
+            if isinstance(meta, dict):
+                return str(meta.get("coach_notes", "") or "")
+        return ""
+    except Exception:
+        return ""
+
+
 
 
 def db_save_season_totals(
@@ -1007,16 +1158,41 @@ def db_save_season_totals(
     season_players: dict,
     games_played: int,
     archived_players: set[str] | list[str] | None = None,
-    coach_notes: str = "",
+    season_pitching: dict | None = None,
+    coach_notes: str | None = None,
 ):
     archived_list = []
     if archived_players:
         archived_list = sorted({str(x).strip().strip('"') for x in archived_players if str(x).strip()})
 
+    # Preserve existing meta so we don't wipe other fields (like coach_notes)
+    existing_meta = {}
+    try:
+        res = (
+            supabase.table("season_totals")
+            .select("data")
+            .eq("team_code", team_code)
+            .eq("team_key", team_key)
+            .limit(1)
+            .execute()
+        )
+        if res.data:
+            payload0 = res.data[0].get("data") or {}
+            meta0 = payload0.get("meta") or {}
+            if isinstance(meta0, dict):
+                existing_meta = dict(meta0)
+    except Exception:
+        existing_meta = {}
+
+    existing_meta["archived_players"] = archived_list
+    if coach_notes is not None:
+        existing_meta["coach_notes"] = str(coach_notes)
+
     payload = {
         "team": season_team,
         "players": season_players,
-        "meta": {"archived_players": archived_list, "coach_notes": str(coach_notes or "").strip()},
+        "pitching": season_pitching or {},
+        "meta": existing_meta,
     }
 
     try:
@@ -1039,7 +1215,7 @@ def db_save_season_totals(
         _render_supabase_fix_block()
         st.stop()
 
-        
+
 def db_try_mark_game_processed(team_code: str, team_key: str, game_hash: str) -> bool:
     try:
         supabase.table("processed_games").insert(
@@ -1479,7 +1655,7 @@ with col_a:
         db_upsert_team(TEAM_CODE_SAFE, team_key, selected_team, roster_text)
 
         # Reload season from DB (source of truth) – includes archived_players
-        season_team, season_players, games_played, processed_set, archived_players, coach_notes = db_load_season_totals(
+        season_team, season_players, games_played, processed_set, archived_players, season_pitching = db_load_season_totals(
             TEAM_CODE_SAFE, team_key, new_roster
         )
 
@@ -1497,7 +1673,7 @@ with col_a:
 
         # Save back with updated archived list
         db_save_season_totals(
-            TEAM_CODE_SAFE, team_key, season_team, season_players, games_played, archived_players, coach_notes=coach_notes
+            TEAM_CODE_SAFE, team_key, season_team, season_players, games_played, archived_players, season_pitching
         )
 
         st.success("Roster saved + removed players archived (reports will match roster).")
@@ -1508,7 +1684,7 @@ st.write(f"**Hitters loaded:** {len(current_roster)}")
 
 
 # ✅ LOAD FROM SUPABASE ONLY (source of truth) — includes archived_players
-season_team, season_players, games_played, processed_set, archived_players, coach_notes = db_load_season_totals(
+season_team, season_players, games_played, processed_set, archived_players, season_pitching = db_load_season_totals(
     TEAM_CODE_SAFE, team_key, current_roster
 )
 
@@ -1551,7 +1727,7 @@ with col_reset:
         # Supabase is the source of truth now
         db_reset_season(TEAM_CODE_SAFE, team_key)
 
-        season_team, season_players, games_played, processed_set, archived_players, coach_notes = db_load_season_totals(
+        season_team, season_players, games_played, processed_set, archived_players, season_pitching = db_load_season_totals(
             TEAM_CODE_SAFE, team_key, current_roster
         )
 
@@ -1563,9 +1739,10 @@ with col_reset:
 # -----------------------------
 with st.expander("🛟 Backup / Restore (Coach-Proof) — Download + Upload Season Totals"):
     raw_payload = {
-        "meta": {"games_played": games_played, "coach_notes": str(coach_notes or "").strip()},
+        "meta": {"games_played": games_played},
         "team": season_team,
         "players": season_players,
+        "pitching": season_pitching,
         "archived_players": sorted(list(archived_players or set())),
     }
 
@@ -1601,6 +1778,7 @@ with st.expander("🛟 Backup / Restore (Coach-Proof) — Download + Upload Seas
 
             incoming_team = incoming.get("team", {})
             incoming_players = incoming.get("players", {})
+            incoming_pitching = incoming.get("pitching", {})
             incoming_meta = incoming.get("meta", {})
             incoming_archived = incoming.get("archived_players", [])
 
@@ -1616,8 +1794,14 @@ with st.expander("🛟 Backup / Restore (Coach-Proof) — Download + Upload Seas
                 if p not in fixed_players:
                     fixed_players[p] = empty_stat_dict()
 
+            # Pitching (optional)
+            fixed_pitching = {}
+            if isinstance(incoming_pitching, dict):
+                for pn, pst in incoming_pitching.items():
+                    fixed_pitching[str(pn).strip().strip('"')] = ensure_pitching_keys(pst) if isinstance(pst, dict) else empty_pitching_stat()
+            incoming_pitching = fixed_pitching
+
             restored_games_played = int(incoming_meta.get("games_played", 0) or 0)
-            restored_coach_notes = incoming_meta.get("coach_notes", "") if isinstance(incoming_meta, dict) else ""
 
             # Archived players set
             restored_archived = set()
@@ -1631,13 +1815,11 @@ with st.expander("🛟 Backup / Restore (Coach-Proof) — Download + Upload Seas
                 restored_games_played = len(set(legacy_hashes))
 
             db_reset_season(TEAM_CODE_SAFE, team_key)
-            db_save_season_totals(TEAM_CODE_SAFE, team_key, incoming_team, fixed_players, restored_games_played, restored_archived, coach_notes=incoming_meta.get('coach_notes','') if isinstance(incoming_meta, dict) else '')
+            db_save_season_totals(TEAM_CODE_SAFE, team_key, incoming_team, fixed_players, restored_games_played, restored_archived, incoming_pitching)
 
             if legacy_hashes:
                 for h in set(legacy_hashes):
                     db_try_mark_game_processed(TEAM_CODE_SAFE, team_key, h)
-
-            coach_notes = restored_coach_notes
 
             st.success("✅ Restore complete (Supabase). Reloading…")
             st.rerun()
@@ -1755,11 +1937,125 @@ if process_clicked:
         game_team = empty_stat_dict()
         game_players = {p: empty_stat_dict() for p in current_roster}
 
+        # --- Yukon pitching (IP / K / BB / Strike%) ---
+        game_pitching = {}
+        current_pitcher = "UNKNOWN_P"
+        current_batting_team = None
+        last_outs_in_half = 0
+        team_pbp_name = (TEAM_CFG.get("team_name", "") or "").strip().lower()
+        inferred_pbp_team = infer_our_team_name_from_pbp(lines, current_roster)
+        if inferred_pbp_team:
+            team_pbp_name = inferred_pbp_team.strip().lower()
+        if not team_pbp_name:
+            team_pbp_name = (selected_team or "").strip().lower()
+        pending_outs = 0
+        pending_pitches = 0
+        pending_strikes = 0
+
         for line in lines:
             clean_line = line.strip().strip('"')
             clean_line = re.sub(r"\([^)]*\)", "", clean_line)
             clean_line = re.sub(r"\s+", " ", clean_line).strip()
             line_lower = clean_line.lower()
+
+            # --- Track half inning + current pitcher (for Yukon pitching) ---
+            maybe_batting = parse_batting_team_from_half(clean_line)
+            if maybe_batting:
+                current_batting_team = maybe_batting
+                last_outs_in_half = 0
+                pending_outs = 0
+                pending_pitches = 0
+                pending_strikes = 0
+                # New half-inning: don't carry pitcher forward implicitly
+                current_pitcher = "UNKNOWN_P"
+
+            # Defense/offense detection: we only credit Yukon pitching when the OTHER team is batting
+            # Defense/offense detection:
+            #  - Primary: half-inning header team name (Top/Bottom ... - TEAM)
+            #  - Failsafe: if we see one of OUR roster hitters in the line, we are on offense even if header was missed
+            _our_batter = get_batter_name(clean_line, current_roster)
+            if _our_batter:
+                is_team_defense = False
+            else:
+                is_team_defense = bool(current_batting_team) and (not team_matches_pbp(current_batting_team, team_pbp_name))
+
+            # Only update *our* current pitcher while on defense (prevents opponent pitcher bleed)
+            maybe_p = parse_pitcher_from_line(clean_line)
+            if is_team_defense and maybe_p:
+                current_pitcher = maybe_p
+
+                # If we previously saw outs before GC stated the pitcher, assign them now
+                # If we previously saw outs/pitches before GC stated the pitcher, assign them now
+                if (current_pitcher and current_pitcher != "UNKNOWN_P") and (pending_outs > 0 or pending_pitches > 0):
+                    game_pitching.setdefault(current_pitcher, empty_pitching_stat())
+                    if pending_outs > 0:
+                        game_pitching[current_pitcher]["OUTS"] += int(pending_outs)
+                        pending_outs = 0
+                    if pending_pitches > 0:
+                        game_pitching[current_pitcher]["PITCHES"] += int(pending_pitches)
+                        game_pitching[current_pitcher]["STRIKES"] += int(pending_strikes)
+                        pending_pitches = 0
+                        pending_strikes = 0
+
+            # Outs by delta (IP accuracy)
+            outs_now = parse_outs_marker(clean_line)
+            if outs_now is not None:
+                delta_outs = max(0, int(outs_now) - int(last_outs_in_half))
+                last_outs_in_half = int(outs_now)
+                if is_team_defense and delta_outs > 0:
+                    # GC often prints '3 Outs' BEFORE the line that contains 'X pitching'.
+                    # If we don't know the pitcher yet, hold outs and assign once pitcher appears.
+                    if (not current_pitcher) or (current_pitcher == "UNKNOWN_P"):
+                        pending_outs += int(delta_outs)
+                    else:
+                        pname = current_pitcher
+                        game_pitching.setdefault(pname, empty_pitching_stat())
+                        game_pitching[pname]["OUTS"] += int(delta_outs)
+
+            # If the half-inning ended (3 outs) and we still never saw a pitcher line,
+            # bucket any held outs/pitches to UNKNOWN_P for that half (so IP stays correct).
+            if is_team_defense and outs_now == 3 and (pending_outs > 0 or pending_pitches > 0) and (current_pitcher == "UNKNOWN_P"):
+                game_pitching.setdefault("UNKNOWN_P", empty_pitching_stat())
+                if pending_outs > 0:
+                    game_pitching["UNKNOWN_P"]["OUTS"] += int(pending_outs)
+                    pending_outs = 0
+                if pending_pitches > 0:
+                    game_pitching["UNKNOWN_P"]["PITCHES"] += int(pending_pitches)
+                    game_pitching["UNKNOWN_P"]["STRIKES"] += int(pending_strikes)
+                    pending_pitches = 0
+                    pending_strikes = 0
+            # K / BB from event detail lines (avoid header double-count)
+            if is_team_defense:
+                pname = current_pitcher or "UNKNOWN_P"
+
+                if is_strikeout_detail(clean_line):
+                    game_pitching.setdefault(pname, empty_pitching_stat())
+                    game_pitching[pname]["K"] += 1
+
+                if is_walk_detail(clean_line):
+                    game_pitching.setdefault(pname, empty_pitching_stat())
+                    game_pitching[pname]["BB"] += 1
+
+                # Strike% from visible pitch tokens
+                p_ct, s_ct = count_pitch_tokens(clean_line)
+                if p_ct > 0:
+                    # If pitcher not known yet in this defensive segment, hold pitches and assign once pitcher appears.
+                    if (not pname) or (pname == "UNKNOWN_P"):
+                        pending_pitches += int(p_ct)
+                        pending_strikes += int(s_ct)
+                    else:
+                        game_pitching.setdefault(pname, empty_pitching_stat())
+                        game_pitching[pname]["PITCHES"] += int(p_ct)
+                        game_pitching[pname]["STRIKES"] += int(s_ct)
+
+                # HBP: add +1 pitch only if the line doesn't already include visible pitch tokens
+                # HBP: add +1 pitch only if the line doesn't already include visible pitch tokens
+                if is_hbp_detail(clean_line) and p_ct == 0:
+                    if (not pname) or (pname == "UNKNOWN_P"):
+                        pending_pitches += 1
+                    else:
+                        game_pitching.setdefault(pname, empty_pitching_stat())
+                        game_pitching[pname]["PITCHES"] += 1
 
             # running events (not BIP)
             runner, total_key, base_key = parse_running_event(clean_line, current_roster)
@@ -1813,8 +2109,19 @@ if process_clicked:
 
         add_game_to_season(season_team, season_players, game_team, game_players)
 
+        # --- Merge game pitching into season pitching ---
+        if "season_pitching" not in locals() or season_pitching is None:
+            season_pitching = {}
+        for pn, pst in (game_pitching or {}).items():
+            pname = str(pn).strip().strip('"') or "UNKNOWN_P"
+            season_pitching.setdefault(pname, empty_pitching_stat())
+            ensure_pitching_keys(season_pitching[pname])
+            ensure_pitching_keys(pst)
+            for k in ["OUTS", "K", "BB", "PITCHES", "STRIKES"]:
+                season_pitching[pname][k] = int(season_pitching[pname].get(k, 0)) + int(pst.get(k, 0) or 0)
+
         # ✅ Save with archived_players too
-        db_save_season_totals(TEAM_CODE_SAFE, team_key, season_team, season_players, len(processed_set), archived_players, coach_notes=coach_notes)
+        db_save_season_totals(TEAM_CODE_SAFE, team_key, season_team, season_players, len(processed_set), archived_players, season_pitching)
 
         st.success("✅ Game processed and added to season totals (Supabase).")
         rerun_needed = True
@@ -1878,57 +2185,85 @@ df_season = df_season[col_order]
 st.dataframe(df_season, use_container_width=True)
 
 # -----------------------------
-# 📝 COACHES SCOUTING NOTES (Saved in Supabase + included in exports)
+# 📝 COACHES SCOUTING NOTES (per opponent / per selected team)
 # -----------------------------
-with st.expander("📝 Coaches Scouting Notes (prints on Excel/CSV)"):
-    notes_key = f"coach_notes__{TEAM_CODE_SAFE}__{team_key}"
-    st.session_state.setdefault(notes_key, coach_notes or "")
-    st.text_area(
-        "Type any scouting notes you want saved with this team’s season report:",
-        key=notes_key,
+notes_key = f"coach_notes__{TEAM_CODE_SAFE}__{team_key}"
+
+if notes_key not in st.session_state:
+    st.session_state[notes_key] = db_get_coach_notes(TEAM_CODE_SAFE, team_key)
+
+with st.expander("📝 Coaches Scouting Notes (prints on Excel/CSV)", expanded=False):
+    st.session_state[notes_key] = st.text_area(
+        "Notes for THIS selected opponent/team:",
+        value=st.session_state[notes_key],
         height=160,
-        placeholder="Example: 'We are attacking 1st-pitch fastballs. #12 is late on velo. Bunt coverage notes…'",
+        key=f"{notes_key}_box",
     )
 
-    col_n1, col_n2 = st.columns([1, 3])
-    with col_n1:
-        if st.button("💾 Save Notes", key=f"save_notes__{TEAM_CODE_SAFE}__{team_key}", type="primary"):
-            coach_notes = str(st.session_state.get(notes_key, "") or "").strip()
-            db_save_season_totals(
-                TEAM_CODE_SAFE, team_key, season_team, season_players, games_played, archived_players, coach_notes=coach_notes
-            )
-            st.success("Saved.")
+    if st.button("💾 Save Notes", key=f"{notes_key}_save"):
+        db_save_season_totals(
+            TEAM_CODE_SAFE,
+            team_key,
+            season_team,
+            season_players,
+            games_played,
+            archived_players,
+            season_pitching,
+            coach_notes=st.session_state[notes_key],
+        )
+        st.success("Notes saved for this opponent/team.")
 
-    with col_n2:
-        st.caption("These notes are private to this team + access code, saved in Supabase, and will be embedded into your Excel/CSV export.")
+coach_notes_text = str(st.session_state.get(notes_key, "") or "").strip()
 
-df_export = df_season.copy()
-notes_text = str(st.session_state.get(notes_key, coach_notes) or "").strip()
 
 # -----------------------------
-# EXPORTS (CSV + Excel)
+# YUKON PITCHING – SEASON TO DATE
 # -----------------------------
-# CSV can't "merge cells", so we append a notes footer section beneath the table.
-df_csv = df_export.copy()
-if notes_text:
-    blank = {c: "" for c in df_csv.columns}
-    footer_rows = [blank.copy() for _ in range(5)]  # 5 blank rows after last player
-    note_row = blank.copy()
-    cols = list(df_csv.columns)
-    note_row[cols[0]] = "COACH NOTES"
-    if len(cols) > 1:
-        note_row[cols[1]] = notes_text
-    else:
-        note_row[cols[0]] = f"COACH NOTES: {notes_text}"
-    df_csv = pd.concat([df_csv, pd.DataFrame(footer_rows + [note_row])], ignore_index=True)
+st.subheader("⚾ Pitching – SEASON TO DATE")
 
-csv_bytes = df_csv.to_csv(index=False).encode("utf-8")
+pitch_rows = []
+for pname in sorted((season_pitching or {}).keys(), key=lambda x: x.lower()):
+    pst = ensure_pitching_keys((season_pitching or {}).get(pname, {}))
+    # skip any empty / accidental entries
+    if sum(int(pst.get(k, 0) or 0) for k in ["OUTS","K","BB","PITCHES","STRIKES"]) == 0:
+        continue
+    outs = int(pst.get("OUTS", 0) or 0)
+    pitches = int(pst.get("PITCHES", 0) or 0)
+    strikes = int(pst.get("STRIKES", 0) or 0)
+    k = int(pst.get("K", 0) or 0)
+    bb = int(pst.get("BB", 0) or 0)
+    spct = (strikes / pitches) if pitches else None
+    pitch_rows.append({
+        "Pitcher": pname,
+        "IP": outs_to_ip_str(outs),
+        "K": k,
+        "BB": bb,
+        "Pitches": pitches,
+        "Strikes": strikes,
+        "Strike%": spct,
+    })
+
+df_pitching = pd.DataFrame(pitch_rows)
+if df_pitching.empty:
+    st.info("No pitching data found yet (requires opponent half-innings + pitching lines in GC play-by-play).")
+else:
+    st.dataframe(df_pitching, use_container_width=True)
+
+csv_text = df_season.to_csv(index=False)
+if coach_notes_text:
+    csv_text += "\n\nCOACH NOTES:\n" + coach_notes_text.replace("\r", "").replace("\n", " ")
+csv_bytes = csv_text.encode("utf-8")
 safe_team = re.sub(r"[^A-Za-z0-9_-]+", "_", selected_team).strip("_")
 
 out = BytesIO()
 with pd.ExcelWriter(out, engine="openpyxl") as writer:
     sheet_name = "Season"
-    df_export.to_excel(writer, index=False, sheet_name=sheet_name)
+    df_season.to_excel(writer, index=False, sheet_name=sheet_name)
+
+    # Pitching sheet
+    if "df_pitching" in locals() and isinstance(df_pitching, pd.DataFrame) and not df_pitching.empty:
+        p_sheet = "Yukon Pitching"
+        df_pitching.to_excel(writer, index=False, sheet_name=p_sheet)
 
     ws = writer.book[sheet_name]
     ws.freeze_panes = "A2"
@@ -1944,10 +2279,10 @@ with pd.ExcelWriter(out, engine="openpyxl") as writer:
         cell.alignment = header_align
         cell.fill = header_fill
 
-    for col_idx, col_name in enumerate(df_export.columns, start=1):
+    for col_idx, col_name in enumerate(df_season.columns, start=1):
         col_letter = get_column_letter(col_idx)
         max_len = len(str(col_name))
-        sample = df_export[col_name].astype(str).head(60).tolist()
+        sample = df_season[col_name].astype(str).head(60).tolist()
         for v in sample:
             max_len = max(max_len, len(v))
         ws.column_dimensions[col_letter].width = min(max(max_len + 2, 8), 22)
@@ -1980,8 +2315,8 @@ with pd.ExcelWriter(out, engine="openpyxl") as writer:
         ws.conditional_formatting.add(data_range, heat_rule)
 
     # highlight UNKNOWN > 0
-    if "UNKNOWN" in df_export.columns:
-        unk_idx = list(df_export.columns).index("UNKNOWN") + 1
+    if "UNKNOWN" in df_season.columns:
+        unk_idx = list(df_season.columns).index("UNKNOWN") + 1
         unk_col = get_column_letter(unk_idx)
         unk_range = f"{unk_col}{start_row}:{unk_col}{end_row}"
         unk_fill = OPFill("solid", fgColor="FFC7CE")
@@ -1995,45 +2330,78 @@ with pd.ExcelWriter(out, engine="openpyxl") as writer:
             if isinstance(cell.value, (int, float)):
                 cell.alignment = num_align
 
+    # Format pitching sheet (if present)
+    if "df_pitching" in locals() and isinstance(df_pitching, pd.DataFrame) and not df_pitching.empty:
+        p_sheet = "Yukon Pitching"
+        if p_sheet in writer.book.sheetnames:
+            wp = writer.book[p_sheet]
+            wp.freeze_panes = "A2"
+
+            # Header style
+            for cell in wp[1]:
+                cell.font = header_font
+                cell.alignment = header_align
+                cell.fill = header_fill
+
+            # Column widths
+            for col_idx, col_name in enumerate(df_pitching.columns, start=1):
+                col_letter = get_column_letter(col_idx)
+                max_len = len(str(col_name))
+                sample = df_pitching[col_name].astype(str).head(80).tolist()
+                for v in sample:
+                    max_len = max(max_len, len(v))
+                wp.column_dimensions[col_letter].width = min(max(max_len + 2, 8), 20)
+
+            # Center numeric columns
+            for row in wp.iter_rows(min_row=2, max_row=wp.max_row):
+                for cell in row:
+                    if isinstance(cell.value, (int, float)):
+                        cell.alignment = num_align
+
+            # Percent format for Strike%
+            if "Strike%" in df_pitching.columns:
+                col_idx = list(df_pitching.columns).index("Strike%") + 1
+                col_letter = get_column_letter(col_idx)
+                for r in range(2, wp.max_row + 1):
+                    wp[f"{col_letter}{r}"].number_format = "0.0%"
 
     # -----------------------------
-    # Excel: Coach Notes box (merged, 5 rows below table)
+    # COACH NOTES BOX (EXCEL) — 5 rows below last player, merged full width, thick border
     # -----------------------------
-    notes_box_text = str(st.session_state.get(notes_key, coach_notes) or "").strip()
-    if notes_box_text:
-        from openpyxl.styles import Border, Side
+    from openpyxl.styles import Border, Side
 
-        last_data_row = 1 + len(df_export)  # header is row 1
-        top_row = last_data_row + 5         # 5 rows after last player row
-        box_height = 10                     # rows tall (adjust if you want)
+    if coach_notes_text:
+        top_row = ws.max_row + 6   # 5 blank rows after last data row
         left_col = 1
         right_col = ws.max_column
+        box_height = 10
 
-        start_cell = f"{get_column_letter(left_col)}{top_row}"
-        end_cell = f"{get_column_letter(right_col)}{top_row + box_height - 1}"
-        box_range = f"{start_cell}:{end_cell}"
+        ws.merge_cells(
+            start_row=top_row,
+            start_column=left_col,
+            end_row=top_row + box_height - 1,
+            end_column=right_col
+        )
 
-        ws.merge_cells(box_range)
-        cell = ws[start_cell]
-        cell.value = f"COACH NOTES:\n\n{notes_box_text}"
+        cell = ws.cell(row=top_row, column=left_col)
+        cell.value = f"COACH NOTES:\n\n{coach_notes_text}"
         cell.alignment = Alignment(wrap_text=True, vertical="top")
 
-        # Make the box rows taller
+        # Row heights (make the box taller)
         for r in range(top_row, top_row + box_height):
-            ws.row_dimensions[r].height = 20
+            ws.row_dimensions[r].height = 22
 
-        # Thick border around the whole box (perimeter only)
+        # Thick border around the perimeter
         thick = Side(style="thick")
         for r in range(top_row, top_row + box_height):
             for c in range(left_col, right_col + 1):
-                addr = f"{get_column_letter(c)}{r}"
-                cur = ws[addr].border
-                left = thick if c == left_col else cur.left
-                right = thick if c == right_col else cur.right
-                top = thick if r == top_row else cur.top
-                bottom = thick if r == top_row + box_height - 1 else cur.bottom
-                ws[addr].border = Border(left=left, right=right, top=top, bottom=bottom)
-
+                cur = ws.cell(row=r, column=c).border
+                ws.cell(row=r, column=c).border = Border(
+                    left=thick if c == left_col else cur.left,
+                    right=thick if c == right_col else cur.right,
+                    top=thick if r == top_row else cur.top,
+                    bottom=thick if r == top_row + box_height - 1 else cur.bottom,
+                )
 
 excel_bytes = out.getvalue()
 
@@ -2062,18 +2430,16 @@ if show_archived:
 else:
     indiv_candidates = active_players
 
-# ✅ FIX: allow players with 0 stats to still appear (so re-added guys show back up)
-selectable_players = [p for p in indiv_candidates if p in season_players]
+selectable_players = [
+    p for p in indiv_candidates
+    if p in season_players and any(season_players[p].get(k, 0) > 0 for k in (LOCATION_KEYS + BALLTYPE_KEYS + COMBO_KEYS + RUN_KEYS))
+]
 
 if not selectable_players:
-    st.info("No hitters found for this roster yet.")
+    st.info("No hitters have recorded balls in play yet.")
 else:
     selected_player = st.selectbox("Choose a hitter:", selectable_players)
     stats = season_players[selected_player]
-
-    # If they have all zeros, still show it (coach can verify they exist)
-    if not any(stats.get(k, 0) > 0 for k in (LOCATION_KEYS + BALLTYPE_KEYS + COMBO_KEYS + RUN_KEYS)):
-        st.info("This player is on the roster but has no recorded events yet (all zeros).")
 
     indiv_rows = [{"Type": loc, "Count": stats.get(loc, 0)} for loc in LOCATION_KEYS]
     indiv_rows.append({"Type": "GB (total)", "Count": stats.get("GB", 0)})
@@ -2091,6 +2457,8 @@ else:
             indiv_rows.append({"Type": rk, "Count": stats.get(rk, 0)})
 
     st.table(indiv_rows)
+
+
 # -----------------------------
 # FOOTER (Copyright)
 # -----------------------------
@@ -2116,180 +2484,6 @@ st.markdown(
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-        cell.alignment = Alignment(wrap_text=True, vertical="top")
-
-        # Make the box rows taller
-        for r in range(top_row, top_row + box_height):
-            ws.row_dimensions[r].height = 20
-
-        # Thick border around the whole box (perimeter only)
-        thick = Side(style="thick")
-        for r in range(top_row, top_row + box_height):
-            for c in range(left_col, right_col + 1):
-                addr = f"{get_column_letter(c)}{r}"
-                cur = ws[addr].border
-                left = thick if c == left_col else cur.left
-                right = thick if c == right_col else cur.right
-                top = thick if r == top_row else cur.top
-                bottom = thick if r == top_row + box_height - 1 else cur.bottom
-                ws[addr].border = Border(left=left, right=right, top=top, bottom=bottom)
-
-
-excel_bytes = out.getvalue()
-
-col_dl1, col_dl2 = st.columns(2)
-with col_dl1:
-    st.download_button(
-        label="📊 Download Season Report (Excel)",
-        data=excel_bytes,
-        file_name=f"{TEAM_CODE}_{safe_team}_Season_Spray_Report.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    )
-
-with col_dl2:
-    st.download_button(
-        label="📄 Download Season Report (CSV - Google Sheets Ready)",
-        data=csv_bytes,
-        file_name=f"{TEAM_CODE}_{safe_team}_Season_Spray_Report.csv",
-        mime="text/csv",
-    )
-
-st.subheader(f"🎯 Individual Spray – SEASON TO DATE ({selected_team})")
-
-# ✅ Individual dropdown matches roster by default; archived optional
-if show_archived:
-    indiv_candidates = sorted(set(active_players + archived_list))
-else:
-    indiv_candidates = active_players
-
-# ✅ FIX: allow players with 0 stats to still appear (so re-added guys show back up)
-selectable_players = [p for p in indiv_candidates if p in season_players]
-
-if not selectable_players:
-    st.info("No hitters found for this roster yet.")
-else:
-    selected_player = st.selectbox("Choose a hitter:", selectable_players)
-    stats = season_players[selected_player]
-
-    # If they have all zeros, still show it (coach can verify they exist)
-    if not any(stats.get(k, 0) > 0 for k in (LOCATION_KEYS + BALLTYPE_KEYS + COMBO_KEYS + RUN_KEYS)):
-        st.info("This player is on the roster but has no recorded events yet (all zeros).")
-
-    indiv_rows = [{"Type": loc, "Count": stats.get(loc, 0)} for loc in LOCATION_KEYS]
-    indiv_rows.append({"Type": "GB (total)", "Count": stats.get("GB", 0)})
-    indiv_rows.append({"Type": "FB (total)", "Count": stats.get("FB", 0)})
-
-    for ck in COMBO_KEYS:
-        indiv_rows.append({"Type": ck, "Count": stats.get(ck, 0)})
-
-    # running events
-    indiv_rows.append({"Type": "SB", "Count": stats.get("SB", 0)})
-    indiv_rows.append({"Type": "CS", "Count": stats.get("CS", 0)})
-    indiv_rows.append({"Type": "DI", "Count": stats.get("DI", 0)})
-    for rk in RUN_KEYS:
-        if rk not in ["SB", "CS", "DI"]:
-            indiv_rows.append({"Type": rk, "Count": stats.get(rk, 0)})
-
-    st.table(indiv_rows)
-# -----------------------------
-# FOOTER (Copyright)
-# -----------------------------
-st.markdown(
-    """
-    <style>
-    .rp-footer {
-        margin-top: 40px;
-        padding-top: 12px;
-        border-top: 1px solid rgba(0,0,0,0.12);
-        text-align: center;
-        font-size: 0.85rem;
-        color: rgba(0,0,0,0.55);
-    }
-    </style>
-
-    <div class="rp-footer">
-        © 2026 RP Spray Analytics. All rights reserved.
-    </div>
-    """,
-    unsafe_allow_html=True,
-)
 
 
 
