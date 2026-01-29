@@ -1912,6 +1912,10 @@ for player in display_players:
 
 df_season = pd.DataFrame(season_rows)
 col_order = (["Player"] + LOCATION_KEYS + ["GB", "FB"] + COMBO_KEYS + RUN_KEYS)
+# If no rows yet, preserve the expected columns so Stat Edit can still work
+if df_season.empty and len(df_season.columns) == 0:
+    df_season = pd.DataFrame(columns=col_order)
+
 col_order = [c for c in col_order if c in df_season.columns]
 df_season = df_season[col_order]
 
@@ -2101,6 +2105,8 @@ if notes_box_text:
     blank_row = [""] * len(cols)
 
     # Build a footer row: COACH NOTES + note text
+    if len(cols) == 0:
+        cols = ["Player"]
     footer = [""] * len(cols)
     if len(cols) == 1:
         footer[0] = "COACH NOTES: " + notes_box_text.replace("\n", " ")
