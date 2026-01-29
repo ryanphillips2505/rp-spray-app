@@ -1916,12 +1916,26 @@ if process_clicked:
             # --- Track half inning + current pitcher (for Yukon pitching) ---
             maybe_batting = parse_batting_team_from_half(clean_line)
             if maybe_batting:
+                # Finalize any pending defense stats from the PREVIOUS half-inning.
+                # IMPORTANT: GC sometimes prints the '... pitching' line AFTER '3 Outs'.
+                # So we do NOT flush pending at '3 Outs' — we flush only when the next half starts (or EOF).
+                if (pending_outs > 0 or pending_pitches > 0) and current_batting_team:
+                    prev_half_defense = (not team_matches_pbp(current_batting_team, team_pbp_name))
+                    if prev_half_defense:
+                        flush_p = current_pitcher if (current_pitcher and current_pitcher != "UNKNOWN_P") else "UNKNOWN_P"
+                        game_pitching.setdefault(flush_p, empty_pitching_stat())
+                        if pending_outs > 0:
+                            game_pitching[flush_p]["OUTS"] += int(pending_outs)
+                        if pending_pitches > 0:
+                            game_pitching[flush_p]["PITCHES"] += int(pending_pitches)
+                            game_pitching[flush_p]["STRIKES"] += int(pending_strikes)
+
+                # Start new half-inning
                 current_batting_team = maybe_batting
                 last_outs_in_half = 0
                 pending_outs = 0
                 pending_pitches = 0
                 pending_strikes = 0
-                # New half-inning: don't carry pitcher forward implicitly
                 current_pitcher = "UNKNOWN_P"
 
             # Defense/offense detection: we only credit Yukon pitching when the OTHER team is batting
@@ -1967,19 +1981,8 @@ if process_clicked:
                         game_pitching.setdefault(pname, empty_pitching_stat())
                         game_pitching[pname]["OUTS"] += int(delta_outs)
 
-            # If the half-inning ended (3 outs) and we still never saw a pitcher line,
-            # bucket any held outs/pitches to UNKNOWN_P for that half (so IP stays correct).
-            if is_team_defense and outs_now == 3 and (pending_outs > 0 or pending_pitches > 0) and (current_pitcher == "UNKNOWN_P"):
-                game_pitching.setdefault("UNKNOWN_P", empty_pitching_stat())
-                if pending_outs > 0:
-                    game_pitching["UNKNOWN_P"]["OUTS"] += int(pending_outs)
-                    pending_outs = 0
-                if pending_pitches > 0:
-                    game_pitching["UNKNOWN_P"]["PITCHES"] += int(pending_pitches)
-                    game_pitching["UNKNOWN_P"]["STRIKES"] += int(pending_strikes)
-                    pending_pitches = 0
-                    pending_strikes = 0
-            # K / BB from event detail lines (avoid header double-count)
+            # K / BB / pitch counts
+            # B from event detail lines (avoid header double-count)
             if is_team_defense:
                 pname = current_pitcher or "UNKNOWN_P"
 
@@ -2022,49 +2025,61 @@ if process_clicked:
                     game_players[runner][base_key] += 1
 
             batter = get_batter_name(clean_line, current_roster)
-            do_bip = True
             if batter is None:
-                do_bip = False
-            elif not is_ball_in_play(line_lower):
-                do_bip = False
+                continue
+            if not is_ball_in_play(line_lower):
+                continue
 
-            if do_bip:
-                loc, loc_conf, loc_reasons = classify_location(line_lower, strict_mode=strict_mode)
-                ball_type, bt_conf, bt_reasons = classify_ball_type(line_lower)
+            loc, loc_conf, loc_reasons = classify_location(line_lower, strict_mode=strict_mode)
+            ball_type, bt_conf, bt_reasons = classify_ball_type(line_lower)
 
-                if loc is None:
-                    if strict_mode:
-                        do_bip = False
-                    else:
-                        loc = "UNKNOWN"
-                        loc_reasons.append("No location match → bucketed as UNKNOWN")
+            if loc is None:
+                if strict_mode:
+                    continue
+                loc = "UNKNOWN"
+                loc_reasons.append("No location match → bucketed as UNKNOWN")
 
-                if do_bip and (ball_type is None) and (loc is not None):
-                    if loc in ["SS", "3B", "2B", "1B", "P", "Bunt", "Sac Bunt"]:
-                        ball_type = "GB"
-                        bt_conf += 1
-                        bt_reasons.append("No explicit GB phrase → inferred GB from infield location")
-                    elif loc in ["LF", "CF", "RF"]:
-                        ball_type = "FB"
-                        bt_conf += 1
-                        bt_reasons.append("No explicit FB phrase → inferred FB from outfield location")
+            if ball_type is None and loc is not None:
+                if loc in ["SS", "3B", "2B", "1B", "P", "Bunt", "Sac Bunt"]:
+                    ball_type = "GB"
+                    bt_conf += 1
+                    bt_reasons.append("No explicit GB phrase → inferred GB from infield location")
+                elif loc in ["LF", "CF", "RF"]:
+                    ball_type = "FB"
+                    bt_conf += 1
+                    bt_reasons.append("No explicit FB phrase → inferred FB from outfield location")
 
-                # (confidence labels kept for future debug; not displayed)
-                if do_bip:
-                    _ = overall_confidence_score(loc_conf + bt_conf)
-                    _ = loc_reasons + bt_reasons
+            # (confidence labels kept for future debug; not displayed)
+            _ = overall_confidence_score(loc_conf + bt_conf)
+            _ = loc_reasons + bt_reasons
 
-                    game_team[loc] += 1
-                    game_players[batter][loc] += 1
+            game_team[loc] += 1
+            game_players[batter][loc] += 1
 
-                    if ball_type in BALLTYPE_KEYS:
-                        game_team[ball_type] += 1
-                        game_players[batter][ball_type] += 1
+            if ball_type in BALLTYPE_KEYS:
+                game_team[ball_type] += 1
+                game_players[batter][ball_type] += 1
 
-                    if ball_type in ["GB", "FB"] and loc in COMBO_LOCS:
-                        combo_key = f"{ball_type}-{loc}"
-                        game_team[combo_key] += 1
-                        game_players[batter][combo_key] += 1
+            if ball_type in ["GB", "FB"] and loc in COMBO_LOCS:
+                combo_key = f"{ball_type}-{loc}"
+                game_team[combo_key] += 1
+                game_players[batter][combo_key] += 1
+
+        # Finalize any pending defense stats at end-of-file (last half-inning)
+        if (pending_outs > 0 or pending_pitches > 0) and current_batting_team:
+            last_half_defense = (not team_matches_pbp(current_batting_team, team_pbp_name))
+            if last_half_defense:
+                flush_p = current_pitcher if (current_pitcher and current_pitcher != "UNKNOWN_P") else "UNKNOWN_P"
+                game_pitching.setdefault(flush_p, empty_pitching_stat())
+                if pending_outs > 0:
+                    game_pitching[flush_p]["OUTS"] += int(pending_outs)
+                if pending_pitches > 0:
+                    game_pitching[flush_p]["PITCHES"] += int(pending_pitches)
+                    game_pitching[flush_p]["STRIKES"] += int(pending_strikes)
+            pending_outs = 0
+            pending_pitches = 0
+            pending_strikes = 0
+
         add_game_to_season(season_team, season_players, game_team, game_players)
 
         # --- Merge game pitching into season pitching ---
