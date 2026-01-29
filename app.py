@@ -4,6 +4,7 @@
 # Unauthorized copying, distribution, or resale prohibited.
 
 import streamlit as st
+st.set_page_config(page_title="RP Spray Charts", page_icon="⚾", layout="wide")
 st.cache_data.clear()
 import os
 import json
@@ -36,6 +37,27 @@ def get_supabase() -> Client:
     if not SUPABASE_URL or not SUPABASE_KEY:
         raise RuntimeError("Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY in Streamlit secrets.")
     return create_client(SUPABASE_URL, SUPABASE_KEY)
+
+def _show_db_error(e: Exception, label: str):
+    st.error(f"**{label}**")
+    try:
+        parts = [f"type: {type(e)}"]
+        for attr in ("message", "details", "hint", "code"):
+            if hasattr(e, attr):
+                val = getattr(e, attr)
+                if val:
+                    parts.append(f"{attr}: {val}")
+        st.code("\n".join(parts), language="text")
+    except Exception:
+        st.write(str(e))
+
+# Create Supabase client once (cached) and fail fast if secrets are missing
+try:
+    supabase: Client = get_supabase()
+except Exception as e:
+    _show_db_error(e, "Supabase secrets missing / invalid")
+    st.stop()
+
 
 def supa_execute_with_retry(builder, tries: int = 5):
     last_err = None
@@ -1336,7 +1358,6 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
-
 
 
 
