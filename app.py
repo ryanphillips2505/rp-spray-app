@@ -391,6 +391,29 @@ def outs_to_ip_str(outs: int) -> str:
     rem = int(outs or 0) % 3
     return f"{inn}.{rem}"
 
+# -----------------------------
+# TEAM NAME MATCHING (PBP) — for reliable defense/offense detection
+# -----------------------------
+_TEAM_STOPWORDS = {"varsity","jv","freshman","frosh","hs","high","school","baseball"}
+
+def _team_tokens(name: str):
+    s = (name or "").lower()
+    toks = re.findall(r"[a-z0-9]+", s)
+    toks = [t for t in toks if t and t not in _TEAM_STOPWORDS and len(t) >= 3]
+    return set(toks)
+
+def team_matches_pbp(batting_team: str, our_team_name: str) -> bool:
+    """
+    True if the half-inning header team name appears to be OUR team.
+    Uses token overlap (robust to 'Varsity', spacing, etc.).
+    """
+    bt = _team_tokens(batting_team)
+    ot = _team_tokens(our_team_name)
+    if not bt or not ot:
+        return False
+    return len(bt.intersection(ot)) > 0
+
+
 
 
 
@@ -1856,7 +1879,8 @@ if process_clicked:
         current_pitcher = "UNKNOWN_P"
         current_batting_team = None
         last_outs_in_half = 0
-        team_pbp_name = (selected_team or "").strip().lower()
+        team_pbp_name = (TEAM_CFG.get("team_name", selected_team) or "").strip().lower()
+        pending_outs = 0
 
         for line in lines:
             clean_line = line.strip().strip('"')
@@ -1869,12 +1893,21 @@ if process_clicked:
             if maybe_batting:
                 current_batting_team = maybe_batting
                 last_outs_in_half = 0
+                pending_outs = 0
 
+            # Defense/offense detection: we only credit Yukon pitching when the OTHER team is batting
+            is_team_defense = bool(current_batting_team) and (not team_matches_pbp(current_batting_team, team_pbp_name))
+
+            # Only update *our* current pitcher while on defense (prevents opponent pitcher bleed)
             maybe_p = parse_pitcher_from_line(clean_line)
-            if maybe_p:
+            if is_team_defense and maybe_p:
                 current_pitcher = maybe_p
 
-            is_team_defense = bool(current_batting_team) and (current_batting_team.strip().lower() != team_pbp_name)
+                # If we previously saw outs before GC stated the pitcher, assign them now
+                if pending_outs > 0 and current_pitcher and current_pitcher != "UNKNOWN_P":
+                    game_pitching.setdefault(current_pitcher, empty_pitching_stat())
+                    game_pitching[current_pitcher]["OUTS"] += int(pending_outs)
+                    pending_outs = 0
 
             # Outs by delta (IP accuracy)
             outs_now = parse_outs_marker(clean_line)
@@ -1882,9 +1915,14 @@ if process_clicked:
                 delta_outs = max(0, int(outs_now) - int(last_outs_in_half))
                 last_outs_in_half = int(outs_now)
                 if is_team_defense and delta_outs > 0:
-                    pname = current_pitcher or "UNKNOWN_P"
-                    game_pitching.setdefault(pname, empty_pitching_stat())
-                    game_pitching[pname]["OUTS"] += delta_outs
+                    # GC often prints '3 Outs' BEFORE the line that contains 'X pitching'.
+                    # If we don't know the pitcher yet, hold outs and assign once pitcher appears.
+                    if (not current_pitcher) or (current_pitcher == "UNKNOWN_P"):
+                        pending_outs += int(delta_outs)
+                    else:
+                        pname = current_pitcher
+                        game_pitching.setdefault(pname, empty_pitching_stat())
+                        game_pitching[pname]["OUTS"] += int(delta_outs)
 
             # K / BB from event detail lines (avoid header double-count)
             if is_team_defense:
@@ -2258,7 +2296,6 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
-
 
 
 
