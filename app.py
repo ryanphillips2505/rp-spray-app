@@ -4,8 +4,6 @@
 # Unauthorized copying, distribution, or resale prohibited.
 
 import streamlit as st
-st.set_page_config(page_title="RP Spray Charts", page_icon="⚾", layout="wide")
-st.cache_data.clear()
 import os
 import json
 import base64
@@ -23,58 +21,774 @@ from openpyxl.utils import get_column_letter
 from openpyxl.formatting.rule import ColorScaleRule, FormulaRule, CellIsRule
 from supabase import create_client, Client
 
-SUPABASE_URL = st.secrets.get("SUPABASE_URL", "").strip()
-# Prefer Service Role key (server-side only). Fall back to older key name if needed.
-SUPABASE_KEY = (
-    st.secrets.get("SUPABASE_SERVICE_ROLE_KEY", "").strip()
-    or st.secrets.get("SUPABASE_SERVICE_KEY", "").strip()
-)
+SUPABASE_URL = st.secrets["SUPABASE_URL"]
+SUPABASE_KEY = st.secrets["SUPABASE_SERVICE_ROLE_KEY"]
+supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-from supabase import create_client, Client
 
-@st.cache_resource(show_spinner=False)
-def get_supabase() -> Client:
-    if not SUPABASE_URL or not SUPABASE_KEY:
-        raise RuntimeError("Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY in Streamlit secrets.")
-    return create_client(SUPABASE_URL, SUPABASE_KEY)
+def hash_access_code(code: str) -> str:
+    pepper = st.secrets["ACCESS_CODE_PEPPER"]
+    raw = (code.strip() + pepper).encode("utf-8")
+    return hashlib.sha256(raw).hexdigest()
+def admin_set_access_code(team_lookup: str, new_plain_code: str) -> bool:
+    team_lookup = (team_lookup or "").strip().upper()
+    new_plain_code = (new_plain_code or "").strip().upper()  # <-- FIXED
 
-def _show_db_error(e: Exception, label: str):
-    st.error(f"**{label}**")
-    try:
-        parts = [f"type: {type(e)}"]
-        for attr in ("message", "details", "hint", "code"):
-            if hasattr(e, attr):
-                val = getattr(e, attr)
-                if val:
-                    parts.append(f"{attr}: {val}")
-        st.code("\n".join(parts), language="text")
-    except Exception:
-        st.write(str(e))
+    if not team_lookup or not new_plain_code:
+        return False
 
-# Create Supabase client once (cached) and fail fast if secrets are missing
+    new_hash = hash_access_code(new_plain_code).strip().lower()
+
+    # Try by team_code first
+    res = supabase.table("team_access").update(
+        {"code_hash": new_hash, "is_active": True}
+    ).eq("team_code", team_lookup).execute()
+
+    if res.data:
+        return True
+
+    # Fallback by team_slug
+    res2 = supabase.table("team_access").update(
+        {"code_hash": new_hash, "is_active": True}
+    ).eq("team_slug", team_lookup).execute()
+
+    return bool(res2.data)
+
+
+# -----------------------------
+# PATHS / FOLDERS
+# -----------------------------
+SETTINGS_PATH = os.path.join("TEAM_CONFIG", "team_settings.json")
+ASSETS_DIR = "assets"
+os.makedirs(ASSETS_DIR, exist_ok=True)
+
+# FORCE include team data folders (Streamlit Cloud quirk) — but don't crash if missing
 try:
-    supabase: Client = get_supabase()
-except Exception as e:
-    _show_db_error(e, "Supabase secrets missing / invalid")
+    if os.path.exists("data/teams"):
+        _ = os.listdir("data/teams")
+except Exception:
+    pass
+
+
+# -----------------------------
+# SETTINGS LOADER
+# -----------------------------
+def load_settings():
+    defaults = {
+        "app_title": "RP Spray Charts",
+        "subtitle": "Coaches that want to win, WILL put in the time",
+        "primary_color": "#b91c1c",
+        "secondary_color": "#111111",
+        "background_image": os.path.join("assets", "background.jpg"),
+        "logo_image": os.path.join("assets", "logo.png"),
+        "strict_mode_default": True,
+    }
+    if os.path.exists(SETTINGS_PATH):
+        try:
+            with open(SETTINGS_PATH, "r", encoding="utf-8") as f:
+                user = json.load(f)
+            if isinstance(user, dict):
+                defaults.update({k: v for k, v in user.items() if v is not None})
+        except Exception:
+            pass
+    return defaults
+
+
+SETTINGS = load_settings()
+settings = SETTINGS  # alias so the rest of the code can use `settings`
+
+
+# -----------------------------
+# ✅ MUST BE FIRST STREAMLIT CALL
+# -----------------------------
+st.set_page_config(
+    page_title=SETTINGS.get("app_title", "RP Spray Charts"),
+    page_icon="⚾",
+    layout="wide",
+)
+st.cache_data.clear()
+
+# ============================
+# ACCESS CODE GATE
+# ============================
+
+
+@st.cache_data(show_spinner=False)
+def load_team_codes() -> dict:
+    try:
+        res = (
+            supabase.table("team_access")
+            .select("team_slug, team_code, team_name, code_hash, is_active")
+            .eq("is_active", True)
+            .execute()
+        )
+        rows = res.data or []
+        out = {}
+        for r in rows:
+            if r.get("team_code"):
+                out[str(r["team_code"]).strip().upper()] = r
+            if r.get("team_slug"):
+                out[str(r["team_slug"]).strip().upper()] = r
+        return out
+    except Exception:
+        return {}
+def license_is_active(team_code: str) -> bool:
+    """
+    Returns True if this team has an active license (and not expired, if expires_at is set).
+    Table: licenses (team_code text, status text, expires_at timestamptz)
+    """
+    try:
+        res = (
+            supabase.table("licenses")
+            .select("status, expires_at")
+            .eq("team_code", str(team_code).strip().upper())
+            .limit(1)
+            .execute()
+        )
+        rows = res.data or []
+        if not rows:
+            return False  # no row = not licensed
+
+        row = rows[0]
+        status = str(row.get("status", "")).strip().lower()
+        if status != "active":
+            return False
+
+        # Optional: expiration
+        exp = row.get("expires_at")
+        if exp:
+            from datetime import datetime, timezone
+            # Supabase returns ISO string typically
+            exp_dt = datetime.fromisoformat(str(exp).replace("Z", "+00:00"))
+            if exp_dt < datetime.now(timezone.utc):
+                return False
+
+        return True
+    except Exception:
+        return False
+        
+
+def require_team_access_option1():
+    """Option 1 login: coach enters Team Code + Team Key (no dropdowns, no licensing).
+    Data is isolated by (TEAM_CODE_SAFE, team_key)."""
+    if "team_code" not in st.session_state:
+        st.session_state.team_code = ""
+    if "team_key" not in st.session_state:
+        st.session_state.team_key = ""
+
+    st.title("RP Spray Analytics")
+    st.markdown("### Team Login")
+    c1, c2 = st.columns([1, 1])
+    with c1:
+        tc_in = st.text_input("Team Code (example: YUKON, MUSTANG)", value=st.session_state.team_code).strip().upper()
+    with c2:
+        tk_in = st.text_input("Team Key (keep this private)", value=st.session_state.team_key, type="password").strip()
+
+    team_code_safe = re.sub(r"[^A-Za-z0-9_-]", "", tc_in)
+
+    if st.button("Enter"):
+        if not team_code_safe or not tk_in:
+            st.error("Enter both Team Code and Team Key")
+        else:
+            st.session_state.team_code = team_code_safe
+            st.session_state.team_key = tk_in
+            st.rerun()
+
+    # Stop until logged in
+    if not st.session_state.team_code or not st.session_state.team_key:
+        st.stop()
+
+    return st.session_state.team_code, st.session_state.team_key
+TEAM_CODE, team_key = require_team_access_option1()
+
+# Load full team config (logo/background/data_folder) from TEAM_CONFIG/team_settings.json
+def _load_team_cfg_from_file(team_code: str) -> dict:
+    try:
+        with open(SETTINGS_PATH, "r", encoding="utf-8") as f:
+            data = json.load(f)
+
+        teams = data.get("teams", {}) or {}
+        branding = data.get("team_branding", {}) or {}
+
+TEAM_CODE, team_key = require_team_access_option1()
+        cfg = None
+        for _, t in teams.items():
+            if str(t.get("team_code", "")).strip().upper() == str(team_code).strip().upper():
+                cfg = t
+                break
+
+        cfg = cfg or {}
+
+        # Apply branding override (your new source of truth)
+        b = branding.get(str(team_code).strip().upper(), {}) or {}
+        if b.get("logo_path"):
+            cfg["logo_path"] = b["logo_path"]
+        if b.get("background_path"):
+            cfg["background_path"] = b["background_path"]
+
+        return cfg
+    except Exception:
+        return {}
+
+TEAM_CFG = _load_team_cfg_from_file(TEAM_CODE) or {}
+
+# -----------------------------
+# TERMS OF USE (one-time per browser)
+# -----------------------------
+if "terms_accepted" not in st.session_state:
+    st.session_state.terms_accepted = False
+
+
+if not st.session_state.terms_accepted:
+    st.markdown("### Terms of Use")
+
+    st.markdown(
+        """
+By using **RP Spray Analytics**, you acknowledge that:
+
+- This software and its analytics models are **proprietary**
+- The logic, parsing rules, and reports may **not be copied, shared, or resold**
+- Data entered is provided by the user and analyzed by this application
+
+Unauthorized duplication or redistribution is prohibited.
+        """
+    )
+
+    agree = st.checkbox("I agree to the Terms of Use")
+
+    if st.button("Continue"):
+        if not agree:
+            st.error("You must agree to continue.")
+        else:
+            st.session_state.terms_accepted = True
+            st.rerun()
+
     st.stop()
 
 
-def supa_execute_with_retry(builder, tries: int = 5):
-    last_err = None
-    for i in range(tries):
-        try:
-            return builder.execute()
-        except (httpx.ReadError, httpx.ConnectError, httpx.ReadTimeout) as e:
-            last_err = e
-            time.sleep(0.6 * (i + 1))
-    raise last_err
+# -----------------------------
+# RESOLVED TEAM BRANDING (logo + background)
+# -----------------------------
+LOGO_PATH = TEAM_CFG.get("logo_path") or SETTINGS.get("logo_image")
+BG_PATH   = TEAM_CFG.get("background_path") or SETTINGS.get("background_image")
+
+
+# -----------------------------
+# ✅ TEAM-ISOLATED STORAGE (folders only for rosters; totals are in Supabase)
+# -----------------------------
+TEAM_CODE_SAFE = str(TEAM_CODE).strip().upper()
+TEAM_ROOT = os.path.join("data", "teams", TEAM_CODE_SAFE)
+TEAM_ROSTERS_DIR = os.path.join(TEAM_ROOT, "rosters")
+TEAM_SEASON_DIR = os.path.join(TEAM_ROOT, "season_totals")  # legacy folder; not used for season totals anymore
+os.makedirs(TEAM_ROSTERS_DIR, exist_ok=True)
+os.makedirs(TEAM_SEASON_DIR, exist_ok=True)
+
+
+# -----------------------------
+# ENGINE CONSTANTS (MUST EXIST BEFORE empty_stat_dict/db_load)
+# -----------------------------
+LOCATION_KEYS = ["LF", "CF", "RF", "3B", "SS", "2B", "1B", "P", "Bunt", "Sac Bunt", "UNKNOWN"]
+BALLTYPE_KEYS = ["GB", "FB"]
+COMBO_LOCS = [loc for loc in LOCATION_KEYS if loc not in ["Bunt", "Sac Bunt", "UNKNOWN"]]
+COMBO_KEYS = [f"GB-{loc}" for loc in COMBO_LOCS] + [f"FB-{loc}" for loc in COMBO_LOCS]
+
+# Running event tracking (NOT balls in play)
+RUN_KEYS = [
+    # Stolen Bases
+    "SB", "SB-2B", "SB-3B",
+    # Caught Stealing
+    "CS", "CS-2B", "CS-3B",
+]
 
 
 
 # -----------------------------
-# SUPABASE TABLE SCHEMA (for quick fixes)
+# STAT HELPERS
 # -----------------------------
-SUPABASE_SETUP_SQL = """-- ============================
+def empty_stat_dict():
+    d = {loc: 0 for loc in LOCATION_KEYS}
+    for k in BALLTYPE_KEYS:
+        d[k] = 0
+    for ck in COMBO_KEYS:
+        d[ck] = 0
+    for rk in RUN_KEYS:
+        d[rk] = 0
+    return d
+
+
+def ensure_all_keys(d: dict):
+    for loc in LOCATION_KEYS:
+        d.setdefault(loc, 0)
+    for k in BALLTYPE_KEYS:
+        d.setdefault(k, 0)
+    for ck in COMBO_KEYS:
+        d.setdefault(ck, 0)
+    for rk in RUN_KEYS:
+        d.setdefault(rk, 0)
+    return d
+
+
+# -----------------------------
+# PBP NORMALIZATION + GAME HASH
+# -----------------------------
+def normalize_pbp(text: str) -> str:
+    return "\n".join([ln.strip() for ln in (text or "").strip().splitlines() if ln.strip()])
+
+
+def game_key_from_pbp(team_key: str, pbp_text: str) -> str:
+    norm = normalize_pbp(pbp_text)
+    h = hashlib.sha1((team_key + "||" + norm).encode("utf-8")).hexdigest()
+    return f"pbp_sha1_{h}"
+
+
+# -----------------------------
+# REGEX / PATTERNS (ENGINE)
+# -----------------------------
+GB_REGEX = [
+    re.compile(r"\bground(?:s|ed)?\b"),
+    re.compile(r"\bground ?ball\b"),
+    re.compile(r"\bgrounder\b"),
+    re.compile(r"\bchopper\b"),
+    re.compile(r"\bbouncer\b"),
+    re.compile(r"\bdribbler\b"),
+    re.compile(r"\broller\b"),
+    re.compile(r"\btapper\b"),
+    re.compile(r"\bslow[- ]roller\b"),
+]
+LD_REGEX = [
+    re.compile(r"\bline drive\b"),
+    re.compile(r"\blines?\b"),
+    re.compile(r"\blined\b"),
+    re.compile(r"\bon a line\b"),
+]
+FB_REGEX = [
+    re.compile(r"\bfly(?:\s?ball)?\b"),
+    re.compile(r"\bflies\b"),
+    re.compile(r"\bflied\b"),
+    re.compile(r"\bpops?\b"),
+    re.compile(r"\bpop[- ]?up\b"),
+    re.compile(r"\bpopup\b"),
+    re.compile(r"\btowering fly\b"),
+    re.compile(r"\bhigh fly\b"),
+    re.compile(r"\bdeep fly\b"),
+    re.compile(r"\bshallow fly\b"),
+    re.compile(r"\binfield fly\b"),
+    re.compile(r"\bfoul pop\b"),
+    re.compile(r"\bblooper\b"),
+    re.compile(r"\bflare\b"),
+    re.compile(r"\bfloater\b"),
+    re.compile(r"\blofted\b"),
+]
+SACFLY_REGEX = [re.compile(r"\bsac(?:rifice)? fly\b")]
+
+LF_PATTERNS = [
+    "left fielder ", "to left fielder", "to left field", "to left", "into left field",
+    "down the left field line", "down the left-field line",
+    "down the lf line", "down the left line", "toward left field",
+    "into shallow left", "into deep left", "into left-center", "into left center",
+    "in front of left fielder"
+]
+CF_PATTERNS = [
+    "center fielder ", "to center fielder", "to center field", "to center", "into center field",
+    "into deep center", "into shallow center",
+    "into left-center field", "into left center field",
+    "into right-center field", "into right center field",
+    "up the middle into center", "up the middle to center"
+]
+RF_PATTERNS = [
+    "right fielder ", "to right fielder", "to right field", "to right", "into right field",
+    "down the right field line", "down the right-field line",
+    "down the rf line", "toward right field",
+    "into shallow right", "into deep right",
+    "into right-center", "into right center",
+    "in front of right fielder"
+]
+SS_PATTERNS = [
+    "shortstop ", "to shortstop", "to the shortstop", "to ss",
+    "fielded by the shortstop", "fielded by shortstop",
+    "shortstop fields", "shortstop to", "shortstop throws to",
+    "shortstop makes the play", "at shortstop"
+]
+_2B_PATTERNS = [
+    "second baseman ", "to second baseman", "to the second baseman", "to 2nd baseman",
+    "fielded by second baseman", "fielded by the second baseman",
+    "second baseman fields", "second baseman to", "second baseman throws to"
+]
+_3B_PATTERNS = [
+    "third baseman ", "to third baseman", "to the third baseman", "to 3rd baseman",
+    "fielded by third baseman", "fielded by the third baseman",
+    "third baseman fields", "third baseman to", "third baseman throws to"
+]
+_1B_PATTERNS = [
+    "first baseman ", "to first baseman", "to the first baseman", "to 1st baseman",
+    "fielded by first baseman", "fielded by the first baseman",
+    "first baseman fields", "first baseman to", "first baseman throws to"
+]
+P_PATTERNS = [
+    "to pitcher", "to the pitcher", "back to the pitcher",
+    "back to pitcher", "back to the mound",
+    "fielded by pitcher", "fielded by the pitcher",
+    "pitcher fields", "pitcher to", "pitcher throws to",
+    "back up the middle to the pitcher"
+]
+LEFT_SIDE_PATTERNS = [
+    "through the left side", "up the left side", "toward the left side",
+    "between shortstop and third baseman", "between 3rd and ss",
+    "between ss and 3b", "between short and third"
+]
+RIGHT_SIDE_PATTERNS = [
+    "through the right side", "up the right side", "toward the right side",
+    "between first baseman and second baseman", "between 1st and 2nd",
+    "between second and first"
+]
+
+# -----------------------------
+# RUNNING EVENTS (SB / CS / DI) — PICKOFFS REMOVED + FIXED
+# -----------------------------
+SB_ACTION_REGEX = re.compile(
+    r"""
+    \b(?:steals?|stole|stolen\s+base)\b
+    (?:\s+(?:a|an))?
+    (?:\s+base)?
+    (?:\s+(?:at|to))?
+    \s*(\(?\s*(?:2nd|3rd|home|second|third)\s*\)?)
+    """,
+    re.IGNORECASE | re.VERBOSE
+)
+
+CS_ACTION_REGEX = re.compile(
+    r"""
+    \b(?:caught\s+stealing|out\s+stealing)\b
+    (?:\s+(?:at|trying\s+for|attempting|to))?
+    (?:\s+base)?
+    (?:\s*(\(?\s*(?:2nd|3rd|home|second|third)\s*\)?))?
+    """,
+    re.IGNORECASE | re.VERBOSE
+)
+
+DI_REGEX_1 = re.compile(
+    r"""
+    \bdefensive\s+indifference\b
+    .*?
+    \b(?:to|advances?\s+to|takes)\b
+    (?:\s+base)?
+    \s*(\(?\s*(?:2nd|3rd|home|second|third)\s*\)?)
+    """,
+    re.IGNORECASE | re.VERBOSE
+)
+
+DI_REGEX_2 = re.compile(
+    r"""
+    \b(?:to|advances?\s+to|takes)\b
+    (?:\s+base)?
+    \s*(\(?\s*(?:2nd|3rd|home|second|third)\s*\)?)
+    .*?
+    \bdefensive\s+indifference\b
+    """,
+    re.IGNORECASE | re.VERBOSE
+)
+
+DI_REGEX_BARE = re.compile(r"\bdefensive\s+indifference\b", re.IGNORECASE)
+PAREN_NAME_REGEX = re.compile(r"\(([^)]+)\)")
+
+
+def normalize_base_bucket(prefix: str, base_raw: Optional[str]) -> str:
+    if not base_raw:
+        return prefix
+    b = base_raw.strip().lower().strip("()").strip()
+    if b in ["2nd", "second"]:
+        return f"{prefix}-2B"
+    if b in ["3rd", "third"]:
+        return f"{prefix}-3B"
+    if b == "home":
+        return f"{prefix}-H"
+    return prefix
+
+
+BAD_FIRST_TOKENS = {
+    "top", "bottom", "inning", "pitch", "ball", "strike", "foul",
+    "runner", "runners", "advances", "advance", "steals", "stole", "caught",
+    "substitution", "defensive", "offensive", "double", "triple", "single", "home",
+    "out", "safe", "error", "no", "one", "two", "three",
+}
+
+
+def starts_like_name(token: str) -> bool:
+    if not token:
+        return False
+    t = token.strip().strip('"').strip().lower()
+    return t[:1].isalpha() and t not in BAD_FIRST_TOKENS
+
+
+def overall_confidence_score(conf_val: int):
+    if conf_val >= 4:
+        return "high"
+    if conf_val >= 2:
+        return "medium"
+    return "low"
+
+
+def get_batter_name(line: str, roster: set[str]):
+    line = (line or "").strip().strip('"')
+    if not line:
+        return None
+
+    line = re.sub(r"\([^)]*\)", "", line)
+    line = re.sub(r"\s+", " ", line).strip()
+
+    parts = line.split()
+    if not parts:
+        return None
+
+    if not starts_like_name(parts[0]):
+        return None
+
+    if len(parts) >= 2:
+        candidate_two = parts[0] + " " + parts[1]
+        if candidate_two in roster:
+            return candidate_two
+
+    last = parts[0]
+    last_matches = [p for p in roster if p.split() and p.split()[-1] == last]
+    if len(last_matches) == 1:
+        return last_matches[0]
+
+    return None
+
+
+def extract_runner_name_near_event(clean_line: str, match_start: int, roster: set[str]) -> Optional[str]:
+    left = (clean_line[:match_start] or "").strip()
+    if not left:
+        return None
+
+    chunk = left.split(",")[-1].strip()
+
+    runner = get_batter_name(chunk, roster)
+    if runner:
+        return runner
+
+    parts = chunk.split()
+    if len(parts) >= 2:
+        candidate = parts[-2] + " " + parts[-1]
+        if candidate in roster:
+            return candidate
+
+    return None
+
+
+def extract_runner_name_fallback(clean_line: str, roster: set[str]) -> Optional[str]:
+    runner = get_batter_name(clean_line, roster)
+    if runner:
+        return runner
+
+    pm = PAREN_NAME_REGEX.search(clean_line)
+    if pm:
+        inside = re.sub(r"\s+", " ", pm.group(1).strip())
+        runner = get_batter_name(inside, roster)
+        if runner:
+            return runner
+
+    return None
+
+
+def parse_running_event(clean_line: str, roster: set[str]) -> Tuple[Optional[str], Optional[str], Optional[str]]:
+    """
+    Returns (runner_name, total_key, base_key) or (None, None, None).
+    PICKOFFS REMOVED.
+    """
+    m = SB_ACTION_REGEX.search(clean_line)
+    if m:
+        base_key = normalize_base_bucket("SB", m.group(1) if (m.lastindex or 0) >= 1 else None)
+        runner = extract_runner_name_near_event(clean_line, m.start(), roster) or extract_runner_name_fallback(clean_line, roster)
+        return runner, "SB", base_key
+
+    m = CS_ACTION_REGEX.search(clean_line)
+    if m:
+        base_raw = m.group(1) if (m.lastindex or 0) >= 1 else None
+        base_key = normalize_base_bucket("CS", base_raw)
+        runner = extract_runner_name_near_event(clean_line, m.start(), roster) or extract_runner_name_fallback(clean_line, roster)
+        return runner, "CS", base_key
+
+    m = DI_REGEX_1.search(clean_line) or DI_REGEX_2.search(clean_line)
+    if m:
+        base_key = normalize_base_bucket("DI", m.group(1) if (m.lastindex or 0) >= 1 else None)
+        runner = extract_runner_name_near_event(clean_line, m.start(), roster) or extract_runner_name_fallback(clean_line, roster)
+        return runner, "DI", base_key
+
+    if DI_REGEX_BARE.search(clean_line):
+        runner = extract_runner_name_fallback(clean_line, roster)
+        return runner, "DI", "DI"
+
+    return None, None, None
+
+
+def is_ball_in_play(line_lower: str) -> bool:
+    ll = (line_lower or "").strip()
+    if not ll:
+        return False
+
+    # exclude non-BIP and running events
+    if any(kw in ll for kw in [
+        "hit by pitch", "hit-by-pitch", "hit batsman",
+        "walks", "walked", " base on balls", "intentional walk",
+        "strikes out", "strikeout", "called out on strikes",
+        "reaches on catcher interference", "catcher's interference",
+        "caught stealing", "out stealing",
+        "steals", "stole", "stealing",
+        "defensive indifference",
+        "picked off", "pickoff",
+    ]):
+        return False
+
+    bip_outcomes = [
+        "grounds", "grounded", "ground ball", "groundball", "grounder",
+        "singles", "doubles", "triples", "homers", "home run",
+        "lines out", "line drive", "lined out", "line out",
+        "flies out", "fly ball", "flied out", "fly out",
+        "pops out", "pop up", "pop-out", "popup",
+        "bloops", "blooper",
+        "bunts", "bunt", "sacrifice bunt", "sac bunt", "sacrifice hit",
+        "sac fly", "sacrifice fly",
+        "reaches on a fielding error", "reaches on a throwing error",
+        "reaches on error", "reached on error", "safe on error",
+        "reaches on a missed catch error",
+        "fielder's choice", "fielders choice",
+        "double play", "triple play",
+        "out at first", "out at second", "out at third", "out at home",
+    ]
+    if any(kw in ll for kw in bip_outcomes):
+        return True
+
+    # fallback: any explicit fielder/location markers
+    fielder_markers = [
+        "left fielder", "center fielder", "right fielder",
+        "shortstop", "second baseman", "third baseman", "first baseman",
+        "to left field", "to center field", "to right field",
+        "to shortstop", "to second baseman", "to third baseman", "to first baseman",
+        "to pitcher", "back to the mound",
+        "down the left", "down the right", "left-center", "right-center"
+    ]
+    return any(m in ll for m in fielder_markers)
+
+
+def classify_ball_type(line_lower: str):
+    if "bunt" in line_lower:
+        return "GB", 3, ["Contains 'bunt' → GB"]
+
+    for rx in SACFLY_REGEX:
+        if rx.search(line_lower):
+            return "FB", 3, ["Matched sac fly regex → FB"]
+
+    for rx in LD_REGEX:
+        if rx.search(line_lower):
+            return "FB", 2, ["Matched line drive regex → FB"]
+
+    for rx in GB_REGEX:
+        if rx.search(line_lower):
+            return "GB", 2, [f"Matched GB regex: {rx.pattern}"]
+
+    for rx in FB_REGEX:
+        if rx.search(line_lower):
+            return "FB", 2, [f"Matched FB regex: {rx.pattern}"]
+
+    return None, 0, []
+
+
+def classify_location(line_lower: str, strict_mode: bool = False):
+    if "sacrifice bunt" in line_lower or "sac bunt" in line_lower or "sacrifice hit" in line_lower:
+        return "Sac Bunt", 3, ["Contains 'sacrifice bunt/sac bunt' → Sac Bunt"]
+
+    if "bunt" in line_lower:
+        return "Bunt", 3, ["Contains 'bunt' → Bunt"]
+
+    candidates = []
+
+    def add_candidates(patterns, code, label):
+        for kw in patterns:
+            idx = line_lower.find(kw)
+            if idx != -1:
+                candidates.append((idx, code, f"Matched {label} phrase: '{kw}'"))
+
+    add_candidates(LF_PATTERNS, "LF", "LF")
+    add_candidates(CF_PATTERNS, "CF", "CF")
+    add_candidates(RF_PATTERNS, "RF", "RF")
+    add_candidates(SS_PATTERNS, "SS", "SS")
+    add_candidates(_3B_PATTERNS, "3B", "3B")
+    add_candidates(_2B_PATTERNS, "2B", "2B")
+    add_candidates(_1B_PATTERNS, "1B", "1B")
+    add_candidates(P_PATTERNS, "P", "P")
+
+    if candidates:
+        _, loc, reason = min(candidates, key=lambda x: x[0])
+        return loc, 3, [reason]
+
+    if strict_mode:
+        return None, 0, ["Strict mode: no explicit fielder/location phrase found"]
+
+    for kw in LEFT_SIDE_PATTERNS:
+        if kw in line_lower:
+            return "SS", 1, [f"Matched left-side phrase: '{kw}' → approximate SS"]
+
+    for kw in RIGHT_SIDE_PATTERNS:
+        if kw in line_lower:
+            return "2B", 1, [f"Matched right-side phrase: '{kw}' → approximate 2B"]
+
+    return None, 0, []
+
+
+# -----------------------------
+# UNLIMITED TEAMS: read roster files
+# -----------------------------
+def list_team_files():
+    files = []
+    for fn in os.listdir(TEAM_ROSTERS_DIR):
+        if fn.lower().endswith(".txt"):
+            files.append(fn)
+    files.sort(key=lambda x: x.lower())
+    return files
+
+
+def team_name_from_file(filename: str) -> str:
+    return os.path.splitext(filename)[0]
+
+
+def safe_team_key(team_name: str) -> str:
+    key = re.sub(r"[^a-zA-Z0-9]+", "_", team_name.strip()).strip("_").lower()
+    return key or "team"
+
+
+def roster_path_for_file(filename: str) -> str:
+    return os.path.join(TEAM_ROSTERS_DIR, filename)
+
+
+def load_roster_text(path: str) -> str:
+    if os.path.exists(path):
+        with open(path, "r", encoding="utf-8") as f:
+            return f.read()
+    return ""
+
+
+def save_roster_text(path: str, text: str):
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(text.strip() + "\n" if text.strip() else "")
+
+
+def add_game_to_season(season_team, season_players, game_team, game_players):
+    for key in LOCATION_KEYS + BALLTYPE_KEYS + COMBO_KEYS + RUN_KEYS:
+        season_team[key] = season_team.get(key, 0) + game_team.get(key, 0)
+
+    for player, gstats in game_players.items():
+        season_players.setdefault(player, empty_stat_dict())
+        sstats = season_players[player]
+        for key in LOCATION_KEYS + BALLTYPE_KEYS + COMBO_KEYS + RUN_KEYS:
+            sstats[key] = sstats.get(key, 0) + gstats.get(key, 0)
+
+
+# -----------------------------
+# SUPABASE (persistent storage)
+# -----------------------------
+SUPABASE_SETUP_SQL = """
+-- ============================
 -- SEASON TOTALS (one row per team_code + team_key)
 -- ============================
 create table if not exists public.season_totals (
@@ -91,9 +805,8 @@ create unique index if not exists season_totals_unique
 
 create index if not exists season_totals_team_idx
   on public.season_totals (team_code, team_key);
-
--- ============================
--- TEAM ROSTERS (one row per team_code + team_key)
+  -- ============================
+-- TEAM ROSTERS (persistent, per team_code)
 -- ============================
 create table if not exists public.team_rosters (
   id bigserial primary key,
@@ -108,7 +821,8 @@ create unique index if not exists team_rosters_unique
   on public.team_rosters (team_code, team_key);
 
 create index if not exists team_rosters_team_idx
-  on public.team_rosters (team_code, team_key);
+  on public.team_rosters (team_code, team_name);
+
 
 -- ============================
 -- PROCESSED GAMES (hard dedupe)
@@ -128,16 +842,59 @@ create index if not exists processed_games_team_idx
   on public.processed_games (team_code, team_key);
 """.strip()
 
+
+def _show_db_error(e: Exception, label: str):
+    st.error(f"**{label}**")
+    try:
+        parts = [f"type: {type(e)}"]
+        for attr in ("message", "details", "hint", "code"):
+            if hasattr(e, attr):
+                val = getattr(e, attr)
+                if val:
+                    parts.append(f"{attr}: {val}")
+        st.code("\n".join(parts), language="text")
+    except Exception:
+        st.write(str(e))
+
+
 def _render_supabase_fix_block():
-    st.error("Supabase tables are missing or mismatched (season_totals / processed_games / team_rosters).")
-    st.markdown("### Fix (copy/paste into Supabase → SQL Editor → Run)")
+    st.error("Supabase tables are missing or mismatched (season_totals / processed_games).")
+    ("### Fix (copy/paste into Supabase → SQL Editor → Run)")
     st.code(SUPABASE_SETUP_SQL, language="sql")
-    st.markdown(
+    (
         """
 **Then refresh your Streamlit app.**  
 If it still errors after running the SQL, your Streamlit **secrets** are wrong.
 """
     )
+
+
+@st.cache_resource(show_spinner=False)
+def get_supabase() -> Client:
+    url = st.secrets.get("SUPABASE_URL", "").strip()
+    key = st.secrets.get("SUPABASE_SERVICE_KEY", "").strip()  # service role key (server-side only)
+    if not url or not key:
+        raise RuntimeError("Missing SUPABASE_URL or SUPABASE_SERVICE_KEY in Streamlit secrets.")
+    return create_client(url, key)
+
+
+try:
+    supabase = get_supabase()
+except Exception as e:
+    _show_db_error(e, "Supabase secrets missing / invalid")
+    st.stop()
+
+
+def supa_execute_with_retry(builder, tries: int = 5):
+    last_err = None
+    for i in range(tries):
+        try:
+            return builder.execute()
+        except (httpx.ReadError, httpx.ConnectError, httpx.ReadTimeout) as e:
+            last_err = e
+            time.sleep(0.6 * (i + 1))
+    raise last_err
+
 
 def supabase_health_check_or_stop():
     try:
@@ -620,16 +1377,96 @@ with st.sidebar:
 
     st.markdown("---")
 
+    # -----------------------------
+    # ADMIN: CHANGE ACCESS CODE (CLEAN + HIDDEN)
+    # -----------------------------
+    with st.expander("🔐 Admin", expanded=False):
+        st.markdown(
+            """
+            <div style="
+                padding: 12px;
+                border-radius: 14px;
+                background: rgba(255,255,255,0.72);
+                border: 1px solid rgba(0,0,0,0.10);
+                box-shadow: 0 6px 18px rgba(0,0,0,0.06);
+                margin-bottom: 10px;
+            ">
+                <div style="font-size:0.92rem; font-weight:800; margin-bottom:6px;">
+                    Change Access Code
+                </div>
+                <div style="font-size:0.85rem; opacity:0.85;">
+                    Updates Supabase instantly.
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+        pin = st.text_input(
+            "Admin PIN",
+            type="password",
+            label_visibility="collapsed",
+            placeholder="Admin PIN",
+        )
+
+        if pin != st.secrets.get("ADMIN_PIN", ""):
+            st.caption("Admin access only.")
+        else:
+            codes_map = load_team_codes()
+            teams = sorted({
+                (v.get("team_code") or "").strip().upper()
+                for v in (codes_map.values() if isinstance(codes_map, dict) else [])
+                if v and v.get("team_code")
+            })
+
+            if not teams:
+                st.error("No active teams found in team_access.")
+            else:
+                team_pick = st.selectbox("Team", options=teams)
+
+                new_code = st.text_input("New Code", type="password", placeholder="New access code")
+                confirm  = st.text_input("Confirm", type="password", placeholder="Confirm new access code")
+
+                c1, c2 = st.columns(2)
+                with c1:
+                    update_btn = st.button("Update", use_container_width=True)
+                with c2:
+                    clear_btn = st.button("Clear", use_container_width=True)
+
+                if clear_btn:
+                    st.rerun()
+
+                if update_btn:
+                    if not new_code.strip():
+                        st.error("Enter a new code.")
+                    elif new_code != confirm:
+                        st.error("Codes don’t match.")
+                    else:
+                        ok = admin_set_access_code(team_pick, new_code)
+                        if ok:
+                            st.success("✅ Access code updated.")
+                            load_team_codes.clear()  # clear cached codes
+                            st.rerun()
+                        else:
+                            st.error("Update failed. Team not found in team_access.")
+
+
 
 
    
 # -----------------------------
-# SINGLE TEAM CONTEXT (Option 1)
+# TEAM (Option 1)
 # -----------------------------
-# For Option 1, "a school" == (TEAM_CODE + team_key). No dropdown needed.
-selected_team = TEAM_CFG.get("team_name") or TEAM_CODE_SAFE
-st.markdown("---")
+# No team dropdowns. Each school is isolated by:
+#   TEAM_CODE_SAFE (Team Code) + team_key (Team Key)
 
+TEAM_CODE_SAFE = str(TEAM_CODE).strip().upper()
+selected_team = TEAM_CFG.get("team_name") or TEAM_CODE_SAFE
+
+st.markdown(f"### Team: **{selected_team}**")
+st.caption("Data is separated by Team Code + Team Key.")
+
+st.markdown("---")
 # -----------------------------
 # ROSTER UI (SUPABASE - PERSISTENT)
 # -----------------------------
@@ -700,6 +1537,23 @@ st.markdown(
 ACTIVE_TEAM_NAME = TEAM_CFG.get("team_name", TEAM_CODE)
 reset_label = f"Reset SEASON totals"
 
+st.markdown(
+    """
+    <style>
+    button[aria-label^="Reset SEASON totals —"]{
+        background-color:#b91c1c !important; /* Power Red */
+        color:#ffffff !important;
+        border:0 !important;
+        font-weight:700 !important;
+    }
+    button[aria-label^="Reset SEASON totals —"]:hover{
+        background-color:#991b1b !important;
+        color:#ffffff !important;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True
+)
 
 col_reset, _ = st.columns([1, 3])
 
@@ -1358,8 +2212,6 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
-
-
 
 
 
