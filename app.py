@@ -1299,12 +1299,12 @@ h1.app-title {{
 </style>
 
 <style>
-/* Pull the Stat Edit control up to visually align with the section header */
+/* Stat Edit wrapper: tight, right-aligned */
 .stat-edit-wrap {{
     display: flex;
     justify-content: flex-end;
-    margin-top: -22px !important;
-    margin-bottom: 6px !important;
+    margin-top: 0px !important;
+    margin-bottom: 4px !important;
 }}
 </style>
 """,
@@ -1890,6 +1890,9 @@ if process_clicked:
 st.subheader(f"📔 Per-Player Spray – SEASON TO DATE ({selected_team})")
 
 show_archived = st.checkbox("Show archived players (not on current roster)", value=False)
+
+# season_spacing_shim: tighten space between header/checkbox and the table controls
+st.markdown("<div style='margin-top:-18px'></div>", unsafe_allow_html=True)
 
 season_rows = []
 
