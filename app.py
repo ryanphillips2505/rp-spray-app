@@ -319,8 +319,8 @@ OUTS_MARKER_RE = re.compile(r"^\s*([123])\s+Outs?\s*$", re.IGNORECASE)
 
 PBP_PITCHER_RE = re.compile(r"\b([A-Z]\s+[A-Za-z][A-Za-z'\-\.#0-9]+)\s+pitching\b")
 PBP_IN_FOR_PITCHER_RE = re.compile(r"\b([A-Z]\s+[A-Za-z][A-Za-z'\-\.#0-9]+)\s+in\s+for\s+pitcher\b")
-# Fielding-play form: "... pitcher G Hoke to first baseman ..."
-PBP_FIELDER_PITCHER_RE = re.compile(r"\bpitcher\s+([A-Z]\s+[A-Za-z][A-Za-z'\-\.#0-9]+)\b")
+
+PBP_FIELDER_PITCHER_RE = re.compile(r"\bpitcher\s+([A-Z]\s+[A-Za-z][A-Za-z'\-\.#0-9]+)\b", re.IGNORECASE)
 
 BALL_TOK_RE = re.compile(r"\bBall\s+[1234]\b", re.IGNORECASE)
 STRIKE_TOK_RE = re.compile(r"\bStrike\s+[123]\b", re.IGNORECASE)
@@ -339,15 +339,22 @@ def parse_outs_marker(line: str) -> Optional[int]:
 
 def parse_pitcher_from_line(line: str) -> Optional[str]:
     s = (line or "").strip().strip('"')
+
+    # Most common: 'G Hoke pitching'
     m = PBP_PITCHER_RE.search(s)
     if m:
         return m.group(1).strip()
+
+    # Lineup change: 'G Hoke in for pitcher ...'
     m = PBP_IN_FOR_PITCHER_RE.search(s)
     if m:
         return m.group(1).strip()
+
+    # Fielding text: '... grounds out, pitcher G Hoke to first baseman ...'
     m = PBP_FIELDER_PITCHER_RE.search(s)
     if m:
         return m.group(1).strip()
+
     return None
 
 def count_pitch_tokens(line: str) -> Tuple[int, int]:
@@ -1901,7 +1908,6 @@ if process_clicked:
         game_pitching = {}
         current_pitcher = "UNKNOWN_P"
         current_batting_team = None
-        in_def_half = False  # True when OUR team is pitching (opponent batting)
         last_outs_in_half = 0
         team_pbp_name = (TEAM_CFG.get("team_name", "") or "").strip().lower()
         inferred_pbp_team = infer_our_team_name_from_pbp(lines, current_roster)
@@ -1922,37 +1928,27 @@ if process_clicked:
             # --- Track half inning + current pitcher (for Yukon pitching) ---
             maybe_batting = parse_batting_team_from_half(clean_line)
             if maybe_batting:
-                # Finalize any pending outs/pitches from the prior defensive half-inning
-                if in_def_half and (pending_outs > 0 or pending_pitches > 0):
-                    target = current_pitcher if (current_pitcher and current_pitcher != "UNKNOWN_P") else "UNKNOWN_P"
-                    game_pitching.setdefault(target, empty_pitching_stat())
+                # We are starting a new half-inning. Before resetting counters, finalize any
+                # pending outs/pitches from the previous defensive segment.
+                if pending_outs > 0 or pending_pitches > 0:
+                    pname_final = current_pitcher if (current_pitcher and current_pitcher != "UNKNOWN_P") else "UNKNOWN_P"
+                    game_pitching.setdefault(pname_final, empty_pitching_stat())
                     if pending_outs > 0:
-                        game_pitching[target]["OUTS"] += int(pending_outs)
-                        pending_outs = 0
+                        game_pitching[pname_final]["OUTS"] += int(pending_outs)
                     if pending_pitches > 0:
-                        game_pitching[target]["PITCHES"] += int(pending_pitches)
-                        game_pitching[target]["STRIKES"] += int(pending_strikes)
-                        pending_pitches = 0
-                        pending_strikes = 0
-
+                        game_pitching[pname_final]["PITCHES"] += int(pending_pitches)
+                        game_pitching[pname_final]["STRIKES"] += int(pending_strikes)
                 current_batting_team = maybe_batting
-                # Determine whether this half-inning is defense for the selected team
-                in_def_half = bool(current_batting_team) and (not team_matches_pbp(current_batting_team, team_pbp_name))
                 last_outs_in_half = 0
                 pending_outs = 0
                 pending_pitches = 0
                 pending_strikes = 0
-                # Do NOT reset current_pitcher here — GC often doesn't restate the pitcher each inning.
 
-            # Defense/offense detection: we only credit Yukon pitching when the OTHER team is batting
-            # Defense/offense detection:
-            #  - Primary: half-inning header team name (Top/Bottom ... - TEAM)
-            #  - Failsafe: if we see one of OUR roster hitters in the line, we are on offense even if header was missed
-            _our_batter = get_batter_name(clean_line, current_roster)
-            if _our_batter:
-                is_team_defense = False
-            else:
-                is_team_defense = in_def_half
+
+            # Defense/offense detection: we only credit *our* pitching when the OTHER team is batting.
+            # Use the half-inning header team name. (This is the only reliable way in GC, because our roster
+            # names appear in defensive text as fielders.)
+            is_team_defense = bool(current_batting_team) and (not team_matches_pbp(current_batting_team, team_pbp_name))
 
             # Only update *our* current pitcher while on defense (prevents opponent pitcher bleed)
             maybe_p = parse_pitcher_from_line(clean_line)
@@ -1986,6 +1982,8 @@ if process_clicked:
                         pname = current_pitcher
                         game_pitching.setdefault(pname, empty_pitching_stat())
                         game_pitching[pname]["OUTS"] += int(delta_outs)
+
+            
             # K / BB from event detail lines (avoid header double-count)
             if is_team_defense:
                 pname = current_pitcher or "UNKNOWN_P"
@@ -2074,6 +2072,21 @@ if process_clicked:
         # --- Merge game pitching into season pitching ---
         if "season_pitching" not in locals() or season_pitching is None:
             season_pitching = {}
+
+        # Finalize any remaining pending outs/pitches for the last defensive segment (EOF case)
+        if pending_outs > 0 or pending_pitches > 0:
+            pname_final = current_pitcher if (current_pitcher and current_pitcher != "UNKNOWN_P") else "UNKNOWN_P"
+            game_pitching.setdefault(pname_final, empty_pitching_stat())
+            if pending_outs > 0:
+                game_pitching[pname_final]["OUTS"] += int(pending_outs)
+            if pending_pitches > 0:
+                game_pitching[pname_final]["PITCHES"] += int(pending_pitches)
+                game_pitching[pname_final]["STRIKES"] += int(pending_strikes)
+            pending_outs = 0
+            pending_pitches = 0
+            pending_strikes = 0
+
+        season_pitching = {}
         for pn, pst in (game_pitching or {}).items():
             pname = str(pn).strip().strip('"') or "UNKNOWN_P"
             season_pitching.setdefault(pname, empty_pitching_stat())
@@ -2370,3 +2383,4 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
+
