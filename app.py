@@ -1880,7 +1880,31 @@ if process_clicked:
 # -----------------------------
 st.subheader(f"📔 Per-Player Spray – SEASON TO DATE ({selected_team})")
 
-show_archived = st.checkbox("Show archived players (not on current roster)", value=False)
+row_left, row_right = st.columns([8, 2])
+with row_left:
+    show_archived = st.checkbox("Show archived players (not on current roster)", value=False)
+with row_right:
+    if hasattr(st, "popover"):
+        with st.popover("Stat Edit"):
+            st.caption("Show / hide stats in this table")
+            picked = st.multiselect(
+                "Show these columns",
+                options=all_cols,
+                default=default_cols,
+            )
+    else:
+        with st.expander("Stat Edit", expanded=False):
+            st.caption("Show / hide stats in this table")
+            picked = st.multiselect(
+                "Show these columns",
+                options=all_cols,
+                default=default_cols,
+            )
+
+    if "Player" in all_cols and "Player" not in picked:
+        picked = ["Player"] + picked
+
+    st.session_state[cols_key] = picked
 st.markdown("<div style='margin-top:-14px'></div>", unsafe_allow_html=True)
 
 season_rows = []
