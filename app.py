@@ -1960,7 +1960,8 @@ default_cols = st.session_state[cols_key]
 
 # Keep only columns that still exist (safe if you add/remove stats later)
 default_cols = [c for c in default_cols if c in all_cols]
-if "Player" in all_cols and # UI row (top-right Stat Edit above the table)
+# UI row (top-right Stat Edit above the table)
+if "Player" in all_cols:
 ctrl_left, ctrl_right = st.columns([10, 2])
 with ctrl_right:
     st.markdown('<div class="stat-edit-wrap">', unsafe_allow_html=True)
@@ -2239,6 +2240,7 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
+
 
 
 
