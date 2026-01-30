@@ -2819,25 +2819,27 @@ else:
             # Coach worksheet block (RIGHT) — matches your highlighted area
             # -----------------------------
             start_row = 17
-            start_col = 6  # Column F (moved left for true 1-page print)
-            col_atbat = start_col           # M
-            col_result_start = start_col+1  # N
-            col_result_end   = start_col+4  # Q
-            col_grid_start   = start_col+5  # R
-            col_grid_end     = start_col+14 # AA (10 cols)
-            col_count        = start_col+15 # AB
-            col_notes_start  = start_col+16 # AC
-            col_notes_end    = start_col+20 # AG
+            # Start the AB chart under the top summary, far enough left to fit PORTRAIT on one page
+            start_col = 5  # Column E
+            col_atbat = start_col                 # E (AT BAT #)
+            col_result_start = start_col + 1       # F
+            col_result_end   = start_col + 3       # H (3 cols wide)
+            col_grid_start   = start_col + 4       # I
+            col_grid_end     = start_col + 11      # P (8 cols)
+            col_count        = start_col + 12      # Q
+            col_notes_start  = start_col + 13      # R
+            col_notes_end    = start_col + 15      # T (3 cols)
 
-            # Column widths tuned to look like the reference sheet
-            ws.column_dimensions[get_column_letter(col_atbat)].width = 9
+            # Column widths tuned for PORTRAIT 1-page print (MLB-style spacing)
+            ws.column_dimensions[get_column_letter(col_atbat)].width = 7.5
             for _c in range(col_result_start, col_result_end+1):
-                ws.column_dimensions[get_column_letter(_c)].width = 4.2
+                ws.column_dimensions[get_column_letter(_c)].width = 6.5
             for _c in range(col_grid_start, col_grid_end+1):
-                ws.column_dimensions[get_column_letter(_c)].width = 2.2
-            ws.column_dimensions[get_column_letter(col_count)].width = 8
+                ws.column_dimensions[get_column_letter(_c)].width = 1.9
+            ws.column_dimensions[get_column_letter(col_count)].width = 6.5
             for _c in range(col_notes_start, col_notes_end+1):
-                ws.column_dimensions[get_column_letter(_c)].width = 4.2
+                ws.column_dimensions[get_column_letter(_c)].width = 6.5
+
 
             thick = Side(style="medium", color="000000")
             thin_black = Side(style="thin", color="000000")
