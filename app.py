@@ -2547,7 +2547,7 @@ else:
             ws.merge_cells("A1:G1")
             ws["A1"] = f"Individual Spray Summary — {p}"
             ws["A1"].font = title_font
-            ws["A1"].alignment = Alignment(horizontal="left", vertical="center")
+            ws["A1"].alignment = Alignment(horizontal="center", vertical="center")
 
             ws["A2"] = "GB / FB by position"
             ws["A2"].font = small_font
@@ -2562,6 +2562,36 @@ else:
 
             field_fill = PatternFill("solid", fgColor="EAF6EA")  # light turf
             dirt_fill = PatternFill("solid", fgColor="F3E7D3")   # light dirt
+
+            def _hex_to_rgb(h):
+                h = h.strip("#")
+                return tuple(int(h[i:i+2], 16) for i in (0, 2, 4))
+
+            def _rgb_to_hex(rgb):
+                return "%02X%02X%02X" % rgb
+
+            # Match the Season heatmap palette (white -> light yellow -> light red)
+            _HEAT_START = "FFFFFF"
+            _HEAT_MID = "FFF2CC"
+            _HEAT_END = "F8CBAD"
+
+            def _heat_hex(v, vmax):
+                vmax = max(1, int(vmax))
+                v = max(0, int(v))
+                t = min(1.0, v / float(vmax))
+                if t <= 0.5:
+                    a = t / 0.5
+                    c1 = _hex_to_rgb(_HEAT_START)
+                    c2 = _hex_to_rgb(_HEAT_MID)
+                else:
+                    a = (t - 0.5) / 0.5
+                    c1 = _hex_to_rgb(_HEAT_MID)
+                    c2 = _hex_to_rgb(_HEAT_END)
+                rgb = tuple(int(round(c1[i] + (c2[i]-c1[i]) * a)) for i in range(3))
+                return _rgb_to_hex(rgb)
+
+            def _heat_fill(v, vmax):
+                return PatternFill("solid", fgColor=_heat_hex(v, vmax))
 
             def box(r1, c1, r2, c2, fill, text_):
                 ws.merge_cells(start_row=r1, start_column=c1, end_row=r2, end_column=c2)
@@ -2579,28 +2609,42 @@ else:
                 fb = int(st_p.get(f"FB-{pos_key}", 0) or 0)
                 return gb, fb
 
-            # Outfield
-            gb, fb = gbfb("LF")
-            box(3, 1, 4, 3, field_fill, f"LF\nGB {gb}  |  FB {fb}")
-            gb, fb = gbfb("CF")
-            box(2, 4, 3, 5, field_fill, f"CF\nGB {gb}  |  FB {fb}")
-            gb, fb = gbfb("RF")
-            box(3, 6, 4, 7, field_fill, f"RF\nGB {gb}  |  FB {fb}")
+            # Build totals for heat coloring (GB+FB by position)
+            _pos_keys = ["LF", "CF", "RF", "3B", "SS", "2B", "1B", "P"]
+            _totals = {}
+            for _k in _pos_keys:
+                g, f = gbfb(_k)
+                _totals[_k] = int(g) + int(f)
+            _vmax = max(1, max(_totals.values()) if _totals else 1)
 
-            # Infield
+            # Outfield (more symmetrical + centered)
+            gb, fb = gbfb("LF")
+            box(3, 1, 4, 2, _heat_fill(_totals["LF"], _vmax), f"LF\nGB {gb}  |  FB {fb}")
+
+            gb, fb = gbfb("CF")
+            box(2, 3, 3, 5, _heat_fill(_totals["CF"], _vmax), f"CF\nGB {gb}  |  FB {fb}")
+
+            gb, fb = gbfb("RF")
+            box(3, 6, 4, 7, _heat_fill(_totals["RF"], _vmax), f"RF\nGB {gb}  |  FB {fb}")
+
+            # Infield (balanced diamond)
             gb, fb = gbfb("3B")
-            box(6, 2, 7, 3, dirt_fill, f"3B\nGB {gb}  |  FB {fb}")
+            box(6, 2, 7, 3, _heat_fill(_totals["3B"], _vmax), f"3B\nGB {gb}  |  FB {fb}")
+
             gb, fb = gbfb("SS")
-            box(5, 3, 6, 4, dirt_fill, f"SS\nGB {gb}  |  FB {fb}")
+            box(5, 3, 6, 4, _heat_fill(_totals["SS"], _vmax), f"SS\nGB {gb}  |  FB {fb}")
+
             gb, fb = gbfb("2B")
-            box(5, 5, 6, 6, dirt_fill, f"2B\nGB {gb}  |  FB {fb}")
+            # Keep 2B tight to avoid overlaps in a 7-col portrait grid
+            box(5, 5, 6, 5, _heat_fill(_totals["2B"], _vmax), f"2B\nGB {gb}  |  FB {fb}")
+
             gb, fb = gbfb("1B")
-            box(6, 7, 7, 7, dirt_fill, f"1B\nGB {gb}  |  FB {fb}")
+            box(6, 6, 7, 7, _heat_fill(_totals["1B"], _vmax), f"1B\nGB {gb}  |  FB {fb}")
 
             gb, fb = gbfb("P")
-            box(7, 4, 8, 5, dirt_fill, f"P\nGB {gb}  |  FB {fb}")
+            box(7, 3, 8, 5, _heat_fill(_totals["P"], _vmax), f"P\nGB {gb}  |  FB {fb}")
 
-            ws["A12"] = "Selected Stat Totals"
+ws["A12"] = "Selected Stat Totals"
             ws["A12"].font = small_font
             ws["A12"].alignment = Alignment(horizontal="left", vertical="center")
 
