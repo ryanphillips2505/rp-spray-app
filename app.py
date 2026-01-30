@@ -31,9 +31,115 @@ def _get_overall_spray_template_png_path() -> str:
     Fallback:
       - ./overall_spray_template.png  (same folder as app.py)
     """
-    # --- Draw blank "Overall Spray Chart" template under the SB/CS table (Excel formatting, no image) ---
+    try:
+        here = os.path.dirname(os.path.abspath(__file__))
+        p1 = os.path.join(here, "assets", "overall_spray_template.png")
+        if os.path.exists(p1):
+            return p1
+        p2 = os.path.join(here, "overall_spray_template.png")
+        return p2 if os.path.exists(p2) else ""
+    except Exception:
+        return ""
+
+import re
+import hashlib
+import httpx
+import time  # anti-stuck processing lock + failsafe unlock
+from datetime import datetime
+
+def _write_table_two_blocks(ws, start_row, cols, row_values, split_at=None, gap=2):
+    """Write a header + rows into two side-by-side blocks for landscape printing.
+    - cols: list of column names
+    - row_values: list of lists (each list aligns to cols)
+    - split_at: index to split columns. If None, split roughly in half.
+    """
+    if not cols:
+        return start_row
+
+    if split_at is None:
+        split_at = max(1, (len(cols) + 1) // 2)
+
+    left_cols = cols[:split_at]
+    right_cols = cols[split_at:]
+
+    left_start_col = 1
+    right_start_col = 1 + len(left_cols) + gap
+
+    # Header
+    for j, c in enumerate(left_cols, start=0):
+        ws.cell(row=start_row, column=left_start_col + j, value=c)
+    for j, c in enumerate(right_cols, start=0):
+        ws.cell(row=start_row, column=right_start_col + j, value=c)
+
+    # Rows
+    r = start_row + 1
+    for vals in row_values:
+        left_vals = vals[:split_at]
+        right_vals = vals[split_at:]
+        for j, v in enumerate(left_vals, start=0):
+            ws.cell(row=r, column=left_start_col + j, value=v)
+        for j, v in enumerate(right_vals, start=0):
+            ws.cell(row=r, column=right_start_col + j, value=v)
+        r += 1
+
+    return r
+
+from typing import Optional, Tuple
+
+import pandas as pd
+from io import BytesIO
+
+from openpyxl.utils import get_column_letter
+from openpyxl.formatting.rule import ColorScaleRule, FormulaRule, CellIsRule
+from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
+from openpyxl.drawing.image import Image as XLImage
+from supabase import create_client, Client
+
+SUPABASE_URL = st.secrets["SUPABASE_URL"]
+SUPABASE_KEY = st.secrets["SUPABASE_SERVICE_ROLE_KEY"]
+supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+
+
+def hash_access_code(code: str) -> str:
+    pepper = st.secrets["ACCESS_CODE_PEPPER"]
+    raw = (code.strip() + pepper).encode("utf-8")
+    return hashlib.sha256(raw).hexdigest()
+def admin_set_access_code(team_lookup: str, new_plain_code: str) -> bool:
+    team_lookup = (team_lookup or "").strip().upper()
+    new_plain_code = (new_plain_code or "").strip().upper()  # <-- FIXED
+
+    if not team_lookup or not new_plain_code:
+        return False
+
+    new_hash = hash_access_code(new_plain_code).strip().lower()
+
+    # Try by team_code first
+    res = supabase.table("team_access").update(
+        {"code_hash": new_hash, "is_active": True}
+    ).eq("team_code", team_lookup).execute()
+
+    if res.data:
+        return True
+
+    # Fallback by team_slug
+    res2 = supabase.table("team_access").update(
+        {"code_hash": new_hash, "is_active": True}
+    ).eq("team_slug", team_lookup).execute()
+
+    return bool(res2.data)
+
+
+# -----------------------------
+# PATHS / FOLDERS
+# -----------------------------
+SETTINGS_PATH = os.path.join("TEAM_CONFIG", "team_settings.json")
+ASSETS_DIR = "assets"
+os.makedirs(ASSETS_DIR, exist_ok=True)
+
+# FORCE include team data folders (Streamlit Cloud quirk) — but don't crash if missing
 try:
-    _draw_overall_spray_template_excel(ws, start_row=16, start_col=1)
+    if os.path.exists("data/teams"):
+        _ = os.listdir("data/teams")
 except Exception:
     pass
 
@@ -2816,24 +2922,77 @@ else:
 
             ws.column_dimensions["A"].width = 18
             ws.column_dimensions["B"].width = 10
-# --- Insert blank "Overall Spray Chart" template under the SB/CS table ---
+# --- Build blank "Overall Spray Chart" template under the SB/CS table (Excel-native formatting; no images) ---
             try:
-                _tmp_png = _get_overall_spray_template_png_path()
-                if _tmp_png:
-                    _img = XLImage(_tmp_png)
+                # Title row
+                title_row = 16
+                grid_top = 17
+                grid_mid_label = 28
+                grid_bottom = 34
 
-                    # --- Scale image to fit on ONE printed page ---
-                    # openpyxl image dimensions are in pixels. If you change layout/print settings later,
-                    # you can tweak TARGET_W below.
-                    _orig_w = getattr(_img, "width", None) or 1
-                    _orig_h = getattr(_img, "height", None) or 1
-                    TARGET_W = 720  # fits typical Letter portrait at 100% scale
-                    _scale = TARGET_W / float(_orig_w)
-                    _img.width = int(_orig_w * _scale)
-                    _img.height = int(_orig_h * _scale)
+                ws.merge_cells(start_row=title_row, start_column=1, end_row=title_row, end_column=8)
+                tcell = ws.cell(row=title_row, column=1, value="OVERALL SPRAY CHART")
+                tcell.font = Font(bold=True, size=14)
+                tcell.alignment = Alignment(horizontal="center", vertical="center")
+                ws.row_dimensions[title_row].height = 26
 
-                    # Anchor beneath the small SB/CS table (table starts at row 13)
-                    ws.add_image(_img, "A16")
+                # Set column widths for an 8-col template (A:H)
+                for col_letter in list("ABCDEFGH"):
+                    ws.column_dimensions[col_letter].width = 7.5
+
+                # Set row heights for writing space
+                for r in range(grid_top, grid_bottom + 1):
+                    ws.row_dimensions[r].height = 18
+
+                # Header labels (Outfield)
+                def _merge_label(r, c1, c2, text):
+                    ws.merge_cells(start_row=r, start_column=c1, end_row=r, end_column=c2)
+                    cell = ws.cell(row=r, column=c1, value=text)
+                    cell.font = Font(bold=True, size=11)
+                    cell.alignment = Alignment(horizontal="center", vertical="center")
+
+                _merge_label(grid_top, 1, 2, "LF")
+                _merge_label(grid_top, 3, 4, "CF")
+                _merge_label(grid_top, 5, 6, "RF")
+                _merge_label(grid_top, 7, 8, "")  # spare space
+
+                # Header labels (Infield)
+                _merge_label(grid_mid_label, 1, 2, "3B")
+                _merge_label(grid_mid_label, 3, 4, "SS")
+                _merge_label(grid_mid_label, 5, 6, "2B")
+                _merge_label(grid_mid_label, 7, 8, "1B")
+
+                # Borders: thin internal, medium outer
+                thin = Side(style="thin", color="000000")
+                med = Side(style="medium", color="000000")
+
+                for r in range(grid_top, grid_bottom + 1):
+                    for c in range(1, 9):
+                        cell = ws.cell(row=r, column=c)
+                        # default thin border
+                        left = thin
+                        right = thin
+                        top = thin
+                        bottom = thin
+
+                        # outer box
+                        if c == 1:
+                            left = med
+                        if c == 8:
+                            right = med
+                        if r == grid_top:
+                            top = med
+                        if r == grid_bottom:
+                            bottom = med
+
+                        cell.border = Border(left=left, right=right, top=top, bottom=bottom)
+
+                # Ensure print fits 1 page
+                try:
+                    ws.page_setup.fitToWidth = 1
+                    ws.page_setup.fitToHeight = 1
+                except Exception:
+                    pass
             except Exception:
                 pass
     excel_bytes = excel_out.getvalue()
