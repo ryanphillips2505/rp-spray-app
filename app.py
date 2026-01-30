@@ -1113,6 +1113,9 @@ def db_save_season_totals(
     existing_meta["archived_players"] = archived_list
     if coach_notes is not None:
         existing_meta["coach_notes"] = str(coach_notes)
+    if player_notes is not None:
+        # Stored as a JSON string (dict of player -> note)
+        existing_meta["player_notes"] = str(player_notes)
 
     payload = {
         "team": season_team,
@@ -2495,7 +2498,51 @@ else:
 
             st.session_state[indiv_key] = [t for t in INDIV_TYPES if t in picked_set]
 
-    # Current individual view types
+    
+    # -----------------------------
+    # 📝 PLAYER NOTES (per selected hitter — prints on Individual Excel)
+    # -----------------------------
+    pn_key = f"player_notes__{TEAM_CODE_SAFE}__{team_key}"
+    if pn_key not in st.session_state:
+        st.session_state[pn_key] = db_get_player_notes(TEAM_CODE_SAFE, team_key)
+
+    try:
+        _pn_dict = json.loads(st.session_state.get(pn_key, "") or "{}")
+        if not isinstance(_pn_dict, dict):
+            _pn_dict = {}
+    except Exception:
+        _pn_dict = {}
+
+    _safe_p = re.sub(r"[^A-Za-z0-9_]+", "_", str(selected_player))
+    _cur_note = str(_pn_dict.get(selected_player, "") or "")
+
+    with st.expander("📝 Player Notes (prints on Individual Excel)", expanded=False):
+        _new_note = st.text_area(
+            f"Notes for {selected_player}:",
+            value=_cur_note,
+            height=140,
+            key=f"{pn_key}__box__{_safe_p}",
+        )
+
+        if st.button("💾 Save Player Note", key=f"{pn_key}__save__{_safe_p}"):
+            _pn_dict[selected_player] = str(_new_note or "")
+            pn_json = json.dumps(_pn_dict, ensure_ascii=False)
+            st.session_state[pn_key] = pn_json
+
+            # Preserve everything else; only update meta.player_notes
+            db_save_season_totals(
+                TEAM_CODE_SAFE,
+                team_key,
+                season_team,
+                season_players,
+                games_played,
+                archived_players,
+                player_notes=pn_json,
+            )
+
+            st.success("Player note saved.")
+
+# Current individual view types
     indiv_types_selected = st.session_state.get(indiv_key, list(INDIV_TYPES))
     if not indiv_types_selected:
         st.warning("No stats selected. Use Stat Edit to choose at least one stat.")
@@ -2819,6 +2866,16 @@ else:
     excel_bytes = excel_out.getvalue()
 
     # CSV bytes (long format)
+    
+    # Pull per-player notes (stored as JSON in meta.player_notes) for CSV export too
+    _pn_key_csv = f"player_notes__{TEAM_CODE_SAFE}__{team_key}"
+    try:
+        _player_notes_dict_csv = json.loads(st.session_state.get(_pn_key_csv, "") or "{}")
+        if not isinstance(_player_notes_dict_csv, dict):
+            _player_notes_dict_csv = {}
+    except Exception:
+        _player_notes_dict_csv = {}
+
     long_rows = []
     for p in selectable_players:
         st_p = season_players.get(p, {})
@@ -2829,7 +2886,7 @@ else:
                 cnt = st_p.get("FB", 0)
             else:
                 cnt = st_p.get(t, 0)
-            long_rows.append({"Player": p, "Type": t, "Count": cnt})
+            long_rows.append({"Player": p, "Type": t, "Count": cnt, "Note": str(_player_notes_dict_csv.get(p, "") or "")})
 
     df_long = pd.DataFrame(long_rows)
     csv_long_bytes = df_long.to_csv(index=False).encode("utf-8")
