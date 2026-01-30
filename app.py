@@ -58,6 +58,7 @@ from io import BytesIO
 
 from openpyxl.utils import get_column_letter
 from openpyxl.formatting.rule import ColorScaleRule, FormulaRule, CellIsRule
+from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
 from supabase import create_client, Client
 
 SUPABASE_URL = st.secrets["SUPABASE_URL"]
@@ -2741,7 +2742,6 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
-
 
 
 
