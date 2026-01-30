@@ -23,11 +23,21 @@ import tempfile
 # The Individual Spray Excel export will insert that image (blank chart) under the SB/CS totals.
 
 def _get_overall_spray_template_png_path() -> str:
-    """Return local path to overall_spray_template.png if present, else empty string."""
+    """Return local path to overall_spray_template.png if present, else empty string.
+
+    Preferred location (matches your repo layout):
+      - ./assets/overall_spray_template.png
+
+    Fallback:
+      - ./overall_spray_template.png  (same folder as app.py)
+    """
     try:
         here = os.path.dirname(os.path.abspath(__file__))
-        p = os.path.join(here, "overall_spray_template.png")
-        return p if os.path.exists(p) else ""
+        p1 = os.path.join(here, "assets", "overall_spray_template.png")
+        if os.path.exists(p1):
+            return p1
+        p2 = os.path.join(here, "overall_spray_template.png")
+        return p2 if os.path.exists(p2) else ""
     except Exception:
         return ""
 
@@ -2869,24 +2879,50 @@ else:
                 ws.row_dimensions[rr].height = 22
 
             ws["A12"] = "Running Game Totals (SB/CS)"
-            # Avoid NameError from scoped font variables: set the font inline
             ws["A12"].font = Font(name=FONT_NAME, size=10, color="444444")
             ws["A12"].alignment = Alignment(horizontal="left", vertical="center")
 
+            # --- SB/CS table stacked in columns A (Type) and B (Count) ---
+            # Clear any prior "Selected Stat Totals" content that may have been written here
+            for rr in range(13, 31):
+                for cc in (1, 2):
+                    cell = ws.cell(row=rr, column=cc)
+                    cell.value = None
+                    cell.fill = white_fill
+                    cell.border = Border()
+                    cell.alignment = Alignment(horizontal="left", vertical="center")
 
+            # Header row
+            ws["A13"] = "Type"
+            ws["B13"] = "Count"
             header_font = Font(bold=True)
             header_align = Alignment(horizontal="center", vertical="center")
             header_fill = PatternFill("solid", fgColor="EDEDED")
-            for cell in ws[13]:
+            for addr in ("A13", "B13"):
+                cell = ws[addr]
                 cell.font = header_font
                 cell.alignment = header_align
                 cell.fill = header_fill
+                cell.border = box_border
+
+            # Data rows
+            sb_val = int(_totals.get("SB", 0) or 0)
+            cs_val = int(_totals.get("CS", 0) or 0)
+
+            ws["A14"] = "SB"
+            ws["B14"] = sb_val
+            ws["A15"] = "CS"
+            ws["B15"] = cs_val
+
+            for addr in ("A14", "B14", "A15", "B15"):
+                cell = ws[addr]
+                cell.font = cell_font
+                cell.alignment = Alignment(horizontal="center", vertical="center") if addr.startswith("B") else Alignment(horizontal="left", vertical="center")
+                cell.border = box_border
 
             ws.column_dimensions["A"].width = 18
             ws.column_dimensions["B"].width = 10
-
-
-            # --- Insert blank "Overall Spray Chart" template under the SB/CS table ---
+# --- Insert blank "Overall Spray Chart" template under the SB/CS table ---
             try:
                 _tmp_png = _get_overall_spray_template_png_path()
                 if _tmp_png:
@@ -2962,6 +2998,75 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
