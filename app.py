@@ -8,6 +8,29 @@ st.cache_data.clear()
 import os
 import json
 import base64
+import tempfile
+
+# ------------------------------------
+# EMBEDDED EXCEL TEMPLATE IMAGE (Overall Spray Chart)
+# ------------------------------------
+# This is a blank "Overall Spray Chart" template image that gets inserted into the
+# Individual Spray Excel export under the field summary. It is embedded so the app
+# does not require a separate PNG file on disk.
+# ------------------------------------
+# OVERALL SPRAY CHART TEMPLATE IMAGE (file-based)
+# ------------------------------------
+# Put a PNG named "overall_spray_template.png" in the SAME folder as this app.py.
+# The Individual Spray Excel export will insert that image (blank chart) under the SB/CS totals.
+
+def _get_overall_spray_template_png_path() -> str:
+    """Return local path to overall_spray_template.png if present, else empty string."""
+    try:
+        here = os.path.dirname(os.path.abspath(__file__))
+        p = os.path.join(here, "overall_spray_template.png")
+        return p if os.path.exists(p) else ""
+    except Exception:
+        return ""
+
 import re
 import hashlib
 import httpx
@@ -59,6 +82,7 @@ from io import BytesIO
 from openpyxl.utils import get_column_letter
 from openpyxl.formatting.rule import ColorScaleRule, FormulaRule, CellIsRule
 from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
+from openpyxl.drawing.image import Image as XLImage
 from supabase import create_client, Client
 
 SUPABASE_URL = st.secrets["SUPABASE_URL"]
@@ -2592,13 +2616,11 @@ else:
         for p in selectable_players:
             st_p = season_players.get(p, {})
             rows_p = []
-            for t in indiv_types_selected:
-                if t == "GB (total)":
-                    rows_p.append({"Type": t, "Count": st_p.get("GB", 0)})
-                elif t == "FB (total)":
-                    rows_p.append({"Type": t, "Count": st_p.get("FB", 0)})
-                else:
-                    rows_p.append({"Type": t, "Count": st_p.get(t, 0)})
+            # Individual Excel: we only show running-game totals here (SB / CS).
+            # GB/FB and location totals are already displayed on the field graphic above,
+            # so listing them again is redundant.
+            for t in ["SB", "CS"]:
+                rows_p.append({"Type": t, "Count": st_p.get(t, 0)})
 
             df_p = pd.DataFrame(rows_p)
             sn = _sheet_name(p)
@@ -2846,7 +2868,7 @@ else:
             for rr in range(2, 9):
                 ws.row_dimensions[rr].height = 22
 
-            ws["A12"] = "Selected Stat Totals"
+            ws["A12"] = "Running Game Totals (SB/CS)"
             # Avoid NameError from scoped font variables: set the font inline
             ws["A12"].font = Font(name=FONT_NAME, size=10, color="444444")
             ws["A12"].alignment = Alignment(horizontal="left", vertical="center")
@@ -2863,6 +2885,17 @@ else:
             ws.column_dimensions["A"].width = 18
             ws.column_dimensions["B"].width = 10
 
+
+            # --- Insert blank "Overall Spray Chart" template under the SB/CS table ---
+            try:
+                _tmp_png = _get_overall_spray_template_png_path()
+                if _tmp_png:
+                    _img = XLImage(_tmp_png)
+                    # Anchor beneath the small SB/CS table (table starts at row 13)
+                    # Adjust as needed if you ever change the startrow above.
+                    ws.add_image(_img, "A16")
+            except Exception:
+                pass
     excel_bytes = excel_out.getvalue()
 
     # CSV bytes (long format)
@@ -2929,75 +2962,6 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
