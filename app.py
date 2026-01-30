@@ -2550,9 +2550,9 @@ else:
             hdr_font = Font(name=FONT_NAME, size=11, bold=True)
             cell_font = Font(name=FONT_NAME, size=11, bold=False)
             gbfb_font = Font(name=FONT_NAME, size=11, bold=True)
-            gray_fill = PatternFill("solid", fgColor="F2F2F2")
-            grass_fill = PatternFill("solid", fgColor="D9EAD3")  # lighter green
-            white_fill = PatternFill("solid", fgColor="FFFFFF")
+            gray_fill = OPFill("solid", fgColor="F2F2F2")
+            grass_fill = OPFill("solid", fgColor="D9EAD3")  # lighter green
+            white_fill = OPFill("solid", fgColor="FFFFFF")
             thin = Side(style="thin", color="9E9E9E")
             box_border = Border(left=thin, right=thin, top=thin, bottom=thin)
 
@@ -2614,7 +2614,7 @@ else:
                     c1 = (244, 204, 204)
                 rgb = tuple(int(c0[i] + (c1[i] - c0[i]) * t) for i in range(3))
                 hex_rgb = "%02X%02X%02X" % rgb
-                return PatternFill("solid", fgColor=hex_rgb)
+                return OPFill("solid", fgColor=hex_rgb)
 
             # Build per-position totals (GB and FB separately)
             positions = ["LF", "CF", "RF", "3B", "SS", "2B", "1B", "P"]
