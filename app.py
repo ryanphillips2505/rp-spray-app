@@ -2644,7 +2644,7 @@ else:
             gb, fb = gbfb("P")
             box(7, 3, 8, 5, _heat_fill(_totals["P"], _vmax), f"P\nGB {gb}  |  FB {fb}")
 
-ws["A12"] = "Selected Stat Totals"
+            ws["A12"] = "Selected Stat Totals"
             ws["A12"].font = small_font
             ws["A12"].alignment = Alignment(horizontal="left", vertical="center")
 
