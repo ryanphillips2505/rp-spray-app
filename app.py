@@ -2819,7 +2819,7 @@ else:
             # Coach worksheet block (RIGHT) — matches your highlighted area
             # -----------------------------
             start_row = 17
-            start_col = 9  # Column I (moved left for 1-page print)
+            start_col = 6  # Column F (moved left for true 1-page print)
             col_atbat = start_col           # M
             col_result_start = start_col+1  # N
             col_result_end   = start_col+4  # Q
@@ -2908,11 +2908,22 @@ else:
 
             # (Removed) Extra Notes & General Information block to keep 1-page print clean
 
-# Print setup per sheet: force one-page fit (like your highlighted area)
-            ws.page_setup.orientation = ws.ORIENTATION_LANDSCAPE
+            # Print setup per sheet: force one-page fit (like your highlighted area)
+            ws.page_setup.orientation = ws.ORIENTATION_PORTRAIT
             ws.page_setup.fitToWidth = 1
             ws.page_setup.fitToHeight = 1
             ws.sheet_properties.pageSetUpPr.fitToPage = True
+            # Tight print area + margins for 1-page per player
+            ws.print_options.horizontalCentered = True
+            ws.print_options.verticalCentered = False
+            ws.page_margins.left = 0.25
+            ws.page_margins.right = 0.25
+            ws.page_margins.top = 0.30
+            ws.page_margins.bottom = 0.30
+            ws.page_margins.header = 0.10
+            ws.page_margins.footer = 0.10
+            ws.print_area = f"A1:{get_column_letter(col_notes_end)}{(hdr_r + (12*3) + 2)}"  # include AB table
+
 
         # Ensure at least one visible worksheet (prevents openpyxl IndexError)
         try:
