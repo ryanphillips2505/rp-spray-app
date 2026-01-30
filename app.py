@@ -1055,6 +1055,27 @@ def db_get_coach_notes(team_code: str, team_key: str) -> str:
         return ""
     except Exception:
         return ""
+
+def db_get_player_notes(team_code: str, team_key: str) -> str:
+    """Fetch per-player coach notes from season_totals.data.meta.player_notes (JSON string)."""
+    try:
+        res = (
+            supabase.table("season_totals")
+            .select("data")
+            .eq("team_code", team_code)
+            .eq("team_key", team_key)
+            .limit(1)
+            .execute()
+        )
+        if res.data:
+            payload = res.data[0].get("data") or {}
+            meta = payload.get("meta") or {}
+            if isinstance(meta, dict):
+                return str(meta.get("player_notes", "") or "")
+        return ""
+    except Exception:
+        return ""
+
 def db_save_season_totals(
     team_code: str,
     team_key: str,
@@ -1063,6 +1084,7 @@ def db_save_season_totals(
     games_played: int,
     archived_players: set[str] | list[str] | None = None,
     coach_notes: str | None = None,
+    player_notes: str | None = None,
 ):
     archived_list = []
     if archived_players:
@@ -2169,6 +2191,10 @@ notes_key = f"coach_notes__{TEAM_CODE_SAFE}__{team_key}"
 if notes_key not in st.session_state:
     st.session_state[notes_key] = db_get_coach_notes(TEAM_CODE_SAFE, team_key)
 
+player_notes_key = f"player_notes__{TEAM_CODE_SAFE}__{team_key}"
+if player_notes_key not in st.session_state:
+    st.session_state[player_notes_key] = db_get_player_notes(TEAM_CODE_SAFE, team_key)
+
 with st.expander("📝 Coaches Scouting Notes (prints on Excel/CSV)", expanded=False):
     st.session_state[notes_key] = st.text_area(
         "Notes for THIS selected opponent/team:",
@@ -2506,6 +2532,14 @@ else:
     # Excel bytes (one sheet per player)
     excel_out = BytesIO()
     with pd.ExcelWriter(excel_out, engine="openpyxl") as writer:
+        # Load per-player notes (stored as JSON string in session_state / DB meta)
+        _pn_key = f"player_notes__{TEAM_CODE_SAFE}__{team_key}"
+        try:
+            _player_notes_dict = json.loads(st.session_state.get(_pn_key, "") or "{}")
+            if not isinstance(_player_notes_dict, dict):
+                _player_notes_dict = {}
+        except Exception:
+            _player_notes_dict = {}
         used = set()
         for p in selectable_players:
             st_p = season_players.get(p, {})
@@ -2531,6 +2565,71 @@ else:
 
             df_p.to_excel(writer, index=False, sheet_name=sn, startrow=12)
             ws = writer.book[sn]
+            # Local styles for notes + stat split (avoid NameError due to ordering)
+            _thin = Side(style="thin", color="9E9E9E")
+            _border = Border(left=_thin, right=_thin, top=_thin, bottom=_thin)
+            _notes_fill = PatternFill("solid", fgColor="D9EAD3")  # light green
+            _header_fill = PatternFill("solid", fgColor="D9E1F2")  # light blue-gray
+            _header_font = Font(name=FONT_NAME, size=12, bold=True)
+            _small_font = Font(name=FONT_NAME, size=11)
+
+            # Player Notes box (prints on sheet) — left side under GB/FB by position
+            note_text = str(_player_notes_dict.get(p, "") or "").strip()
+            ws.merge_cells("A3:B10")
+            ncell = ws["A3"]
+            ncell.value = note_text
+            ncell.font = _small_font
+            ncell.alignment = Alignment(horizontal="left", vertical="top", wrap_text=True)
+            ncell.fill = _notes_fill
+            for rr in range(3, 11):
+                for cc in range(1, 3):
+                    ws.cell(row=rr, column=cc).border = _border
+
+            ws["A2"].value = "GB / FB by position"
+            ws["A2"].font = _header_font
+            ws["A2"].alignment = Alignment(horizontal="left", vertical="center")
+
+            # Split Selected Stat Totals into two columns to reduce white space.
+            # (pandas wrote the full table at A13:B...)
+            stats_start = 13  # header row
+            last = stats_start
+            while ws.cell(row=last + 1, column=1).value not in (None, ""):
+                last += 1
+                if last > 300:
+                    break
+            n_rows = max(0, last - stats_start)  # number of data rows
+            if n_rows > 10:
+                split = (n_rows + 1) // 2
+
+                # Right header (D/E)
+                ws.cell(row=stats_start, column=4).value = "Type"
+                ws.cell(row=stats_start, column=5).value = "Count"
+                for c in (4, 5):
+                    h = ws.cell(row=stats_start, column=c)
+                    h.font = _header_font
+                    h.fill = _header_fill
+                    h.border = _border
+                    h.alignment = Alignment(horizontal="center", vertical="center")
+
+                # Move bottom half to D/E and clear originals
+                for i in range(split + 1, n_rows + 1):
+                    src_r = stats_start + i
+                    dst_r = stats_start + (i - split)
+
+                    ws.cell(row=dst_r, column=4).value = ws.cell(row=src_r, column=1).value
+                    ws.cell(row=dst_r, column=5).value = ws.cell(row=src_r, column=2).value
+
+                    ws.cell(row=src_r, column=1).value = ""
+                    ws.cell(row=src_r, column=2).value = ""
+
+                # Format right table cells
+                max_r = stats_start + split
+                for r in range(stats_start + 1, max_r + 1):
+                    for c in (4, 5):
+                        cell = ws.cell(row=r, column=c)
+                        cell.font = _small_font
+                        cell.border = _border
+                        cell.alignment = Alignment(horizontal="left" if c == 4 else "center", vertical="center")
             ws.freeze_panes = "A14"
             _totals = st_p  # per-player season totals dict (includes GB-*/FB-* buckets)
 
