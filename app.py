@@ -2619,7 +2619,7 @@ else:
             for rr in range(5, 9):
                 for cc in range(3, 7):  # C..F
                     ws.cell(row=rr, column=cc).fill = dirt_bg
-def _cell(r, c, value, fill, bold=False):
+            def _cell(r, c, value, fill, bold=False):
                 cell = ws.cell(row=r, column=c)
                 cell.value = value
                 cell.fill = fill
@@ -2743,7 +2743,6 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
-
 
 
 
