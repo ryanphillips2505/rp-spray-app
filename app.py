@@ -2611,73 +2611,8 @@ else:
             ws["A2"].font = _header_font
             ws["A2"].alignment = Alignment(horizontal="left", vertical="center")
 
-            # Split Selected Stat Totals into two columns to reduce white space.
-            # (pandas wrote the full table at A13:B...)
-            stats_start = 13  # header row
-            last = stats_start
-            while ws.cell(row=last + 1, column=1).value not in (None, ""):
-                last += 1
-                if last > 300:
-                    break
-            n_rows = max(0, last - stats_start)  # number of data rows
-            if n_rows > 10:
-                split = (n_rows + 1) // 2
+                        # (Removed) Selected Stat Totals split-table — replaced below with SB/CS + coach worksheet block
 
-                            # Right table (D-H) — two-column layout on one printable page
-            split = (n_rows + 1) // 2  # roughly half rows on left, half on right
-
-            # Headers (row stats_start): merge D-F for Type, G-H for Count
-            ws.merge_cells(start_row=stats_start, start_column=4, end_row=stats_start, end_column=6)  # D-F
-            ws.merge_cells(start_row=stats_start, start_column=7, end_row=stats_start, end_column=8)  # G-H
-            ws.cell(row=stats_start, column=4, value="Type")
-            ws.cell(row=stats_start, column=7, value="Count")
-
-            for c in range(4, 7):
-                cell = ws.cell(row=stats_start, column=c)
-                cell.font = _header_font
-                cell.fill = _header_fill
-                cell.alignment = Alignment(horizontal="center", vertical="center")
-                cell.border = _border
-            for c in range(7, 9):
-                cell = ws.cell(row=stats_start, column=c)
-                cell.font = _header_font
-                cell.fill = _header_fill
-                cell.alignment = Alignment(horizontal="center", vertical="center")
-                cell.border = _border
-
-            # Move bottom half (from left A/B) into right table (D/G)
-            for i in range(split + 1, n_rows + 1):
-                src_r = stats_start + i
-                dst_r = stats_start + (i - split)
-
-                tval = ws.cell(row=src_r, column=1).value
-                cval = ws.cell(row=src_r, column=2).value
-
-                ws.cell(row=dst_r, column=4, value=tval)
-                ws.cell(row=dst_r, column=7, value=cval)
-
-                # clear originals on left
-                ws.cell(row=src_r, column=1).value = None
-                ws.cell(row=src_r, column=2).value = None
-
-            # Format right table rows: merge D-F (Type) and G-H (Count)
-            for r in range(stats_start + 1, stats_start + split + 1):
-                ws.merge_cells(start_row=r, start_column=4, end_row=r, end_column=6)  # D-F
-                ws.merge_cells(start_row=r, start_column=7, end_row=r, end_column=8)  # G-H
-                for c in range(4, 9):  # D-H
-                    cell = ws.cell(row=r, column=c)
-                    cell.font = _small_font
-                    cell.alignment = Alignment(horizontal="left" if c <= 6 else "center", vertical="center")
-                    cell.border = _border
-                    cell.fill = PatternFill("solid", fgColor="FFFFFF")
-            ws.freeze_panes = "A14"
-            _totals = st_p  # per-player season totals dict (includes GB-*/FB-* buckets)
-
-            
-
-            # --- MLB-style field summary (clean, symmetrical, print-ready) ---
-            # We draw a simple "field" layout and place each position as a 2-column GB/FB block.
-            # Heatmap fill is applied separately to GB and FB cells.
             FIELD_TOP_ROW = 2
             FIELD_LEFT_COL = 3   # Column C
             FIELD_RIGHT_COL = 12 # Column L
@@ -2811,188 +2746,175 @@ else:
 
             
 # -----------------------------
-# Running Game Totals (SB/CS) — keep it simple (A:B only)
-# -----------------------------
-ws["A12"] = "Running Game Totals (SB/CS)"
-ws["A12"].font = Font(name=FONT_NAME, size=10, color="444444")
-ws["A12"].alignment = Alignment(horizontal="left", vertical="center")
+            # -----------------------------
+            # Running Game Totals (SB/CS) — ONLY (A:B) and clear any extra stat tables
+            # -----------------------------
+            # Clear rows 12-16 across A:I to remove any leftover "Selected Stat Totals" / split tables
+            for _r in range(12, 17):
+                for _c in range(1, 10):  # A..I
+                    _cell = ws.cell(row=_r, column=_c)
+                    _cell.value = None
+                    _cell.border = Border()
+                    _cell.fill = PatternFill()
+                    _cell.alignment = Alignment(horizontal="general", vertical="center")
+                    _cell.font = Font(name=FONT_NAME, size=11)
 
-# Clear any old header styling on row 13 so we don't accidentally format extra columns
-for c in range(1, 25):
-    ws.cell(row=13, column=c).font = Font(name=FONT_NAME, size=11, bold=False)
-    ws.cell(row=13, column=c).fill = PatternFill()
-    ws.cell(row=13, column=c).alignment = Alignment(horizontal="general", vertical="center")
-    ws.cell(row=13, column=c).border = Border()
+            ws["A12"] = "Running Game Totals (SB/CS)"
+            ws["A12"].font = Font(name=FONT_NAME, size=10, color="444444")
+            ws["A12"].alignment = Alignment(horizontal="left", vertical="center")
 
-header_font = Font(name=FONT_NAME, bold=True)
-header_align = Alignment(horizontal="center", vertical="center")
-header_fill = PatternFill("solid", fgColor="EDEDED")
+            _header_font2 = Font(name=FONT_NAME, bold=True)
+            _header_align2 = Alignment(horizontal="center", vertical="center")
+            _header_fill2 = PatternFill("solid", fgColor="EDEDED")
+            _thin2 = Side(style="thin", color="9E9E9E")
+            _box_border2 = Border(left=_thin2, right=_thin2, top=_thin2, bottom=_thin2)
 
-ws["A13"] = "Type"
-ws["B13"] = "Count"
-ws["A13"].font = header_font
-ws["B13"].font = header_font
-ws["A13"].alignment = header_align
-ws["B13"].alignment = header_align
-ws["A13"].fill = header_fill
-ws["B13"].fill = header_fill
-ws["A13"].border = box_border
-ws["B13"].border = box_border
+            ws["A13"] = "Type"
+            ws["B13"] = "Count"
+            for _addr in ["A13", "B13"]:
+                ws[_addr].font = _header_font2
+                ws[_addr].alignment = _header_align2
+                ws[_addr].fill = _header_fill2
+                ws[_addr].border = _box_border2
 
-sb_val = int(season_players.get(p, {}).get("SB", 0) or 0)
-cs_val = int(season_players.get(p, {}).get("CS", 0) or 0)
+            sb_val = int(season_players.get(p, {}).get("SB", 0) or 0)
+            cs_val = int(season_players.get(p, {}).get("CS", 0) or 0)
 
-ws["A14"] = "SB"
-ws["B14"] = sb_val
-ws["A15"] = "CS"
-ws["B15"] = cs_val
-for addr in ["A14","B14","A15","B15"]:
-    ws[addr].font = Font(name=FONT_NAME, size=11)
-    ws[addr].alignment = Alignment(horizontal="center", vertical="center")
-    ws[addr].border = box_border
+            ws["A14"] = "SB"
+            ws["B14"] = sb_val
+            ws["A15"] = "CS"
+            ws["B15"] = cs_val
+            for _addr in ["A14","B14","A15","B15"]:
+                ws[_addr].font = Font(name=FONT_NAME, size=11)
+                ws[_addr].alignment = Alignment(horizontal="center", vertical="center")
+                ws[_addr].border = _box_border2
 
-ws.column_dimensions["A"].width = 18
-ws.column_dimensions["B"].width = 10
+            ws.column_dimensions["A"].width = 18
+            ws.column_dimensions["B"].width = 10
 
-# -----------------------------
-# Small overall spray template image (scaled) under the summary
-# -----------------------------
-try:
-    from openpyxl.drawing.image import Image as XLImage
+            # -----------------------------
+            # Small overall spray template image (scaled) under the summary (LEFT)
+            # -----------------------------
+            try:
+                template_candidates = [
+                    os.path.join("assets", "overall_spray_template.png"),
+                    "overall_spray_template.png",
+                ]
+                template_path = None
+                for _cand in template_candidates:
+                    if os.path.exists(_cand):
+                        template_path = _cand
+                        break
+                if template_path:
+                    img = XLImage(template_path)
+                    target_w = 330  # pixels (small block like your highlighted area)
+                    if img.width:
+                        scale = target_w / float(img.width)
+                        img.width = int(img.width * scale)
+                        img.height = int(img.height * scale)
+                    ws.add_image(img, "A17")
+            except Exception:
+                pass
 
-    # Prefer repo asset path; fallback to same-folder path
-    template_candidates = [
-        os.path.join("assets", "overall_spray_template.png"),
-        "overall_spray_template.png",
-    ]
-    template_path = None
-    for cand in template_candidates:
-        if os.path.exists(cand):
-            template_path = cand
-            break
+            # -----------------------------
+            # Coach worksheet block (RIGHT) — matches your highlighted area
+            # -----------------------------
+            start_row = 17
+            start_col = 13  # Column M
+            col_atbat = start_col           # M
+            col_result_start = start_col+1  # N
+            col_result_end   = start_col+4  # Q
+            col_grid_start   = start_col+5  # R
+            col_grid_end     = start_col+14 # AA (10 cols)
+            col_count        = start_col+15 # AB
+            col_notes_start  = start_col+16 # AC
+            col_notes_end    = start_col+20 # AG
 
-    if template_path:
-        img = XLImage(template_path)
+            # Column widths tuned to look like the reference sheet
+            ws.column_dimensions[get_column_letter(col_atbat)].width = 9
+            for _c in range(col_result_start, col_result_end+1):
+                ws.column_dimensions[get_column_letter(_c)].width = 4.2
+            for _c in range(col_grid_start, col_grid_end+1):
+                ws.column_dimensions[get_column_letter(_c)].width = 2.2
+            ws.column_dimensions[get_column_letter(col_count)].width = 8
+            for _c in range(col_notes_start, col_notes_end+1):
+                ws.column_dimensions[get_column_letter(_c)].width = 4.2
 
-        # Scale to a small block so it stays 1-page friendly
-        target_w = 330  # pixels (tuned for one-page print)
-        scale = target_w / float(img.width) if img.width else 1.0
-        img.width = int(img.width * scale)
-        img.height = int(img.height * scale)
+            thick = Side(style="medium", color="000000")
+            thin_black = Side(style="thin", color="000000")
 
-        ws.add_image(img, "A17")
-except Exception:
-    pass
+            def _set_border_range(r1, c1, r2, c2):
+                for rr in range(r1, r2+1):
+                    for cc in range(c1, c2+1):
+                        left = thick if cc == c1 else thin_black
+                        right = thick if cc == c2 else thin_black
+                        top = thick if rr == r1 else thin_black
+                        bottom = thick if rr == r2 else thin_black
+                        ws.cell(rr, cc).border = Border(left=left, right=right, top=top, bottom=bottom)
 
-# -----------------------------
-# Coach worksheet block (matches your highlighted area: table on the right)
-# -----------------------------
-start_row = 17
-start_col = 13  # Column M
-col_atbat = start_col           # M
-col_result_start = start_col+1  # N
-col_result_end   = start_col+4  # Q
-col_grid_start   = start_col+5  # R
-col_grid_end     = start_col+14 # AA (10 cols)
-col_count        = start_col+15 # AB
-col_notes_start  = start_col+16 # AC
-col_notes_end    = start_col+20 # AG
+            hdr_r = start_row
+            ws.cell(hdr_r, col_atbat, "AT BAT #").font = _header_font2
+            ws.cell(hdr_r, col_atbat).alignment = _header_align2
 
-# Column widths tuned to look like the reference sheet
-ws.column_dimensions[get_column_letter(col_atbat)].width = 9
-for c in range(col_result_start, col_result_end+1):
-    ws.column_dimensions[get_column_letter(c)].width = 4.2
-for c in range(col_grid_start, col_grid_end+1):
-    ws.column_dimensions[get_column_letter(c)].width = 2.2
-ws.column_dimensions[get_column_letter(col_count)].width = 8
-for c in range(col_notes_start, col_notes_end+1):
-    ws.column_dimensions[get_column_letter(c)].width = 4.2
+            ws.merge_cells(start_row=hdr_r, start_column=col_result_start, end_row=hdr_r, end_column=col_result_end)
+            ws.cell(hdr_r, col_result_start, "RESULT").font = _header_font2
+            ws.cell(hdr_r, col_result_start).alignment = _header_align2
 
-thick = Side(style="medium", color="000000")
-thin_black = Side(style="thin", color="000000")
+            ws.merge_cells(start_row=hdr_r, start_column=col_grid_start, end_row=hdr_r, end_column=col_grid_end)
+            ws.cell(hdr_r, col_grid_start, "PITCH PROGRESSION").font = _header_font2
+            ws.cell(hdr_r, col_grid_start).alignment = _header_align2
 
-def set_border_range(r1, c1, r2, c2, outer_thick=True):
-    for rr in range(r1, r2+1):
-        for cc in range(c1, c2+1):
-            left = thick if outer_thick and cc == c1 else thin_black
-            right = thick if outer_thick and cc == c2 else thin_black
-            top = thick if outer_thick and rr == r1 else thin_black
-            bottom = thick if outer_thick and rr == r2 else thin_black
-            ws.cell(rr, cc).border = Border(left=left, right=right, top=top, bottom=bottom)
+            ws.cell(hdr_r, col_count, "COUNT").font = _header_font2
+            ws.cell(hdr_r, col_count).alignment = _header_align2
 
-# Header row
-hdr_r = start_row
-ws.cell(hdr_r, col_atbat, "AT BAT #").font = header_font
-ws.cell(hdr_r, col_atbat).alignment = header_align
+            ws.merge_cells(start_row=hdr_r, start_column=col_notes_start, end_row=hdr_r, end_column=col_notes_end)
+            ws.cell(hdr_r, col_notes_start, "NOTES").font = _header_font2
+            ws.cell(hdr_r, col_notes_start).alignment = _header_align2
 
-ws.merge_cells(start_row=hdr_r, start_column=col_result_start, end_row=hdr_r, end_column=col_result_end)
-ws.cell(hdr_r, col_result_start, "RESULT").font = header_font
-ws.cell(hdr_r, col_result_start).alignment = header_align
+            _set_border_range(hdr_r, col_atbat, hdr_r, col_notes_end)
+            ws.row_dimensions[hdr_r].height = 22
 
-ws.merge_cells(start_row=hdr_r, start_column=col_grid_start, end_row=hdr_r, end_column=col_grid_end)
-ws.cell(hdr_r, col_grid_start, "PITCH PROGRESSION").font = header_font
-ws.cell(hdr_r, col_grid_start).alignment = header_align
+            block_h = 3
+            first_data_row = hdr_r + 1
+            for i_ab in range(1, 13):
+                r1 = first_data_row + (i_ab-1)*block_h
+                r2 = r1 + block_h - 1
+                for rr in range(r1, r2+1):
+                    ws.row_dimensions[rr].height = 18
 
-ws.cell(hdr_r, col_count, "COUNT").font = header_font
-ws.cell(hdr_r, col_count).alignment = header_align
+                ws.merge_cells(start_row=r1, start_column=col_atbat, end_row=r2, end_column=col_atbat)
+                ws.cell(r1, col_atbat, f"#{i_ab}").alignment = Alignment(horizontal="center", vertical="center")
+                ws.cell(r1, col_atbat).font = Font(name=FONT_NAME, size=11)
 
-ws.merge_cells(start_row=hdr_r, start_column=col_notes_start, end_row=hdr_r, end_column=col_notes_end)
-ws.cell(hdr_r, col_notes_start, "NOTES").font = header_font
-ws.cell(hdr_r, col_notes_start).alignment = header_align
+                ws.merge_cells(start_row=r1, start_column=col_result_start, end_row=r2, end_column=col_result_end)
+                ws.merge_cells(start_row=r1, start_column=col_count, end_row=r2, end_column=col_count)
+                ws.merge_cells(start_row=r1, start_column=col_notes_start, end_row=r2, end_column=col_notes_end)
 
-# Draw header border
-set_border_range(hdr_r, col_atbat, hdr_r, col_notes_end, outer_thick=True)
-ws.row_dimensions[hdr_r].height = 22
+                # grid squares (no merges)
+                for rr in range(r1, r2+1):
+                    for cc in range(col_grid_start, col_grid_end+1):
+                        ws.cell(rr, cc).alignment = Alignment(horizontal="center", vertical="center")
 
-# 12 at-bat rows; each block is 3 rows tall (so the pitch grid has space)
-block_h = 3
-first_data_row = hdr_r + 1
-for i in range(1, 13):
-    r1 = first_data_row + (i-1)*block_h
-    r2 = r1 + block_h - 1
+                _set_border_range(r1, col_atbat, r2, col_notes_end)
 
-    # row heights
-    for rr in range(r1, r2+1):
-        ws.row_dimensions[rr].height = 18
+                # strengthen internal separators
+                for rr in range(r1, r2+1):
+                    ws.cell(rr, col_result_start).border = ws.cell(rr, col_result_start).border.copy(left=thick)
+                    ws.cell(rr, col_result_end).border = ws.cell(rr, col_result_end).border.copy(right=thick)
+                    ws.cell(rr, col_grid_start).border = ws.cell(rr, col_grid_start).border.copy(left=thick)
+                    ws.cell(rr, col_grid_end).border = ws.cell(rr, col_grid_end).border.copy(right=thick)
+                    ws.cell(rr, col_count).border = ws.cell(rr, col_count).border.copy(left=thick, right=thick)
+                    ws.cell(rr, col_notes_start).border = ws.cell(rr, col_notes_start).border.copy(left=thick)
+                    ws.cell(rr, col_notes_end).border = ws.cell(rr, col_notes_end).border.copy(right=thick)
 
-    # AT BAT # merged
-    ws.merge_cells(start_row=r1, start_column=col_atbat, end_row=r2, end_column=col_atbat)
-    ws.cell(r1, col_atbat, f"#{i}").alignment = Alignment(horizontal="center", vertical="center")
-    ws.cell(r1, col_atbat).font = Font(name=FONT_NAME, size=11)
+            # Print setup per sheet: force one-page fit (like your highlighted area)
+            ws.page_setup.orientation = ws.ORIENTATION_LANDSCAPE
+            ws.page_setup.fitToWidth = 1
+            ws.page_setup.fitToHeight = 1
+            ws.sheet_properties.pageSetUpPr.fitToPage = True
 
-    # RESULT merged
-    ws.merge_cells(start_row=r1, start_column=col_result_start, end_row=r2, end_column=col_result_end)
 
-    # COUNT merged
-    ws.merge_cells(start_row=r1, start_column=col_count, end_row=r2, end_column=col_count)
-
-    # NOTES merged
-    ws.merge_cells(start_row=r1, start_column=col_notes_start, end_row=r2, end_column=col_notes_end)
-
-    # Pitch progression grid cells: keep as individual squares
-    for rr in range(r1, r2+1):
-        for cc in range(col_grid_start, col_grid_end+1):
-            ws.cell(rr, cc).alignment = Alignment(horizontal="center", vertical="center")
-
-    # Borders for whole block (thick outer, thin inside)
-    set_border_range(r1, col_atbat, r2, col_notes_end, outer_thick=True)
-
-    # Inner vertical separators thicker between main columns
-    for rr in range(r1, r2+1):
-        # separator before RESULT
-        ws.cell(rr, col_result_start).border = ws.cell(rr, col_result_start).border.copy(left=thick)
-        ws.cell(rr, col_result_end).border = ws.cell(rr, col_result_end).border.copy(right=thick)
-        ws.cell(rr, col_grid_start).border = ws.cell(rr, col_grid_start).border.copy(left=thick)
-        ws.cell(rr, col_grid_end).border = ws.cell(rr, col_grid_end).border.copy(right=thick)
-        ws.cell(rr, col_count).border = ws.cell(rr, col_count).border.copy(left=thick, right=thick)
-        ws.cell(rr, col_notes_start).border = ws.cell(rr, col_notes_start).border.copy(left=thick)
-        ws.cell(rr, col_notes_end).border = ws.cell(rr, col_notes_end).border.copy(right=thick)
-
-    # Print setup: force one-page fit
-    ws.page_setup.orientation = ws.ORIENTATION_LANDSCAPE
-    ws.page_setup.fitToWidth = 1
-    ws.page_setup.fitToHeight = 1
-    ws.sheet_properties.pageSetUpPr.fitToPage = True
+    # Finish Excel bytes after writing all player sheets
     excel_bytes = excel_out.getvalue()
 
     # CSV bytes (long format)
@@ -3011,7 +2933,7 @@ for i in range(1, 13):
     df_long = pd.DataFrame(long_rows)
     csv_long_bytes = df_long.to_csv(index=False).encode("utf-8")
 
-    # Render the download buttons exactly once per app run (prevents accidental duplicates if this block
+# Render the download buttons exactly once per app run (prevents accidental duplicates if this block
     # gets executed inside a loop or repeated container).
     if st.session_state.get("_indiv_dl_guard_nonce") != _RP_RUN_NONCE:
         st.session_state["_indiv_dl_guard_nonce"] = _RP_RUN_NONCE
