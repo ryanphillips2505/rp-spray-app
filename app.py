@@ -1580,7 +1580,7 @@ else:
     selected_row = next((t for t in teams if t.get("team_name") == selected_team), teams[0])
     team_key = selected_row.get("team_key") or safe_team_key(selected_team)
 
-with st.expander("➕ Add a new team (stored in Supabase)"):
+with st.expander("➕ Add a new team"):
     new_team_name = st.text_input("New team name:")
     if st.button("Create Team"):
         if not new_team_name.strip():
@@ -2507,6 +2507,7 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
+
 
 
 
