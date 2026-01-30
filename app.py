@@ -3004,6 +3004,7 @@ for i in range(1, 13):
     with dl_a:
         st.download_button(
             label="📥 Download Individual Spray (Excel - sheets per player)",
+            key="dl_individual_excel_sheets_per_player",
             data=excel_bytes,
             file_name=f"{TEAM_CODE}_{safe_team_ind}_Individual_Spray.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -3012,6 +3013,7 @@ for i in range(1, 13):
     with dl_b:
         st.download_button(
             label="📄 Download Individual Spray (CSV)",
+            key="dl_individual_csv_long",
             data=csv_long_bytes,
             file_name=f"{TEAM_CODE}_{safe_team_ind}_Individual_Spray.csv",
             mime="text/csv",
