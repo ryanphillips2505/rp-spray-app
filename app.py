@@ -2573,8 +2573,8 @@ else:
                 sn = (base[:31 - len(suffix)] + suffix) if len(base) + len(suffix) > 31 else (base + suffix)
                 k += 1
             used.add(sn)
-
-            df_p.to_excel(writer, index=False, sheet_name=sn, startrow=12)
+            # (Removed) full Type/Count stat list below — redundant with GB/FB boxes + SB/CS
+            # df_p.to_excel(writer, index=False, sheet_name=sn, startrow=12)
             ws = writer.book[sn]
             # Local styles for notes + stat split (avoid NameError due to ordering)
             FONT_NAME = "Arial"  # Excel-safe font
@@ -2821,7 +2821,7 @@ else:
             # Coach worksheet block (RIGHT) — matches your highlighted area
             # -----------------------------
             start_row = 17
-            start_col = 9  # Column I (moved left for 1-page print)
+            start_col = 8  # Column H (moved left for 1-page print)
             col_atbat = start_col           # M
             col_result_start = start_col+1  # N
             col_result_end   = start_col+4  # Q
