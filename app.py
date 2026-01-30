@@ -2280,6 +2280,23 @@ if notes_box_text:
 
     _csv_text = _csv_text.rstrip("\n") + "\n" + buf.getvalue().lstrip("\n")
 
+# Add a simple branding footer for CSV (formatting isn't possible in CSV)
+try:
+    import csv as _csv
+    import io as _io
+    cols = list(df_season.columns) if (df_season is not None and len(getattr(df_season, "columns", []))>0) else ["Player"]
+    blank_row = [""] * len(cols)
+    footer = [""] * len(cols)
+    footer[0] = "RP Spray Analytics"
+    buf = _io.StringIO()
+    w = _csv.writer(buf, lineterminator="\n")
+    for _ in range(3):
+        w.writerow(blank_row)
+    w.writerow(footer)
+    _csv_text = _csv_text.rstrip("\n") + "\n" + buf.getvalue().lstrip("\n")
+except Exception:
+    pass
+
 csv_bytes = _csv_text.encode("utf-8")
 safe_team = re.sub(r"[^A-Za-z0-9_-]+", "_", selected_team).strip("_")
 
@@ -2311,17 +2328,40 @@ else:
 out = BytesIO()
 with pd.ExcelWriter(out, engine="openpyxl") as writer:
     sheet_name = "Season"
-    df_xl.to_excel(writer, index=False, sheet_name=sheet_name)
+    df_xl.to_excel(writer, index=False, sheet_name=sheet_name, startrow=2)
 
     ws = writer.book[sheet_name]
-    ws.freeze_panes = "A2"
+
+    # -----------------------------
+    # TEAM HEADER (Row 1) + Watermark
+    # -----------------------------
+    team_header = f"{selected_team} — RP Spray Analytics"
+    last_col = get_column_letter(ws.max_column if ws.max_column else 1)
+    ws.merge_cells(f"A1:{last_col}1")
+    hcell = ws["A1"]
+    hcell.value = team_header
+    hcell.font = Font(bold=True, size=16)
+    hcell.alignment = Alignment(horizontal="center", vertical="center")
+
+    # Optional spacer row (Row 2) for clean look
+    ws.row_dimensions[1].height = 26
+    ws.row_dimensions[2].height = 10
+
+    # Watermark for printing (header/footer)
+    try:
+        ws.oddHeader.center.text = '&KCCCCCC&"Calibri,Italic"&24RP Spray Analytics'
+    except Exception:
+        pass
+
+    # Freeze panes below the column headers (Row 3)
+    ws.freeze_panes = "A4"
 
 
     header_font = Font(bold=True)
     header_align = Alignment(horizontal="center", vertical="center", wrap_text=True)
     header_fill = PatternFill("solid", fgColor="D9E1F2")
 
-    for cell in ws[1]:
+    for cell in ws[3]:
         cell.font = header_font
         cell.alignment = header_align
         cell.fill = header_fill
@@ -2334,7 +2374,7 @@ with pd.ExcelWriter(out, engine="openpyxl") as writer:
             max_len = max(max_len, len(v))
         ws.column_dimensions[col_letter].width = min(max(max_len + 2, 8), 22)
 
-    start_row = 2
+    start_row = 4
     start_col = 2  # numeric starts after Player
     end_row = ws.max_row
     end_col = ws.max_column
@@ -2373,10 +2413,19 @@ with pd.ExcelWriter(out, engine="openpyxl") as writer:
 
     # center numbers
     num_align = Alignment(horizontal="center", vertical="center")
-    for row in ws.iter_rows(min_row=2, max_row=ws.max_row):
+    for row in ws.iter_rows(min_row=4, max_row=ws.max_row):
         for cell in row:
             if isinstance(cell.value, (int, float)):
                 cell.alignment = num_align
+
+    # Bold player names (Player column)
+    try:
+        player_col_idx = list(df_xl.columns).index("Player") + 1
+        for r in range(4, ws.max_row + 1):
+            ws.cell(row=r, column=player_col_idx).font = Font(bold=True)
+    except Exception:
+        pass
+
 
     # -----------------------------
     # COACH NOTES BOX (EXCEL)
