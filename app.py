@@ -1315,7 +1315,18 @@ st.markdown(
 h1.app-title {{
     font-family: 'Black Ops One', 'Jersey 10', sans-serif !important;
     font-size: 6.0rem !important;
-    color: {PRIMARY} !important;
+    color: {PRIMARY} 
+/* FORCE: apply to any element with class app-title (Streamlit sometimes wraps/changes heading tags) */
+.app-title {
+    font-family: 'Inter', 'Black Ops One', sans-serif !important;
+    font-size: 3.8rem !important;
+    letter-spacing: 0.06em !important;
+    -webkit-text-stroke: 0px transparent !important;
+    text-shadow: 1px 1px 2px rgba(0,0,0,0.35) !important;
+    margin-top: -16px !important;
+    margin-bottom: 4px !important;
+}
+!important;
     text-align: center !important;
     letter-spacing: 0.20em !important;
     text-transform: uppercase !important;
@@ -1369,7 +1380,25 @@ h1.app-title {{
 # -----------------------------
 # HEADER
 # -----------------------------
-st.markdown(f"<h1 class='app-title'>{SETTINGS.get('app_title','RP Spray Analytics')}</h1>", unsafe_allow_html=True)
+st.markdown(
+    f"""
+    <h1 class='app-title' style="
+        font-family: 'Inter','Black Ops One',sans-serif;
+        font-size: 3.8rem;
+        color: {PRIMARY};
+        text-align: center;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        text-shadow: 1px 1px 2px rgba(0,0,0,0.35);
+        margin-top: -16px;
+        margin-bottom: 4px;
+    ">
+        {SETTINGS.get('app_title','RP Spray Analytics')}
+    </h1>
+    """,
+    unsafe_allow_html=True,
+)
+
 st.markdown(f"<div class='app-subtitle'>{SETTINGS.get('subtitle','')}</div>", unsafe_allow_html=True)
 st.markdown("---")
 
