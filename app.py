@@ -2574,18 +2574,27 @@ else:
             _header_font = Font(name=FONT_NAME, size=12, bold=True)
             _small_font = Font(name=FONT_NAME, size=11)
 
-            # Player Notes box (prints on sheet) — left side under GB/FB by position
-            note_text = str(_player_notes_dict.get(p, "") or "").strip()
-            ws.merge_cells("A3:B10")
-            ncell = ws["A3"]
-            ncell.value = note_text
-            ncell.font = _small_font
-            ncell.alignment = Alignment(horizontal="left", vertical="top", wrap_text=True)
-            ncell.fill = _notes_fill
-            for rr in range(3, 11):
-                for cc in range(1, 3):
-                    ws.cell(row=rr, column=cc).border = _border
+                        # Coaches Notes (per player) — printable, saved into Excel
+            # Header row
+            ws.merge_cells("A3:B3")
+            ws["A3"].value = "Coaches Notes"
+            for c in range(1, 3):
+                cell = ws.cell(row=3, column=c)
+                cell.font = _header_font
+                cell.fill = _header_fill
+                cell.alignment = Alignment(horizontal="center", vertical="center")
+                cell.border = _border
 
+            # Body (editable note text)
+            ws.merge_cells("A4:B10")
+            ws["A4"].value = player_note_text or ""
+            for r in range(4, 11):
+                for c in range(1, 3):
+                    cell = ws.cell(row=r, column=c)
+                    cell.font = _small_font
+                    cell.fill = PatternFill("solid", fgColor="FFFFFF")
+                    cell.alignment = Alignment(horizontal="left", vertical="top", wrap_text=True)
+                    cell.border = _border
             ws["A2"].value = "GB / FB by position"
             ws["A2"].font = _header_font
             ws["A2"].alignment = Alignment(horizontal="left", vertical="center")
@@ -2602,35 +2611,53 @@ else:
             if n_rows > 10:
                 split = (n_rows + 1) // 2
 
-                # Right header (D/E)
-                ws.cell(row=stats_start, column=4).value = "Type"
-                ws.cell(row=stats_start, column=5).value = "Count"
-                for c in (4, 5):
-                    h = ws.cell(row=stats_start, column=c)
-                    h.font = _header_font
-                    h.fill = _header_fill
-                    h.border = _border
-                    h.alignment = Alignment(horizontal="center", vertical="center")
+                            # Right table (D-H) — two-column layout on one printable page
+            split = (n_rows + 1) // 2  # roughly half rows on left, half on right
 
-                # Move bottom half to D/E and clear originals
-                for i in range(split + 1, n_rows + 1):
-                    src_r = stats_start + i
-                    dst_r = stats_start + (i - split)
+            # Headers (row stats_start): merge D-F for Type, G-H for Count
+            ws.merge_cells(start_row=stats_start, start_column=4, end_row=stats_start, end_column=6)  # D-F
+            ws.merge_cells(start_row=stats_start, start_column=7, end_row=stats_start, end_column=8)  # G-H
+            ws.cell(row=stats_start, column=4, value="Type")
+            ws.cell(row=stats_start, column=7, value="Count")
 
-                    ws.cell(row=dst_r, column=4).value = ws.cell(row=src_r, column=1).value
-                    ws.cell(row=dst_r, column=5).value = ws.cell(row=src_r, column=2).value
+            for c in range(4, 7):
+                cell = ws.cell(row=stats_start, column=c)
+                cell.font = _header_font
+                cell.fill = _header_fill
+                cell.alignment = Alignment(horizontal="center", vertical="center")
+                cell.border = _border
+            for c in range(7, 9):
+                cell = ws.cell(row=stats_start, column=c)
+                cell.font = _header_font
+                cell.fill = _header_fill
+                cell.alignment = Alignment(horizontal="center", vertical="center")
+                cell.border = _border
 
-                    ws.cell(row=src_r, column=1).value = ""
-                    ws.cell(row=src_r, column=2).value = ""
+            # Move bottom half (from left A/B) into right table (D/G)
+            for i in range(split + 1, n_rows + 1):
+                src_r = stats_start + i
+                dst_r = stats_start + (i - split)
 
-                # Format right table cells
-                max_r = stats_start + split
-                for r in range(stats_start + 1, max_r + 1):
-                    for c in (4, 5):
-                        cell = ws.cell(row=r, column=c)
-                        cell.font = _small_font
-                        cell.border = _border
-                        cell.alignment = Alignment(horizontal="left" if c == 4 else "center", vertical="center")
+                tval = ws.cell(row=src_r, column=1).value
+                cval = ws.cell(row=src_r, column=2).value
+
+                ws.cell(row=dst_r, column=4, value=tval)
+                ws.cell(row=dst_r, column=7, value=cval)
+
+                # clear originals on left
+                ws.cell(row=src_r, column=1).value = None
+                ws.cell(row=src_r, column=2).value = None
+
+            # Format right table rows: merge D-F (Type) and G-H (Count)
+            for r in range(stats_start + 1, stats_start + split + 1):
+                ws.merge_cells(start_row=r, start_column=4, end_row=r, end_column=6)  # D-F
+                ws.merge_cells(start_row=r, start_column=7, end_row=r, end_column=8)  # G-H
+                for c in range(4, 9):  # D-H
+                    cell = ws.cell(row=r, column=c)
+                    cell.font = _small_font
+                    cell.alignment = Alignment(horizontal="left" if c <= 6 else "center", vertical="center")
+                    cell.border = _border
+                    cell.fill = PatternFill("solid", fgColor="FFFFFF")
             ws.freeze_panes = "A14"
             _totals = st_p  # per-player season totals dict (includes GB-*/FB-* buckets)
 
