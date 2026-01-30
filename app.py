@@ -2927,8 +2927,18 @@ else:
                 _tmp_png = _get_overall_spray_template_png_path()
                 if _tmp_png:
                     _img = XLImage(_tmp_png)
+
+                    # --- Scale image to fit on ONE printed page ---
+                    # openpyxl image dimensions are in pixels. If you change layout/print settings later,
+                    # you can tweak TARGET_W below.
+                    _orig_w = getattr(_img, "width", None) or 1
+                    _orig_h = getattr(_img, "height", None) or 1
+                    TARGET_W = 720  # fits typical Letter portrait at 100% scale
+                    _scale = TARGET_W / float(_orig_w)
+                    _img.width = int(_orig_w * _scale)
+                    _img.height = int(_orig_h * _scale)
+
                     # Anchor beneath the small SB/CS table (table starts at row 13)
-                    # Adjust as needed if you ever change the startrow above.
                     ws.add_image(_img, "A16")
             except Exception:
                 pass
