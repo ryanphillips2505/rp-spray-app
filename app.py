@@ -2326,7 +2326,7 @@ try:
         [
             {"selector": "th", "props": [("font-weight", "700"), ("font-size", "14px"), ("height", "45px")]},
             {"selector": "td", "props": [("height", "45px"), ("font-size", "14px")]},
-        ] + _build_group_divider_styles(cols),
+        ],
         overwrite=False,
     )
 
