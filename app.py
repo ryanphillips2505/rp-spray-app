@@ -5,6 +5,15 @@
 
 import streamlit as st
 st.cache_data.clear()
+
+# -------------------------------------------------
+# Per-run nonce (prevents accidental duplicate UI renders in loops)
+# -------------------------------------------------
+if "_rp_run_nonce" not in st.session_state:
+    st.session_state["_rp_run_nonce"] = 0
+st.session_state["_rp_run_nonce"] += 1
+_RP_RUN_NONCE = st.session_state["_rp_run_nonce"]
+
 import os
 import json
 import base64
@@ -3002,23 +3011,29 @@ for i in range(1, 13):
     df_long = pd.DataFrame(long_rows)
     csv_long_bytes = df_long.to_csv(index=False).encode("utf-8")
 
-    with dl_a:
-        st.download_button(
-            label="📥 Download Individual Spray (Excel - sheets per player)",
-            key=f"dl_indiv_excel_{uuid.uuid4().hex}",
-            data=excel_bytes,
-            file_name=f"{TEAM_CODE}_{safe_team_ind}_Individual_Spray.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        )
+    # Render the download buttons exactly once per app run (prevents accidental duplicates if this block
+    # gets executed inside a loop or repeated container).
+    if st.session_state.get("_indiv_dl_guard_nonce") != _RP_RUN_NONCE:
+        st.session_state["_indiv_dl_guard_nonce"] = _RP_RUN_NONCE
 
-    with dl_b:
-        st.download_button(
-            label="📄 Download Individual Spray (CSV)",
-            key=f"dl_indiv_csv_{uuid.uuid4().hex}",
-            data=csv_long_bytes,
-            file_name=f"{TEAM_CODE}_{safe_team_ind}_Individual_Spray.csv",
-            mime="text/csv",
-        )
+        with dl_a:
+            st.download_button(
+                label="📥 Download Individual Spray (Excel - sheets per player)",
+                key=f"dl_indiv_excel_{TEAM_CODE_SAFE}_{team_key}_{_RP_RUN_NONCE}",
+                data=excel_bytes,
+                file_name=f"{TEAM_CODE}_{safe_team_ind}_Individual_Spray.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            )
+
+        with dl_b:
+            st.download_button(
+                label="📄 Download Individual Spray (CSV)",
+                key=f"dl_indiv_csv_{TEAM_CODE_SAFE}_{team_key}_{_RP_RUN_NONCE}",
+                data=csv_long_bytes,
+                file_name=f"{TEAM_CODE}_{safe_team_ind}_Individual_Spray.csv",
+                mime="text/csv",
+            )
+
 # -----------------------------
 # FOOTER (Copyright)
 # -----------------------------
