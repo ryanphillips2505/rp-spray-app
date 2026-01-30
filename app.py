@@ -2609,7 +2609,7 @@ else:
                 cell.fill = fill
                 cell.border = box_border
                 cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
-                cell.font = Font(name=FONT_NAME, size=12, bold=bold, color="111827")
+                cell.font = Font(name="Calibri", size=12, bold=bold, color="111827")
                 return cell
 
             def pos_box(pos, r, c):
@@ -2626,7 +2626,7 @@ else:
                 h.fill = header_fill
                 h.border = box_border
                 h.alignment = Alignment(horizontal="center", vertical="center")
-                h.font = Font(name=FONT_NAME, size=12, bold=True, color="111827")
+                h.font = Font(name="Calibri", size=12, bold=True, color="111827")
                 ws.cell(row=r, column=c+1).border = box_border
                 ws.cell(row=r, column=c+1).fill = header_fill
 
