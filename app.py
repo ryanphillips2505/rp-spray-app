@@ -2603,7 +2603,23 @@ else:
             _vmax_gb = max(1, max(_gb_map.values()) if _gb_map else 1)
             _vmax_fb = max(1, max(_fb_map.values()) if _fb_map else 1)
 
-            def _cell(r, c, value, fill, bold=False):
+            
+            # -----------------------------
+            # BACKGROUND "FIELD" LOOK (grass + infield dirt)
+            # -----------------------------
+            grass_bg = PatternFill("solid", fgColor="E7F3E7")   # subtle grass green
+            dirt_bg  = PatternFill("solid", fgColor="F6E6D2")   # subtle infield dirt
+
+            # Grass behind the whole defensive alignment area (B2:G9)
+            for rr in range(2, 10):
+                for cc in range(2, 8):  # B..G
+                    ws.cell(row=rr, column=cc).fill = grass_bg
+
+            # Dirt behind the infield (C5:F8)
+            for rr in range(5, 9):
+                for cc in range(3, 7):  # C..F
+                    ws.cell(row=rr, column=cc).fill = dirt_bg
+def _cell(r, c, value, fill, bold=False):
                 cell = ws.cell(row=r, column=c)
                 cell.value = value
                 cell.fill = fill
