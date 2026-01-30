@@ -2566,6 +2566,7 @@ else:
             df_p.to_excel(writer, index=False, sheet_name=sn, startrow=12)
             ws = writer.book[sn]
             # Local styles for notes + stat split (avoid NameError due to ordering)
+            FONT_NAME = "Arial"  # Excel-safe font
             _thin = Side(style="thin", color="9E9E9E")
             _border = Border(left=_thin, right=_thin, top=_thin, bottom=_thin)
             _notes_fill = PatternFill("solid", fgColor="D9EAD3")  # light green
@@ -2644,7 +2645,6 @@ else:
             FIELD_BOTTOM_ROW = 11
 
             # Colors / styles
-            FONT_NAME = "Arial"
             title_font = Font(name=FONT_NAME, size=16, bold=True)
             hdr_font = Font(name=FONT_NAME, size=11, bold=True)
             cell_font = Font(name=FONT_NAME, size=11, bold=False)
@@ -2842,7 +2842,6 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
-
 
 
 
