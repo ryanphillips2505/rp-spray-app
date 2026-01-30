@@ -2645,204 +2645,26 @@ else:
                     # keep background clean (no borders on grass)
                     cell.border = Border()
 
-            # Column widths tuned so the field fits clean on portrait print
-            for c in range(1, 20):
-                col_letter = get_column_letter(c)
-                if 3 <= c <= 12:
-                    ws.column_dimensions[col_letter].width = 6.0
-                elif c == 1:
-                    ws.column_dimensions[col_letter].width = 18.0
-                else:
-                    ws.column_dimensions[col_letter].width = 10.0
-
-            # Row heights for symmetry
-            for r in range(1, 45):
-                if 2 <= r <= 11:
-                    ws.row_dimensions[r].height = 20
-                else:
-                    ws.row_dimensions[r].height = 18
-
-            # Helper: heat fill using the same palette logic as team sheet (white->orange->red)
-            def _heat_fill(value: int, vmax: int):
-                # clamp
-                try:
-                    v = int(value)
-                except Exception:
-                    v = 0
-                if vmax <= 0:
-                    return white_fill
-                ratio = max(0.0, min(1.0, v / float(vmax)))
-                # simple 3-stop gradient: white -> FCE5CD -> F4CCCC
-                # use two segments
-                if ratio <= 0.5:
-                    # white to light orange
-                    t = ratio / 0.5
-                    c0 = (255, 255, 255)
-                    c1 = (252, 229, 205)
-                else:
-                    # light orange to light red
-                    t = (ratio - 0.5) / 0.5
-                    c0 = (252, 229, 205)
-                    c1 = (244, 204, 204)
-                rgb = tuple(int(c0[i] + (c1[i] - c0[i]) * t) for i in range(3))
-                hex_rgb = "%02X%02X%02X" % rgb
-                return PatternFill("solid", fgColor=hex_rgb)
-
-            # Build per-position totals (GB and FB separately)
-            positions = ["LF", "CF", "RF", "3B", "SS", "2B", "1B", "P"]
-            # Use per-player season stats dict for combo buckets (GB-LF, FB-LF, etc.)
-            gb_totals = {pos: int(st_p.get(f"GB-{pos}", 0) or 0) for pos in positions}
-            fb_totals = {pos: int(st_p.get(f"FB-{pos}", 0) or 0) for pos in positions}
-
-            gb_vmax = max([gb_totals[p] for p in positions] + [0])
-            fb_vmax = max([fb_totals[p] for p in positions] + [0])
-
-            def pos_box(pos: str, top_row: int, left_col: int):
-                """Draw a symmetric 2-col position block:
-                Header merged across 2 cols, then GB (left) + FB (right).
-                """
-                # Header (merged)
-                ws.merge_cells(start_row=top_row, start_column=left_col, end_row=top_row, end_column=left_col + 1)
-                h = ws.cell(row=top_row, column=left_col, value=pos)
-                h.font = hdr_font
-                h.fill = gray_fill
-                h.alignment = Alignment(horizontal="center", vertical="center")
-                # Data row cells
-                gb_cell = ws.cell(row=top_row + 1, column=left_col, value=f"GB {gb_totals.get(pos, 0)}")
-                fb_cell = ws.cell(row=top_row + 1, column=left_col + 1, value=f"FB {fb_totals.get(pos, 0)}")
-                gb_cell.font = cell_font
-                fb_cell.font = cell_font
-                gb_cell.alignment = Alignment(horizontal="center", vertical="center")
-                fb_cell.alignment = Alignment(horizontal="center", vertical="center")
-                gb_cell.fill = _heat_fill(gb_totals.get(pos, 0), gb_vmax)
-                fb_cell.fill = _heat_fill(fb_totals.get(pos, 0), fb_vmax)
-
-                # Borders (header + both cells)
-                for rr in (top_row, top_row + 1):
-                    for cc in (left_col, left_col + 1):
-                        ws.cell(row=rr, column=cc).border = box_border
-
-            # Layout map inside C2:L11 (matches a baseball field feel & stays symmetric)
-            # (row, col) refers to the HEADER cell's top-left (two-column block)
-            layout = {
-                "CF": (2, 7),  # G-H
-                "LF": (3, 5),  # E-F
-                "RF": (3, 9),  # I-J
-                "SS": (6, 5),  # E-F
-                "2B": (6, 9),  # I-J
-                "3B": (8, 3),  # C-D
-                "P":  (8, 7),  # G-H
-                "1B": (8, 11), # K-L
-            }
-
-            for pos, (r0, c0) in layout.items():
-                pos_box(pos, r0, c0)
-
-
-            # Keep grid tidy
-            for rr in range(2, 9):
-                ws.row_dimensions[rr].height = 22
-
-            
-# -----------------------------
-            # -----------------------------
-            # Running Game Totals (SB/CS) — ONLY (A:B) and clear any extra stat tables
-            # -----------------------------
-            # Clear rows 12-16 across A:I to remove any leftover "Selected Stat Totals" / split tables
-            for _r in range(12, 17):
-                for _c in range(1, 10):  # A..I
-                    _cell = ws.cell(row=_r, column=_c)
-                    _cell.value = None
-                    _cell.border = Border()
-                    _cell.fill = PatternFill()
-                    _cell.alignment = Alignment(horizontal="general", vertical="center")
-                    _cell.font = Font(name=FONT_NAME, size=11)
-
-            ws["A12"] = "Running Game Totals (SB/CS)"
-            ws["A12"].font = Font(name=FONT_NAME, size=10, color="444444")
-            ws["A12"].alignment = Alignment(horizontal="left", vertical="center")
-
-            _header_font2 = Font(name=FONT_NAME, bold=True)
-            _header_align2 = Alignment(horizontal="center", vertical="center")
-            _header_fill2 = PatternFill("solid", fgColor="EDEDED")
-            _thin2 = Side(style="thin", color="9E9E9E")
-            _box_border2 = Border(left=_thin2, right=_thin2, top=_thin2, bottom=_thin2)
-
-            ws["A13"] = "Type"
-            ws["B13"] = "Count"
-            for _addr in ["A13", "B13"]:
-                ws[_addr].font = _header_font2
-                ws[_addr].alignment = _header_align2
-                ws[_addr].fill = _header_fill2
-                ws[_addr].border = _box_border2
-
-            sb_val = int(season_players.get(p, {}).get("SB", 0) or 0)
-            cs_val = int(season_players.get(p, {}).get("CS", 0) or 0)
-
-            ws["A14"] = "SB"
-            ws["B14"] = sb_val
-            ws["A15"] = "CS"
-            ws["B15"] = cs_val
-            for _addr in ["A14","B14","A15","B15"]:
-                ws[_addr].font = Font(name=FONT_NAME, size=11)
-                ws[_addr].alignment = Alignment(horizontal="center", vertical="center")
-                ws[_addr].border = _box_border2
-
-            ws.column_dimensions["A"].width = 18
-            ws.column_dimensions["B"].width = 10
-
-            # -----------------------------
-            # Small overall spray template image (scaled) under the summary (LEFT)
-            # -----------------------------
-            try:
-                template_candidates = [
-                    os.path.join("assets", "overall_spray_template.png"),
-                    "overall_spray_template.png",
-                ]
-                template_path = None
-                for _cand in template_candidates:
-                    if os.path.exists(_cand):
-                        template_path = _cand
-                        break
-                if template_path:
-                    img = XLImage(template_path)
-                    target_w = 330  # pixels (small block like your highlighted area)
-                    if img.width:
-                        scale = target_w / float(img.width)
-                        img.width = int(img.width * scale)
-                        img.height = int(img.height * scale)
-                    ws.add_image(img, "A17")
-            except Exception:
-                pass
-
-            # -----------------------------
-            # Coach worksheet block (RIGHT) — matches your highlighted area
-            # -----------------------------
-            start_row = 17
-            # Start the AB chart under the top summary, far enough left to fit PORTRAIT on one page
-            start_col = 5  # Column E
-            col_atbat = start_col                 # E (AT BAT #)
-            col_result_start = start_col + 1       # F
-            col_result_end   = start_col + 3       # H (3 cols wide)
-            col_grid_start   = start_col + 4       # I
-            col_grid_end     = start_col + 11      # P (8 cols)
-            col_count        = start_col + 12      # Q
-            col_notes_start  = start_col + 13      # R
-            col_notes_end    = start_col + 15      # T (3 cols)
-
-            # Column widths tuned for PORTRAIT 1-page print (MLB-style spacing)
-            ws.column_dimensions[get_column_letter(col_atbat)].width = 7.5
+            # Column widths tuned for PORTRAIT 1-page print (clean + "MLB" look)
+            ws.column_dimensions[get_column_letter(col_atbat)].width = 6.0
             for _c in range(col_result_start, col_result_end+1):
-                ws.column_dimensions[get_column_letter(_c)].width = 6.5
+                ws.column_dimensions[get_column_letter(_c)].width = 11.0
             for _c in range(col_grid_start, col_grid_end+1):
-                ws.column_dimensions[get_column_letter(_c)].width = 1.9
-            ws.column_dimensions[get_column_letter(col_count)].width = 6.5
+                ws.column_dimensions[get_column_letter(_c)].width = 2.0
+            ws.column_dimensions[get_column_letter(col_count)].width = 7.0
             for _c in range(col_notes_start, col_notes_end+1):
-                ws.column_dimensions[get_column_letter(_c)].width = 6.5
+                ws.column_dimensions[get_column_letter(_c)].width = 13.0
 
 
             thick = Side(style="medium", color="000000")
             thin_black = Side(style="thin", color="000000")
+
+            # Clear any leftover content in the AB-table area (prevents old stat lists from showing)
+            for rr in range(start_row, start_row + 40):
+                for cc in range(col_atbat, col_notes_end + 1):
+                    ws.cell(rr, cc, "")
+                    ws.cell(rr, cc).border = Border()
+                    ws.cell(rr, cc).fill = PatternFill(fill_type=None)
 
             def _set_border_range(r1, c1, r2, c2):
                 for rr in range(r1, r2+1):
@@ -2924,7 +2746,9 @@ else:
             ws.page_margins.bottom = 0.30
             ws.page_margins.header = 0.10
             ws.page_margins.footer = 0.10
-            ws.print_area = f"A1:{get_column_letter(col_notes_end)}{(hdr_r + (12*3) + 2)}"  # include AB table
+            ws.page_setup.paperSize = ws.PAPERSIZE_LETTER
+            end_row = hdr_r + (12 * block_h)
+            ws.print_area = f"A1:{get_column_letter(col_notes_end)}{end_row}"
 
 
         # Ensure at least one visible worksheet (prevents openpyxl IndexError)
