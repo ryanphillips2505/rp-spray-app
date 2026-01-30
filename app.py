@@ -2544,7 +2544,7 @@ else:
             small_font = Font(bold=True, size=11)
 
             # Title
-            ws.merge_cells("A1:G1")
+            ws.merge_cells("A1:I1")
             ws["A1"] = f"Individual Spray Summary — {p}"
             ws["A1"].font = title_font
             ws["A1"].alignment = Alignment(horizontal="center", vertical="center")
@@ -2555,10 +2555,10 @@ else:
 
             # ---- Field layout (portrait, MLB-clean) ----
             # Column widths tuned to fit 1-page portrait
-            for col_letter in list("ABCDEFG"):
+            for col_letter in list("ABCDEFGHI"):
                 ws.column_dimensions[col_letter].width = 11
             ws.column_dimensions["A"].width = 18  # label column
-            ws.column_dimensions["B"].width = 10  # left margin for field
+            ws.column_dimensions["B"].width = 6   # small left gutter
 
             def _hex_to_rgb(h):
                 h = h.strip("#")
@@ -2603,22 +2603,22 @@ else:
             _vmax_gb = max(1, max(_gb_map.values()) if _gb_map else 1)
             _vmax_fb = max(1, max(_fb_map.values()) if _fb_map else 1)
 
-            
             # -----------------------------
             # BACKGROUND "FIELD" LOOK (grass + infield dirt)
             # -----------------------------
             grass_bg = PatternFill("solid", fgColor="E7F3E7")   # subtle grass green
             dirt_bg  = PatternFill("solid", fgColor="F6E6D2")   # subtle infield dirt
 
-            # Grass behind the whole defensive alignment area (B2:G9)
+            # Grass behind the defensive alignment area (C2:I9)
             for rr in range(2, 10):
-                for cc in range(2, 8):  # B..G
+                for cc in range(3, 10):  # C..I
                     ws.cell(row=rr, column=cc).fill = grass_bg
 
-            # Dirt behind the infield (C5:F8)
+            # Dirt behind the infield (E5:H8)
             for rr in range(5, 9):
-                for cc in range(3, 7):  # C..F
+                for cc in range(5, 9):  # E..H
                     ws.cell(row=rr, column=cc).fill = dirt_bg
+
             def _cell(r, c, value, fill, bold=False):
                 cell = ws.cell(row=r, column=c)
                 cell.value = value
@@ -2635,7 +2635,6 @@ else:
                   row r+1: GB (left) + FB (right) with separate heat fills
                 c is the left column index (box spans c..c+1)
                 """
-                # Header
                 ws.merge_cells(start_row=r, start_column=c, end_row=r, end_column=c+1)
                 h = ws.cell(row=r, column=c)
                 h.value = pos
@@ -2648,29 +2647,27 @@ else:
 
                 gb = _gb_map.get(pos, 0)
                 fb = _fb_map.get(pos, 0)
-
                 _cell(r+1, c,   f"GB {gb}", _heat_fill(gb, _vmax_gb))
                 _cell(r+1, c+1, f"FB {fb}", _heat_fill(fb, _vmax_fb))
 
-            # ---- Symmetric placement (B..G) ----
+            # ---- Symmetric placement (C..I) ----
             # Outfield
-            pos_box("CF", 2, 4)  # D-E
-            pos_box("LF", 3, 2)  # B-C
-            pos_box("RF", 3, 6)  # F-G
+            pos_box("CF", 2, 5)  # E-F
+            pos_box("LF", 3, 3)  # C-D
+            pos_box("RF", 3, 7)  # G-H
 
             # Infield
-            pos_box("3B", 5, 2)  # B-C
-            pos_box("SS", 5, 4)  # D-E
-            pos_box("2B", 5, 6)  # F-G
+            pos_box("3B", 5, 3)  # C-D
+            pos_box("SS", 5, 5)  # E-F
+            pos_box("2B", 5, 7)  # G-H
 
             # Bottom row
-            pos_box("P",  7, 4)  # D-E
-            pos_box("1B", 7, 6)  # F-G
+            pos_box("P",  7, 5)  # E-F
+            pos_box("1B", 7, 8)  # H-I
 
             # Keep grid tidy
             for rr in range(2, 9):
                 ws.row_dimensions[rr].height = 22
-
             ws["A12"] = "Selected Stat Totals"
             ws["A12"].font = small_font
             ws["A12"].alignment = Alignment(horizontal="left", vertical="center")
@@ -2743,7 +2740,6 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
-
 
 
 
