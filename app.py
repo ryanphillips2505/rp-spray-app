@@ -2595,7 +2595,7 @@ else:
             gb, fb = gbfb("2B")
             box(5, 5, 6, 6, dirt_fill, f"2B\nGB {gb}  |  FB {fb}")
             gb, fb = gbfb("1B")
-            box(6, 6, 7, 7, dirt_fill, f"1B\nGB {gb}  |  FB {fb}")
+            box(6, 7, 7, 7, dirt_fill, f"1B\nGB {gb}  |  FB {fb}")
 
             gb, fb = gbfb("P")
             box(7, 4, 8, 5, dirt_fill, f"P\nGB {gb}  |  FB {fb}")
