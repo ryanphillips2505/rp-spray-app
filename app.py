@@ -1974,7 +1974,7 @@ if process_clicked:
 # -----------------------------
 # SEASON OUTPUTS
 # -----------------------------
-st.subheader(f"📔 TEAM - SEASON TO DATE ({selected_team})")
+st.subheader(f"📔 Per-Player Spray – SEASON TO DATE ({selected_team})")
 
 row_left, row_right = st.columns([8, 2])
 with row_left:
@@ -2246,9 +2246,45 @@ visible_cols = _grouped_export_cols(visible_cols)
 # Re-order for export readability (GB grouped, FB grouped, baserunning grouped)
 visible_cols = _grouped_export_cols(visible_cols)
 
+
 if len(visible_cols) == 0:
     visible_cols = list(df_season.columns)
-st.dataframe(df_show, use_container_width=True)
+
+# -----------------------------
+# TABLE VIEW (match export look) + heatmap
+# -----------------------------
+# Make the on-screen table resemble the printout:
+# - Columns grouped (SPRAY / GB / FB / RUN) using a MultiIndex header
+# - Heatmap across numeric cells
+df_view = df_season[visible_cols] if visible_cols else df_season
+
+def _col_group(c: str) -> str:
+    if c == "Player":
+        return "PLAYER"
+    if c in RUN_KEYS:
+        return "RUN"
+    if c == "GB" or str(c).startswith("GB-"):
+        return "GB"
+    if c == "FB" or str(c).startswith("FB-"):
+        return "FB"
+    return "SPRAY"
+
+try:
+    df_view_mi = df_view.copy()
+    df_view_mi.columns = pd.MultiIndex.from_tuples([(_col_group(c), c) for c in df_view.columns])
+
+    # Apply a simple heatmap on all numeric cells (everything except Player)
+    numeric_subset = [col for col in df_view.columns if col != "Player"]
+    styled = (
+        df_view_mi.style
+        .format({c: "{:.0f}" for c in numeric_subset})
+        .background_gradient(axis=None, subset=pd.IndexSlice[:, numeric_subset], cmap="YlOrRd")
+    )
+
+    st.dataframe(styled, use_container_width=True, hide_index=True)
+except Exception:
+    # Fallback if MultiIndex/Styler isn't supported on this Streamlit build
+    st.dataframe(df_view, use_container_width=True, hide_index=True)
 
 # -----------------------------
 # 📝 COACHES SCOUTING NOTES (per selected opponent/team)
@@ -2584,7 +2620,6 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
-
 
 
 
