@@ -2604,7 +2604,7 @@ else:
                 for c in range(1, 3):
                     cell = ws.cell(row=r, column=c)
                     cell.font = _small_font
-                    cell.fill = _notes_fill
+                    cell.fill = PatternFill("solid", fgColor="FFFFFF")
                     cell.alignment = Alignment(horizontal="left", vertical="top", wrap_text=True)
                     cell.border = _border
             ws["A2"].value = "GB / FB by position"
@@ -2821,7 +2821,7 @@ else:
             # Coach worksheet block (RIGHT) — matches your highlighted area
             # -----------------------------
             start_row = 17
-            start_col = 13  # Column M
+            start_col = 9  # Column I (moved left for 1-page print)
             col_atbat = start_col           # M
             col_result_start = start_col+1  # N
             col_result_end   = start_col+4  # Q
@@ -2875,7 +2875,7 @@ else:
             _set_border_range(hdr_r, col_atbat, hdr_r, col_notes_end)
             ws.row_dimensions[hdr_r].height = 22
 
-            block_h = 3
+            block_h = 2  # pitch progression grid only 2 rows tall
             first_data_row = hdr_r + 1
             for i_ab in range(1, 13):
                 r1 = first_data_row + (i_ab-1)*block_h
@@ -2908,25 +2908,9 @@ else:
                     ws.cell(rr, col_notes_start).border = ws.cell(rr, col_notes_start).border.copy(left=thick)
                     ws.cell(rr, col_notes_end).border = ws.cell(rr, col_notes_end).border.copy(right=thick)
 
-            # EXTRA NOTES & GENERAL INFORMATION block (below #12)
-            extra_hdr_r = first_data_row + 12 * block_h + 1
-            ws.merge_cells(start_row=extra_hdr_r, start_column=col_atbat, end_row=extra_hdr_r, end_column=col_notes_end)
-            eh = ws.cell(extra_hdr_r, col_atbat, "EXTRA NOTES & GENERAL INFORMATION")
-            eh.font = Font(name=FONT_NAME, size=12, bold=True)
-            eh.alignment = Alignment(horizontal="center", vertical="center")
-            ws.row_dimensions[extra_hdr_r].height = 22
-            _set_border_range(extra_hdr_r, col_atbat, extra_hdr_r, col_notes_end)
+            # (Removed) Extra Notes & General Information block to keep 1-page print clean
 
-            # Big write-in area
-            extra_r1 = extra_hdr_r + 1
-            extra_r2 = extra_r1 + 10  # write-in height
-            ws.merge_cells(start_row=extra_r1, start_column=col_atbat, end_row=extra_r2, end_column=col_notes_end)
-            ws.cell(extra_r1, col_atbat).alignment = Alignment(horizontal="left", vertical="top", wrap_text=True)
-            for rr in range(extra_r1, extra_r2 + 1):
-                ws.row_dimensions[rr].height = 20
-            _set_border_range(extra_r1, col_atbat, extra_r2, col_notes_end)
-
-            # Print setup per sheet: force one-page fit (like your highlighted area)
+# Print setup per sheet: force one-page fit (like your highlighted area)
             ws.page_setup.orientation = ws.ORIENTATION_LANDSCAPE
             ws.page_setup.fitToWidth = 1
             ws.page_setup.fitToHeight = 1
