@@ -2978,28 +2978,35 @@ for i in range(1, 13):
         ws.cell(rr, col_notes_start).border = ws.cell(rr, col_notes_start).border.copy(left=thick)
         ws.cell(rr, col_notes_end).border = ws.cell(rr, col_notes_end).border.copy(right=thick)
 
+# (all your Excel formatting above this stays the same)
+
 # Print setup: force one-page fit
 ws.page_setup.orientation = ws.ORIENTATION_LANDSCAPE
 ws.page_setup.fitToWidth = 1
 ws.page_setup.fitToHeight = 1
 ws.sheet_properties.pageSetUpPr.fitToPage = True
+
+# ---- SAVE EXCEL BYTES (THIS IS WHERE INDENT MATTERS) ----
+with io.BytesIO() as excel_out:
+    wb.save(excel_out)
     excel_bytes = excel_out.getvalue()
 
-    # CSV bytes (long format)
-    long_rows = []
-    for p in selectable_players:
-        st_p = season_players.get(p, {})
-        for t in indiv_types_selected:
-            if t == "GB (total)":
-                cnt = st_p.get("GB", 0)
-            elif t == "FB (total)":
-                cnt = st_p.get("FB", 0)
-            else:
-                cnt = st_p.get(t, 0)
-            long_rows.append({"Player": p, "Type": t, "Count": cnt})
+# CSV bytes (long format)
+long_rows = []
+for p in selectable_players:
+    st_p = season_players.get(p, {})
+    for t in indiv_types_selected:
+        if t == "GB (total)":
+            cnt = st_p.get("GB", 0)
+        elif t == "FB (total)":
+            cnt = st_p.get("FB", 0)
+        else:
+            cnt = st_p.get(t, 0)
+        long_rows.append({"Player": p, "Type": t, "Count": cnt})
 
-    df_long = pd.DataFrame(long_rows)
-    csv_long_bytes = df_long.to_csv(index=False).encode("utf-8")
+df_long = pd.DataFrame(long_rows)
+csv_long_bytes = df_long.to_csv(index=False).encode("utf-8")
+
 
     with dl_a:
         st.download_button(
@@ -3039,6 +3046,7 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
+
 
 
 
