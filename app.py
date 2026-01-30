@@ -1697,92 +1697,6 @@ with col_reset:
 
         st.rerun()
 
-
-# -----------------------------
-# ✅ COACH-PROOF BACKUP / RESTORE (SUPABASE)
-# -----------------------------
-with st.expander("🛟 Backup / Restore (Coach-Proof) — Download + Upload Season Totals"):
-    raw_payload = {
-        "meta": {"games_played": games_played},
-        "team": season_team,
-        "players": season_players,
-        "archived_players": sorted(list(archived_players or set())),
-    }
-
-    backup_bytes = json.dumps(raw_payload, indent=2).encode("utf-8")
-    safe_team = re.sub(r"[^A-Za-z0-9_-]+", "_", selected_team).strip("_")
-
-    st.download_button(
-        label="⬇️ Download Season Totals JSON (backup)",
-        data=backup_bytes,
-        file_name=f"{TEAM_CODE}_{safe_team}_season_totals_backup.json",
-        mime="application/json",
-    )
-
-    st.markdown("**Restore from a backup JSON:** (This overwrites the current season totals for this selected team.)")
-
-    uploaded = st.file_uploader(
-        "Upload backup JSON",
-        type=["json"],
-        accept_multiple_files=False,
-        help="Choose a season_totals_backup.json file you downloaded earlier.",
-    )
-
-    do_restore = st.button("♻️ Restore Backup NOW")
-    if do_restore:
-        if uploaded is None:
-            st.error("Upload a backup JSON first.")
-            st.stop()
-
-        try:
-            incoming = json.load(uploaded)
-            if not isinstance(incoming, dict):
-                raise ValueError("Backup JSON is not an object.")
-
-            incoming_team = incoming.get("team", {})
-            incoming_players = incoming.get("players", {})
-            incoming_meta = incoming.get("meta", {})
-            incoming_archived = incoming.get("archived_players", [])
-
-            if not isinstance(incoming_team, dict) or not isinstance(incoming_players, dict) or not isinstance(incoming_meta, dict):
-                raise ValueError("Backup JSON is missing required sections: meta/team/players.")
-
-            incoming_team = ensure_all_keys(incoming_team)
-            fixed_players = {}
-            for p, sd in incoming_players.items():
-                fixed_players[p] = ensure_all_keys(sd) if isinstance(sd, dict) else empty_stat_dict()
-
-            for p in current_roster:
-                if p not in fixed_players:
-                    fixed_players[p] = empty_stat_dict()
-
-            restored_games_played = int(incoming_meta.get("games_played", 0) or 0)
-
-            # Archived players set
-            restored_archived = set()
-            if isinstance(incoming_archived, list):
-                restored_archived = {str(x).strip().strip('"') for x in incoming_archived if str(x).strip()}
-
-            legacy_processed = incoming_team.get("_processed_game_keys", [])
-            legacy_hashes = []
-            if isinstance(legacy_processed, list):
-                legacy_hashes = [str(x) for x in legacy_processed if x]
-                restored_games_played = len(set(legacy_hashes))
-
-            db_reset_season(TEAM_CODE_SAFE, team_key)
-            db_save_season_totals(TEAM_CODE_SAFE, team_key, incoming_team, fixed_players, restored_games_played, restored_archived)
-
-            if legacy_hashes:
-                for h in set(legacy_hashes):
-                    db_try_mark_game_processed(TEAM_CODE_SAFE, team_key, h)
-
-            st.success("✅ Restore complete (Supabase). Reloading…")
-            st.rerun()
-
-        except Exception as e:
-            st.error(f"Restore failed: {e}")
-
-
 # -----------------------------
 # PLAY-BY-PLAY INPUT
 # -----------------------------
@@ -1974,7 +1888,7 @@ if process_clicked:
 # -----------------------------
 # SEASON OUTPUTS
 # -----------------------------
-st.subheader(f"📔 Per-Player Spray – SEASON TO DATE ({selected_team})")
+st.subheader(f"📔 Full Team Spray - ({selected_team})")
 
 row_left, row_right = st.columns([8, 2])
 with row_left:
@@ -2593,6 +2507,7 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
+
 
 
 
