@@ -2670,8 +2670,10 @@ else:
             # Keep grid tidy
             for rr in range(2, 9):
                 ws.row_dimensions[rr].height = 22
+
             ws["A12"] = "Selected Stat Totals"
-            ws["A12"].font = small_font
+            # Avoid NameError from scoped font variables: set the font inline
+            ws["A12"].font = Font(name=FONT_NAME, size=10, color="444444")
             ws["A12"].alignment = Alignment(horizontal="left", vertical="center")
 
 
