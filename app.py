@@ -2335,14 +2335,14 @@ with pd.ExcelWriter(out, engine="openpyxl") as writer:
     # Convert GB/FB totals to GB% / FB% (percent of BIP) in the Excel export
     df_export = df_xl.copy() if df_xl is not None else pd.DataFrame()
 
-# Insert GP (Games Played) before GB%/FB% in the Excel export
-if not df_export.empty and "Player" in df_export.columns:
-    def _gp_for(name):
-        try:
-            return int((season_players.get(str(name), {}) or {}).get(GP_KEY, 0) or 0)
-        except Exception:
-            return 0
-    df_export.insert(1, "GP", df_export["Player"].apply(_gp_for))
+    # Insert GP (Games Played) before GB%/FB% in the Excel export
+    if not df_export.empty and "Player" in df_export.columns:
+        def _gp_for(name):
+            try:
+                return int((season_players.get(str(name), {}) or {}).get(GP_KEY, 0) or 0)
+            except Exception:
+                return 0
+        df_export.insert(1, "GP", df_export["Player"].apply(_gp_for))
 
     if not df_export.empty and ("GB" in df_export.columns) and ("FB" in df_export.columns):
         gb_vals = pd.to_numeric(df_export["GB"], errors="coerce").fillna(0)
@@ -2354,15 +2354,24 @@ if not df_export.empty and "Player" in df_export.columns:
         # Drop raw totals (show percent instead)
         df_export = df_export.drop(columns=["GB", "FB"])
 
-        # Place percent columns right after Player
+        # Place percent columns right after Player (and after GP if present)
         cols = list(df_export.columns)
         if "Player" in cols:
-            rest = [c for c in cols if c not in ["Player", "GB%", "FB%"]]
-            df_export = df_export[["Player", "GB%", "FB%"] + rest]
+            rest = [c for c in cols if c not in ["Player", "GP", "GB%", "FB%"]]
+            lead = ["Player"] + (["GP"] if "GP" in cols else []) + ["GB%", "FB%"]
+            df_export = df_export[lead + rest]
 
-    # Write data starting at row 2 (we'll insert team header at row 1)
     df_export.to_excel(writer, index=False, sheet_name=sheet_name, startrow=1)
     ws = writer.book[sheet_name]
+
+    # Safety: OpenPyXL requires at least one visible worksheet when saving
+    try:
+        for _sh in writer.book.worksheets:
+            _sh.sheet_state = "visible"
+        writer.book.active = writer.book.worksheets.index(ws)
+    except Exception:
+        pass
+
 
     # Team title row (Row 1)
     total_cols = max(1, ws.max_column)
@@ -2654,8 +2663,6 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
-
-
 
 
 
