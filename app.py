@@ -1533,7 +1533,28 @@ with st.sidebar:
 
     # Strict mode
     strict_mode = st.checkbox(
-        "STRICT MODE (only count plays with explicit fielder/location)",
+        "STRICT MODE (only count plays with explicit fielder/location
+
+
+st.markdown(
+    """
+    <style>
+    /* Remove Streamlit's default top header / spacer */
+    header[data-testid="stHeader"] {
+        display: none;
+    }
+
+    /* Reduce extra top padding */
+    .block-container {
+        padding-top: 1.5rem !important;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
+
+)",
         value=bool(SETTINGS.get("strict_mode_default", True)),
     )
 
