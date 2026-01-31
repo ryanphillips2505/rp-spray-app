@@ -363,6 +363,10 @@ RUN_KEYS = [
 
 
 
+# Games Played tracking (per player)
+GP_KEY = "GP"
+
+
 # -----------------------------
 # STAT HELPERS
 # -----------------------------
@@ -374,6 +378,7 @@ def empty_stat_dict():
         d[ck] = 0
     for rk in RUN_KEYS:
         d[rk] = 0
+    d[GP_KEY] = 0
     return d
 
 
@@ -386,6 +391,7 @@ def ensure_all_keys(d: dict):
         d.setdefault(ck, 0)
     for rk in RUN_KEYS:
         d.setdefault(rk, 0)
+    d.setdefault(GP_KEY, 0)
     return d
 
 
@@ -802,13 +808,13 @@ def save_roster_text(path: str, text: str):
 
 
 def add_game_to_season(season_team, season_players, game_team, game_players):
-    for key in LOCATION_KEYS + BALLTYPE_KEYS + COMBO_KEYS + RUN_KEYS:
+    for key in LOCATION_KEYS + BALLTYPE_KEYS + COMBO_KEYS + RUN_KEYS + [GP_KEY]:
         season_team[key] = season_team.get(key, 0) + game_team.get(key, 0)
 
     for player, gstats in game_players.items():
         season_players.setdefault(player, empty_stat_dict())
         sstats = season_players[player]
-        for key in LOCATION_KEYS + BALLTYPE_KEYS + COMBO_KEYS + RUN_KEYS:
+        for key in LOCATION_KEYS + BALLTYPE_KEYS + COMBO_KEYS + RUN_KEYS + [GP_KEY]:
             sstats[key] = sstats.get(key, 0) + gstats.get(key, 0)
 
 
@@ -1831,11 +1837,32 @@ if process_clicked:
         game_team = empty_stat_dict()
         game_players = {p: empty_stat_dict() for p in current_roster}
 
+        gp_in_game = set()
+
         for line in lines:
             clean_line = line.strip().strip('"')
             clean_line = re.sub(r"\([^)]*\)", "", clean_line)
             clean_line = re.sub(r"\s+", " ", clean_line).strip()
             line_lower = clean_line.lower()
+
+            # --- GP tracking (Games Played) ---
+            # Count any time a rostered player is shown as participating in the game:
+            # - plate appearances ("X at bat")
+            # - lineup/defensive substitutions ("Lineup changed:", "Defensive", "in for")
+            # Exclude courtesy runner appearances (CR).
+            if not ("courtesy runner" in line_lower or re.search(r"\bcr\b", line_lower)):
+                # plate appearance marker
+                if " at bat" in line_lower:
+                    bn = get_batter_name(clean_line, current_roster)
+                    if bn:
+                        gp_in_game.add(bn)
+
+                # substitution / lineup change markers
+                if ("lineup changed" in line_lower) or ("defensive" in line_lower) or (" in for " in line_lower):
+                    uline = (" " + clean_line.upper().replace(",", " ") + " ")
+                    for p in current_roster:
+                        if (" " + p.upper() + " ") in uline:
+                            gp_in_game.add(p)
 
             # running events (not BIP)
             runner, total_key, base_key = parse_running_event(clean_line, current_roster)
@@ -1849,6 +1876,7 @@ if process_clicked:
             batter = get_batter_name(clean_line, current_roster)
             if batter is None:
                 continue
+            gp_in_game.add(batter)
             if not is_ball_in_play(line_lower):
                 continue
 
@@ -1887,6 +1915,11 @@ if process_clicked:
                 game_team[combo_key] += 1
                 game_players[batter][combo_key] += 1
 
+        # Apply GP (games played) for this game
+        for _p in gp_in_game:
+            if _p in game_players:
+                game_players[_p][GP_KEY] = game_players[_p].get(GP_KEY, 0) + 1
+        
         add_game_to_season(season_team, season_players, game_team, game_players)
 
         # ✅ Save with archived_players too
@@ -2301,6 +2334,15 @@ with pd.ExcelWriter(out, engine="openpyxl") as writer:
     # Build export frame (keep all other stats numeric)
     # Convert GB/FB totals to GB% / FB% (percent of BIP) in the Excel export
     df_export = df_xl.copy() if df_xl is not None else pd.DataFrame()
+
+# Insert GP (Games Played) before GB%/FB% in the Excel export
+if not df_export.empty and "Player" in df_export.columns:
+    def _gp_for(name):
+        try:
+            return int((season_players.get(str(name), {}) or {}).get(GP_KEY, 0) or 0)
+        except Exception:
+            return 0
+    df_export.insert(1, "GP", df_export["Player"].apply(_gp_for))
 
     if not df_export.empty and ("GB" in df_export.columns) and ("FB" in df_export.columns):
         gb_vals = pd.to_numeric(df_export["GB"], errors="coerce").fillna(0)
