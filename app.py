@@ -216,6 +216,7 @@ def license_is_active(team_code: str) -> bool:
     except Exception:
         return False
         
+
 def require_team_access():
     codes = load_team_codes()
 
@@ -226,18 +227,18 @@ def require_team_access():
     if st.session_state.team_code in codes:
         return st.session_state.team_code, codes[st.session_state.team_code]
 
-    # ---------- Professional Login UI ----------
+    # ---------- Professional Login UI (centered card) ----------
     st.markdown(
         f"""
         <style>
         /* Center the login card */
-        .rp-login-wrap {{
+        #rp-login-wrap {{
             min-height: 68vh;
             display: flex;
             justify-content: center;
             align-items: center;
         }}
-        .rp-login-card {{
+        #rp-login-card {{
             width: min(560px, 92vw);
             padding: 26px 24px 22px 24px;
             border-radius: 18px;
@@ -246,7 +247,7 @@ def require_team_access():
             box-shadow: 0 14px 40px rgba(0,0,0,0.10);
             backdrop-filter: blur(6px);
         }}
-        .rp-login-title {{
+        #rp-login-title {{
             font-weight: 900;
             font-size: 1.55rem;
             letter-spacing: 0.06em;
@@ -254,8 +255,8 @@ def require_team_access():
             margin: 0 0 6px 0;
             color: rgba(17,24,39,0.92);
         }}
-        .rp-login-sub {{
-            margin: 0 0 16px 0;
+        #rp-login-sub {{
+            margin: 0 0 14px 0;
             font-weight: 700;
             font-size: 0.95rem;
             color: rgba(17,24,39,0.70);
@@ -276,34 +277,34 @@ def require_team_access():
             margin-top: 6px;
         }}
 
-        /* Make the access input look sharp */
-        [data-testid="stTextInput"] input {{
+        /* Input polish (scoped to login card) */
+        #rp-login-card [data-testid="stTextInput"] input {{
             border-radius: 12px !important;
             padding: 0.65rem 0.85rem !important;
             border: 1px solid rgba(17,24,39,0.20) !important;
-            font-weight: 700 !important;
-            letter-spacing: 0.08em !important;
+            font-weight: 800 !important;
+            letter-spacing: 0.10em !important;
             text-transform: uppercase !important;
         }}
 
-        /* Primary login button styling */
-        div[data-testid="stButton"] button.rp-login-btn {{
+        /* Button polish (scoped to login card) */
+        #rp-login-card div[data-testid="stButton"] button {{
             width: 100%;
             border-radius: 12px !important;
             padding: 0.70rem 1rem !important;
             font-weight: 900 !important;
-            letter-spacing: 0.08em !important;
+            letter-spacing: 0.10em !important;
             text-transform: uppercase !important;
             background: {PRIMARY} !important;
             border: 1px solid {PRIMARY} !important;
             color: #ffffff !important;
         }}
-        div[data-testid="stButton"] button.rp-login-btn:hover {{
+        #rp-login-card div[data-testid="stButton"] button:hover {{
             filter: brightness(0.95) !important;
         }}
 
-        /* Cleaner error spacing */
-        [data-testid="stAlert"] {{
+        /* Alerts look cleaner */
+        #rp-login-card [data-testid="stAlert"] {{
             border-radius: 12px !important;
         }}
         </style>
@@ -311,22 +312,23 @@ def require_team_access():
         unsafe_allow_html=True,
     )
 
-    # Card layout
-    st.markdown('<div class="rp-login-wrap"><div class="rp-login-card">', unsafe_allow_html=True)
+    st.markdown('<div id="rp-login-wrap"><div id="rp-login-card">', unsafe_allow_html=True)
 
-    st.markdown(f"<div class='rp-login-title'>{SETTINGS.get('app_title','RP Spray Analytics')}</div>", unsafe_allow_html=True)
     st.markdown(
-        "<div class='rp-login-sub'>Enter your team access code to continue.</div>",
+        f'<div id="rp-login-title">{SETTINGS.get("app_title","RP Spray Analytics")}</div>',
+        unsafe_allow_html=True,
+    )
+    st.markdown(
+        '<div id="rp-login-sub">Enter your team access code to continue.</div>',
         unsafe_allow_html=True,
     )
 
-    # Small “product” pills (feel free to edit/remove)
     st.markdown(
-        """
+        '''
         <span class="rp-login-pill">Secure Access</span>
         <span class="rp-login-pill">Team Licensed</span>
         <span class="rp-login-pill">Supabase Sync</span>
-        """,
+        ''',
         unsafe_allow_html=True,
     )
 
@@ -340,18 +342,7 @@ def require_team_access():
         type="password",
     )
 
-    # Login button
     login_clicked = st.button("Unlock", use_container_width=True)
-    st.markdown(
-        """
-        <script>
-          // Add a class to the first button on the page for consistent styling
-          const btns = window.parent.document.querySelectorAll('button[kind="primary"], button[kind="secondary"], button');
-          if (btns && btns.length > 0) btns[0].classList.add('rp-login-btn');
-        </script>
-        """,
-        unsafe_allow_html=True,
-    )
 
     st.markdown("<div style='height:10px'></div>", unsafe_allow_html=True)
     st.caption("Having trouble? Contact your administrator for licensing or access support.")
@@ -384,6 +375,77 @@ def require_team_access():
     st.stop()
     return None, None
 
+    if "team_code" not in st.session_state:
+        st.session_state.team_code = None
+
+    # Already logged in
+    if st.session_state.team_code in codes:
+        return st.session_state.team_code, codes[st.session_state.team_code]
+
+    # Login screen
+    st.title("Welcome to the Jungle of RP Spray Analytics")
+    st.markdown("### Enter Access Code")
+
+    code_raw = st.text_input("Access Code", value="")
+
+    if st.button("Enter into the door of Success"):
+        code = code_raw.strip().upper()
+
+        if not code:
+            st.error("Enter an access code")
+        else:
+            hashed = hash_access_code(code).strip().lower()
+            row = codes.get(code)
+            stored = str((row or {}).get("code_hash", "")).strip().lower()
+
+            if row and hashed == stored:
+                team_code = str(row.get("team_code", "")).strip().upper()
+
+                if not license_is_active(team_code):
+                    st.error("License inactive. Contact admin.")
+                    st.stop()
+
+                st.session_state.team_code = team_code
+                st.rerun()
+
+            else:
+                st.error("Invalid access code")
+
+    st.stop()
+    return None, None
+
+TEAM_CODE, _ = require_team_access()
+
+# Load full team config (logo/background/data_folder) from TEAM_CONFIG/team_settings.json
+def _load_team_cfg_from_file(team_code: str) -> dict:
+    try:
+        with open(SETTINGS_PATH, "r", encoding="utf-8") as f:
+            data = json.load(f)
+
+        teams = data.get("teams", {}) or {}
+        branding = data.get("team_branding", {}) or {}
+
+        # Find the team entry whose team_code matches TEAM_CODE
+        cfg = None
+        for _, t in teams.items():
+            if str(t.get("team_code", "")).strip().upper() == str(team_code).strip().upper():
+                cfg = t
+                break
+
+        cfg = cfg or {}
+
+        # Apply branding override (your new source of truth)
+        b = branding.get(str(team_code).strip().upper(), {}) or {}
+        if b.get("logo_path"):
+            cfg["logo_path"] = b["logo_path"]
+        if b.get("background_path"):
+            cfg["background_path"] = b["background_path"]
+
+        return cfg
+    except Exception:
+        return {}
+
+TEAM_CFG = _load_team_cfg_from_file(TEAM_CODE) or {}
 
 # -----------------------------
 # TERMS OF USE (one-time per browser)
@@ -2756,7 +2818,6 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
-
 
 
 
