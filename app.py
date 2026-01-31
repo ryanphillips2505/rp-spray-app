@@ -24,19 +24,6 @@ import time  # anti-stuck processing lock + failsafe unlock
 from datetime import datetime
 import uuid
 
-import os, hashlib, time, streamlit as st
-
-with st.sidebar.expander("🧪 DEBUG (what code is running?)", expanded=False):
-    try:
-        this_file = os.path.abspath(__file__)
-        raw = open(this_file, "rb").read()
-        st.write("File path:", this_file)
-        st.write("SHA1:", hashlib.sha1(raw).hexdigest()[:12])
-        st.write("Last modified:", time.ctime(os.path.getmtime(this_file)))
-        st.write("Working dir:", os.getcwd())
-    except Exception as e:
-        st.write("Debug failed:", e)
-
 
 def _write_table_two_blocks(ws, start_row, cols, row_values, split_at=None, gap=2):
     """Write a header + rows into two side-by-side blocks for landscape printing.
@@ -2550,8 +2537,12 @@ with pd.ExcelWriter(out, engine="openpyxl") as writer:
         )
 
         note_cell = ws.cell(row=top_row, column=left_col)
-        note_cell.value = f"COACH NOTES:\n\n{notes_box_text}"
-        note_cell.alignment = Alignment(wrap_text=True, vertical="top")
+        note_cell.value = f"COACH NOTES:
+
+{notes_box_text}"
+        note_cell.font = Font(size=12)
+                note_cell.font = Font(size=12)
+note_cell.alignment = Alignment(wrap_text=True, vertical="top")
 
         for r in range(top_row, top_row + box_height):
             ws.row_dimensions[r].height = 22
