@@ -24,6 +24,9 @@ import time  # anti-stuck processing lock + failsafe unlock
 from datetime import datetime
 import uuid
 
+import os, hashlib, time, streamlit as st
+
+
 def _write_table_two_blocks(ws, start_row, cols, row_values, split_at=None, gap=2):
     """Write a header + rows into two side-by-side blocks for landscape printing.
     - cols: list of column names
@@ -374,6 +377,7 @@ def empty_stat_dict():
         d[ck] = 0
     for rk in RUN_KEYS:
         d[rk] = 0
+    d["G"] = 0  # Games Played (non-CR participation)
     return d
 
 
@@ -386,6 +390,7 @@ def ensure_all_keys(d: dict):
         d.setdefault(ck, 0)
     for rk in RUN_KEYS:
         d.setdefault(rk, 0)
+    d.setdefault("G", 0)
     return d
 
 
@@ -1830,12 +1835,28 @@ if process_clicked:
 
         game_team = empty_stat_dict()
         game_players = {p: empty_stat_dict() for p in current_roster}
+        players_in_game = set()
 
         for line in lines:
             clean_line = line.strip().strip('"')
             clean_line = re.sub(r"\([^)]*\)", "", clean_line)
             clean_line = re.sub(r"\s+", " ", clean_line).strip()
             line_lower = clean_line.lower()
+# Track "entered the game" (Games Played) using lineup/defensive change lines.
+# Courtesy runners are NOT counted unless they also appear later as a batter/sub.
+lm = LINEUP_IN_FOR_REGEX.search(clean_line)
+if lm:
+    entering_raw = (lm.group(1) or "").strip()
+    entering = get_batter_name(entering_raw, current_roster) or entering_raw
+    if entering in current_roster:
+        players_in_game.add(entering)
+
+dm = DEF_SWITCH_REGEX.search(clean_line)
+if dm:
+    entering_raw = (dm.group(1) or "").strip()
+    entering = get_batter_name(entering_raw, current_roster) or entering_raw
+    if entering in current_roster:
+        players_in_game.add(entering)
 
             # running events (not BIP)
             runner, total_key, base_key = parse_running_event(clean_line, current_roster)
@@ -1848,7 +1869,21 @@ if process_clicked:
 
             batter = get_batter_name(clean_line, current_roster)
             if batter is None:
+                # Also track lineup/defensive subs even if no batter found
+                lm = LINEUP_IN_FOR_REGEX.search(clean_line)
+                if lm:
+                    entering = (lm.group(1) or "").strip()
+                    nm = get_batter_name(entering, current_roster)
+                    if nm:
+                        players_in_game.add(nm)
+                dm = DEF_SWITCH_REGEX.search(clean_line)
+                if dm:
+                    entering = (dm.group(1) or "").strip()
+                    nm = get_batter_name(entering, current_roster)
+                    if nm:
+                        players_in_game.add(nm)
                 continue
+            players_in_game.add(batter)
             if not is_ball_in_play(line_lower):
                 continue
 
@@ -1887,6 +1922,11 @@ if process_clicked:
                 game_team[combo_key] += 1
                 game_players[batter][combo_key] += 1
 
+# Games Played (GP): count this game for any player who appeared as a batter
+# or entered via lineup/defensive change (courtesy-runner-only players won't be counted).
+for p in players_in_game:
+    if p in season_players:
+        season_players[p]["G"] = int(season_players[p].get("G", 0) or 0) + 1
         add_game_to_season(season_team, season_players, game_team, game_players)
 
         # ✅ Save with archived_players too
@@ -1948,6 +1988,7 @@ else:
 for player in display_players:
     stats = season_players[player]
     row = {"Player": player}
+    row["G"] = stats.get("G", 0)
 
     # Totals
     row["GB"] = stats.get("GB", 0)
@@ -1964,7 +2005,7 @@ for player in display_players:
     season_rows.append(row)
 
 df_season = pd.DataFrame(season_rows)
-col_order = (["Player"] + ["GB", "FB"] + COMBO_KEYS + RUN_KEYS)
+col_order = (["Player", "G"] + ["GB", "FB"] + COMBO_KEYS + RUN_KEYS)
 # If no rows yet, preserve the expected columns so Stat Edit can still work
 if df_season.empty and len(df_season.columns) == 0:
     df_season = pd.DataFrame(columns=col_order)
@@ -2321,6 +2362,7 @@ with pd.ExcelWriter(out, engine="openpyxl") as writer:
     # Write data starting at row 2 (we'll insert team header at row 1)
     df_export.to_excel(writer, index=False, sheet_name=sheet_name, startrow=1)
     ws = writer.book[sheet_name]
+    ws.sheet_view.showGridLines = False
 
     # Team title row (Row 1)
     total_cols = max(1, ws.max_column)
@@ -2330,7 +2372,7 @@ with pd.ExcelWriter(out, engine="openpyxl") as writer:
     title_cell.alignment = Alignment(horizontal="center", vertical="center")
 
     # Freeze panes below header row 2 (data starts row 3)
-    ws.freeze_panes = "A3"
+    ws.freeze_panes = "B3"  # freeze header rows + Player column
 
     # Row heights
     ws.row_dimensions[1].height = 35
@@ -2453,21 +2495,24 @@ with pd.ExcelWriter(out, engine="openpyxl") as writer:
         _set_right_thick(fb_end)
 
     # -----------------------------
-    # STATIC HEAT MAP (fills cells so it shows in previews/prints too)
-    # Applies to all numeric stats except Player, GB%, FB%
-    # 0 = no fill
+    # DISCRETE HEAT MAP for numeric stats (excluding Player and GB%/FB% columns)
+    # 0 = white (no fill)
     # 1-5 light orange
     # 6-10 darker orange
     # 11-15 darker
     # 16-19 darker
     # >=20 red
     # -----------------------------
+    from openpyxl.formatting.rule import CellIsRule
+
+    # Define fills
     fill_1_5   = PatternFill("solid", fgColor="FFE5CC")
     fill_6_10  = PatternFill("solid", fgColor="FFCC99")
     fill_11_15 = PatternFill("solid", fgColor="FFB266")
     fill_16_19 = PatternFill("solid", fgColor="FF9933")
     fill_20p   = PatternFill("solid", fgColor="F8696B")  # red-ish
 
+    # Build a list of numeric columns to format
     exclude_idxs = set()
     if player_col_idx:
         exclude_idxs.add(player_col_idx)
@@ -2479,37 +2524,21 @@ with pd.ExcelWriter(out, engine="openpyxl") as writer:
     data_min_row = 3
     data_max_row = ws.max_row
 
-    for r in range(data_min_row, data_max_row + 1):
-        for c in range(1, ws.max_column + 1):
-            if c in exclude_idxs:
-                continue
+    # Apply rules per column (clean + predictable)
+    for c in range(1, ws.max_column + 1):
+        if c in exclude_idxs:
+            continue
+        col_letter = get_column_letter(c)
+        rng = f"{col_letter}{data_min_row}:{col_letter}{data_max_row}"
 
-            cell = ws.cell(row=r, column=c)
-            v = cell.value
+        # Highest first with stopIfTrue so bins don't overlap weirdly
+        ws.conditional_formatting.add(rng, CellIsRule(operator="greaterThanOrEqual", formula=["20"], fill=fill_20p, stopIfTrue=True))
+        ws.conditional_formatting.add(rng, CellIsRule(operator="between", formula=["16", "19"], fill=fill_16_19, stopIfTrue=True))
+        ws.conditional_formatting.add(rng, CellIsRule(operator="between", formula=["11", "15"], fill=fill_11_15, stopIfTrue=True))
+        ws.conditional_formatting.add(rng, CellIsRule(operator="between", formula=["6", "10"], fill=fill_6_10, stopIfTrue=True))
+        ws.conditional_formatting.add(rng, CellIsRule(operator="between", formula=["1", "5"], fill=fill_1_5, stopIfTrue=True))
 
-            # Coerce to number (skip text/blanks)
-            try:
-                if v is None or v == "":
-                    continue
-                if isinstance(v, bool):
-                    continue
-                v_num = float(v)
-            except Exception:
-                continue
-
-            if v_num <= 0:
-                continue
-            elif v_num >= 20:
-                cell.fill = fill_20p
-            elif 16 <= v_num <= 19:
-                cell.fill = fill_16_19
-            elif 11 <= v_num <= 15:
-                cell.fill = fill_11_15
-            elif 6 <= v_num <= 10:
-                cell.fill = fill_6_10
-            elif 1 <= v_num <= 5:
-                cell.fill = fill_1_5
-# Watermark via print header (shows on print/PDF)
+    # Watermark via print header (shows on print/PDF)
     try:
         ws.oddHeader.center.text = "RP Spray Analytics"
         ws.oddHeader.center.font = "Tahoma,Bold"
@@ -2533,9 +2562,6 @@ with pd.ExcelWriter(out, engine="openpyxl") as writer:
     ws.page_setup.paperSize = ws.PAPERSIZE_LETTER
 
     # -----------------------------
-    
-
-    # -----------------------------
     # COACH NOTES BOX (EXCEL)
     # -----------------------------
     if notes_box_text:
@@ -2552,14 +2578,17 @@ with pd.ExcelWriter(out, engine="openpyxl") as writer:
         )
 
         note_cell = ws.cell(row=top_row, column=left_col)
-        note_cell.value = f"COACH NOTES:\n\n{notes_box_text}"
+        note_cell.value = f"COACH NOTES:
+
+{notes_box_text}"
         note_cell.font = Font(size=12)
-        note_cell.alignment = Alignment(wrap_text=True, vertical="top")
+                note_cell.font = Font(size=12)
+note_cell.alignment = Alignment(wrap_text=True, vertical="top")
 
         for r in range(top_row, top_row + box_height):
             ws.row_dimensions[r].height = 22
 
-        thick = Side(style="thick", color="000000")
+        thick = Side(style="thick")
         for r in range(top_row, top_row + box_height):
             for c in range(left_col, right_col + 1):
                 cur = ws.cell(row=r, column=c).border
