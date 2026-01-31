@@ -152,37 +152,7 @@ settings = SETTINGS  # alias so the rest of the code can use `settings`
 # ✅ MUST BE FIRST STREAMLIT CALL
 # -----------------------------
 st.set_page_config(
-    page_title=SETTINGS.get("app_title", "RP Spray Charts")
-
-
-st.markdown(
-    f"""
-    <style>
-    /* Brand Streamlit top header (Power Red) */
-    header[data-testid="stHeader"] {
-        background: {SETTINGS.get("primary_color", "#b91c1c")} !important;
-        height: 64px !important;
-        box-shadow: none !important;
-        border-bottom: none !important;
-    }
-
-    /* Remove extra padding inside header */
-    header[data-testid="stHeader"] > div {
-        padding-top: 0 !important;
-        padding-bottom: 0 !important;
-    }
-
-    /* Pull main content closer to header */
-    .block-container {
-        padding-top: 2rem !important;
-    }
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
-
-
-,
+    page_title=SETTINGS.get("app_title", "RP Spray Charts"),
     page_icon="⚾",
     layout="wide",
 )
@@ -250,40 +220,104 @@ def license_is_active(team_code: str) -> bool:
 def require_team_access():
     codes = load_team_codes()
 
-    # Local theme color (access gate runs before global PRIMARY is defined)
-    primary = SETTINGS.get("primary_color", "#b91c1c")
-
     if "team_code" not in st.session_state:
         st.session_state.team_code = None
 
-    # Clear the access code box safely BEFORE the widget is created
+    # Clear the access-code input safely on the next run (before widget is created)
     if st.session_state.get("_clear_login_access_code", False):
-        st.session_state["login_access_code"] = ""
         st.session_state["_clear_login_access_code"] = False
+        # Pop is safest with Streamlit widgets
+        st.session_state.pop("login_access_code", None)
 
     # Already logged in
     if st.session_state.team_code in codes:
         return st.session_state.team_code, codes[st.session_state.team_code]
 
-    # ---------- Login UI (professional + tight) ----------
+    primary = SETTINGS.get("primary_color", "#b91c1c")
+
+    # Professional login styling + brand the top chrome red (no fighting Streamlit)
     st.markdown(
-        """
+        f"""
         <style>
-/* --- Hide Streamlit top chrome (header/toolbar/status) to remove the white oval --- */
+        /* Brand the Streamlit top chrome so the "oval" looks intentional */
+        header[data-testid="stHeader"],
+        div[data-testid="stToolbar"],
+        div[data-testid="stDecoration"],
+        div[data-testid="stStatusWidget"] {{
+            background: {primary} !important;
+        }}
+        header[data-testid="stHeader"] {{
+            box-shadow: none !important;
+            border-bottom: none !important;
+        }}
+
+        /* Tighten top spacing */
+        .block-container {{
+            padding-top: 1.25rem !important;
+            padding-bottom: 1.25rem !important;
+        }}
+
+        /* Card */
+        .rp-login-card {{
+            width: min(520px, 92vw);
+            padding: 22px 22px 18px 22px;
+            border-radius: 18px;
+            background: rgba(255,255,255,0.90);
+            border: 1px solid rgba(17,24,39,0.14);
+            box-shadow: 0 14px 40px rgba(0,0,0,0.10);
+        }}
+        .rp-login-title {{
+            font-weight: 900;
+            font-size: 1.55rem;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+            margin: 0 0 6px 0;
+            color: rgba(17,24,39,0.92);
+        }}
+        .rp-login-sub {{
+            margin: 0 0 16px 0;
+            font-weight: 700;
+            font-size: 0.95rem;
+            color: rgba(17,24,39,0.70);
+            line-height: 1.35;
+        }}
+
+        /* Input */
+        [data-testid="stTextInput"] input {{
+            border-radius: 12px !important;
+            padding: 0.65rem 0.85rem !important;
+            border: 1px solid rgba(17,24,39,0.20) !important;
+            font-weight: 800 !important;
+            letter-spacing: 0.10em !important;
+            text-transform: uppercase !important;
+        }}
+
+        /* Button */
+        div[data-testid="stButton"] button {{
+            border-radius: 12px !important;
+            padding: 0.70rem 1rem !important;
+            font-weight: 900 !important;
+            letter-spacing: 0.10em !important;
+            text-transform: uppercase !important;
+            background: {primary} !important;
+            border: 1px solid {primary} !important;
+            color: #ffffff !important;
+        }}
+        </style>
         """,
         unsafe_allow_html=True,
     )
 
-    # Center card with columns (no weird flex spacing)
-    left, mid, right = st.columns([1, 2, 1])
+    # Center the card using columns (reliable across Streamlit versions)
+    left, mid, right = st.columns([1.2, 1.0, 1.2])
     with mid:
-        st.markdown("<div class='rp-login-card'>", unsafe_allow_html=True)
+        st.markdown('<div class="rp-login-card">', unsafe_allow_html=True)
         st.markdown(f"<div class='rp-login-title'>{SETTINGS.get('app_title','RP Spray Analytics')}</div>", unsafe_allow_html=True)
         st.markdown("<div class='rp-login-sub'>Enter your team access code to continue.</div>", unsafe_allow_html=True)
 
         code_raw = st.text_input(
             "Access Code",
-            value="",
+            value=st.session_state.get("login_access_code", ""),
             placeholder="ACCESS CODE",
             label_visibility="collapsed",
             type="password",
@@ -291,19 +325,10 @@ def require_team_access():
         )
 
         login_clicked = st.button("Unlock", use_container_width=True)
-        st.markdown(
-            """
-            <script>
-              const btns = window.parent.document.querySelectorAll('button');
-              if (btns && btns.length > 0) btns[0].classList.add('rp-login-btn');
-            </script>
-            """,
-            unsafe_allow_html=True,
-        )
+
         st.caption("Need help? Contact your administrator.")
         st.markdown("</div>", unsafe_allow_html=True)
 
-    # ---------- Same logic as before ----------
     if login_clicked:
         code = (code_raw or "").strip().upper()
 
@@ -322,17 +347,13 @@ def require_team_access():
                     st.stop()
 
                 st.session_state.team_code = team_code
+                # Clear the input safely on next run
                 st.session_state["_clear_login_access_code"] = True
                 st.rerun()
             else:
                 st.error("Invalid access code.")
 
     st.stop()
-    return None, None
-
-TEAM_CODE, _ = require_team_access()
-
-# Load full team config (logo/background/data_folder) from TEAM_CONFIG/team_settings.json
 def _load_team_cfg_from_file(team_code: str) -> dict:
     try:
         with open(SETTINGS_PATH, "r", encoding="utf-8") as f:
@@ -2734,6 +2755,7 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
+
 
 
 
