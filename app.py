@@ -1950,18 +1950,21 @@ if process_clicked:
 # -----------------------------
 # SEASON OUTPUTS
 # -----------------------------
-# Tight header directly above the table (reduces vertical dead space)
-hdr_left, hdr_right = st.columns([8, 2], vertical_alignment="center")
+# Title row (tight)
+hdr_left, _hdr_right = st.columns([10, 1], vertical_alignment="center")
 with hdr_left:
     st.markdown(
         f"""<h3 style='margin:0; padding:0;'>📔 Full Team Spray – SEASON TO DATE ({selected_team})</h3>""",
         unsafe_allow_html=True,
     )
-with hdr_right:
+
+# Controls row (directly under title, same line)
+ctl_left, ctl_right = st.columns([8, 2], vertical_alignment="center")
+with ctl_left:
+    show_archived = st.checkbox("Show archived players", value=False)
+with ctl_right:
     stat_edit_slot = st.empty()  # filled after df_season is built
 
-# Archived toggle directly under the title (left-aligned)
-show_archived = st.checkbox("Show archived players", value=False)
 
 season_rows = []
 
@@ -2018,14 +2021,31 @@ st.markdown(
 st.markdown(
     """
     <style>
+    /* Sleek MLB-style Stat Filters control */
     .stat-edit-wrap {
         display: flex;
         justify-content: flex-end;
         align-items: center;
-        margin-top: -6px !important;
-        margin-bottom: 6px !important;
+        margin-top: 0px !important;
+        margin-bottom: 0px !important;
     }
-    .stat-edit-wrap button { white-space: nowrap; }
+    .stat-edit-wrap button {
+        white-space: nowrap;
+        border-radius: 999px !important;
+        padding: 0.35rem 0.75rem !important;
+        font-weight: 800 !important;
+        font-size: 0.75rem !important;
+        letter-spacing: 0.08em !important;
+        text-transform: uppercase !important;
+        background: rgba(17,24,39,0.06) !important;
+        border: 1px solid rgba(17,24,39,0.18) !important;
+        color: rgba(17,24,39,0.92) !important;
+        box-shadow: 0 1px 2px rgba(0,0,0,0.04) !important;
+    }
+    .stat-edit-wrap button:hover {
+        background: rgba(17,24,39,0.10) !important;
+        border-color: rgba(17,24,39,0.28) !important;
+    }
     </style>
     """,
     unsafe_allow_html=True,
@@ -2054,7 +2074,7 @@ if "Player" in all_cols and "Player" not in default_cols:
 with stat_edit_slot.container():
     st.markdown('<div class="stat-edit-wrap">', unsafe_allow_html=True)
     if hasattr(st, "popover"):
-        with st.popover("Stat Edit"):
+        with st.popover("⚙ Stat Filters"):
             st.caption("Toggle which stats show in the table")
             flt = st.text_input("Search", value="", placeholder="Type to filter stats...", key=f"{cols_key}__flt")
 
@@ -2110,7 +2130,7 @@ with stat_edit_slot.container():
             st.session_state[cols_key] = picked
 
     else:
-        with st.expander("Stat Edit", expanded=False):
+        with st.expander("⚙ Stat Filters", expanded=False):
             st.caption("Toggle which stats show in the table")
             flt = st.text_input("Search", value="", placeholder="Type to filter stats...", key=f"{cols_key}__flt")
 
