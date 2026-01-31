@@ -229,11 +229,16 @@ def require_team_access():
         # Pop is safest with Streamlit widgets
         st.session_state.pop("login_access_code", None)
 
-    # Already logged in
-    if st.session_state.team_code in codes:
-        return st.session_state.team_code, codes[st.session_state.team_code]
-
-    primary = SETTINGS.get("primary_color", "#b91c1c")
+    # Already logged in (session stores TEAM_CODE; `codes` is keyed by ACCESS CODE)
+    if st.session_state.team_code:
+        tc = str(st.session_state.team_code).strip().upper()
+        # Find the matching license row (any access code that maps to this TEAM_CODE)
+        for _ac, _row in (codes or {}).items():
+            if str((_row or {}).get("team_code", "")).strip().upper() == tc:
+                return tc, _row
+        # If TEAM_CODE isn't in the codes table, treat as not logged in
+        st.session_state.team_code = None
+primary = SETTINGS.get("primary_color", "#b91c1c")
 
     # Professional login styling + brand the top chrome red (no fighting Streamlit)
     st.markdown(
