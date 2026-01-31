@@ -226,117 +226,136 @@ def require_team_access():
     if "team_code" not in st.session_state:
         st.session_state.team_code = None
 
+    # Clear the access code box safely BEFORE the widget is created
+    if st.session_state.get("_clear_login_access_code", False):
+        st.session_state["login_access_code"] = ""
+        st.session_state["_clear_login_access_code"] = False
+
     # Already logged in
     if st.session_state.team_code in codes:
         return st.session_state.team_code, codes[st.session_state.team_code]
 
-    # ---------- Professional login UI ----------
+    # ---------- Login UI (professional + tight) ----------
     st.markdown(
-        f"""
+        """
         <style>
+/* --- Hide Streamlit top chrome (header/toolbar/status) to remove the white oval --- */
+header[data-testid="stHeader"] { display: none !important; }
+div[data-testid="stToolbar"] { display: none !important; }
+div[data-testid="stDecoration"] { display: none !important; }
+div[data-testid="stStatusWidget"] { display: none !important; }
+#MainMenu { visibility: hidden !important; }
+footer { visibility: hidden !important; }
+
+/* Tighten page top padding that Streamlit adds */
+section.main > div { padding-top: 0.75rem !important; }
+.block-container { padding-top: 0.75rem !important; }
+
+
         /* Remove Streamlit top chrome + reclaim whitespace on login page */
-        header[data-testid="stHeader"] {{ display: none !important; height: 0 !important; }}
-        div[data-testid="stToolbar"] {{ display: none !important; height: 0 !important; }}
-        div[data-testid="stDecoration"] {{ display: none !important; height: 0 !important; }}
-        div[data-testid="stStatusWidget"] {{ display: none !important; height: 0 !important; }}
-        #MainMenu {{ visibility: hidden; }}
-        footer {{ visibility: hidden; }}
+        header[data-testid="stHeader"] { display: none !important; height: 0 !important; }
+        div[data-testid="stToolbar"] { display: none !important; height: 0 !important; }
+        div[data-testid="stDecoration"] { display: none !important; height: 0 !important; }
+        div[data-testid="stStatusWidget"] { display: none !important; height: 0 !important; }
+        #MainMenu { visibility: hidden; }
+        footer { visibility: hidden; }
 
         /* Tighten container padding */
-        html, body, [data-testid="stAppViewContainer"] {{ padding-top: 0 !important; margin-top: 0 !important; }}
+        html, body, [data-testid="stAppViewContainer"] { padding-top: 0 !important; margin-top: 0 !important; }
         section.main > div.block-container,
-        [data-testid="stAppViewContainer"] .block-container {{
-            padding-top: 0.25rem !important;
-            padding-bottom: 1rem !important;
+        [data-testid="stAppViewContainer"] .block-container {
+            padding-top: 0.35rem !important;
+            padding-bottom: 1.0rem !important;
             max-width: 980px !important;
-        }}
+        }
 
         /* Card */
-        .rp-login-card {{
+        .rp-login-card {
             width: 100%;
             padding: 22px 22px 18px 22px;
             border-radius: 16px;
             background: rgba(255,255,255,0.86);
             border: 1px solid rgba(17,24,39,0.14);
             box-shadow: 0 10px 28px rgba(0,0,0,0.10);
-        }}
-        .rp-login-title {{
+        }
+        .rp-login-title {
             font-weight: 900;
             font-size: 1.35rem;
-            letter-spacing: 0.06em;
+            letter-spacing: 0.10em;
             text-transform: uppercase;
             margin: 0 0 6px 0;
             color: rgba(17,24,39,0.92);
-        }}
-        .rp-login-sub {{
+        }
+        .rp-login-sub {
             margin: 0 0 14px 0;
             font-weight: 700;
             font-size: 0.95rem;
             color: rgba(17,24,39,0.70);
             line-height: 1.35;
-        }}
+        }
 
-        /* Access code input */
-        [data-testid="stTextInput"] input {{
+        /* Input polish */
+        [data-testid="stTextInput"] input {
             border-radius: 12px !important;
             padding: 0.70rem 0.90rem !important;
-            border: 1px solid rgba(17,24,39,0.20) !important;
+            border: 1px solid rgba(17,24,39,0.22) !important;
             font-weight: 800 !important;
-            letter-spacing: 0.10em !important;
+            letter-spacing: 0.12em !important;
             text-transform: uppercase !important;
-        }}
+        }
 
-        /* Primary button */
-        div[data-testid="stButton"] button[kind="primary"] {{
-            width: 100% !important;
+        /* Button polish */
+        div[data-testid="stButton"] button.rp-login-btn {
+            width: 100%;
             border-radius: 12px !important;
             padding: 0.75rem 1rem !important;
             font-weight: 900 !important;
-            letter-spacing: 0.10em !important;
+            letter-spacing: 0.14em !important;
             text-transform: uppercase !important;
-            background: {primary} !important;
-            border: 1px solid {primary} !important;
+            background: """ + primary + r""" !important;
+            border: 1px solid """ + primary + r""" !important;
             color: #ffffff !important;
-        }}
-        div[data-testid="stButton"] button[kind="primary"]:hover {{
-            filter: brightness(0.95) !important;
-        }}
+        }
+        div[data-testid="stButton"] button.rp-login-btn:hover {
+            filter: brightness(0.96) !important;
+        }
 
-        [data-testid="stAlert"] {{
-            border-radius: 12px !important;
-        }}
+        [data-testid="stAlert"] { border-radius: 12px !important; }
         </style>
         """,
         unsafe_allow_html=True,
     )
 
-    # Center the card using columns (stable across Streamlit versions)
-    left, mid, right = st.columns([1, 1.2, 1])
+    # Center card with columns (no weird flex spacing)
+    left, mid, right = st.columns([1, 2, 1])
     with mid:
-        st.markdown('<div class="rp-login-card">', unsafe_allow_html=True)
-        st.markdown(
-            f"<div class='rp-login-title'>{SETTINGS.get('app_title', 'RP Spray Analytics')}</div>",
-            unsafe_allow_html=True,
-        )
-        st.markdown(
-            "<div class='rp-login-sub'>Enter your team access code to continue.</div>",
-            unsafe_allow_html=True,
-        )
+        st.markdown("<div class='rp-login-card'>", unsafe_allow_html=True)
+        st.markdown(f"<div class='rp-login-title'>{SETTINGS.get('app_title','RP Spray Analytics')}</div>", unsafe_allow_html=True)
+        st.markdown("<div class='rp-login-sub'>Enter your team access code to continue.</div>", unsafe_allow_html=True)
 
         code_raw = st.text_input(
             "Access Code",
-            value=st.session_state.get("login_access_code", ""),
+            value="",
             placeholder="ACCESS CODE",
             label_visibility="collapsed",
             type="password",
             key="login_access_code",
         )
 
-        login_clicked = st.button("UNLOCK", type="primary", use_container_width=True)
-
+        login_clicked = st.button("Unlock", use_container_width=True)
+        st.markdown(
+            """
+            <script>
+              const btns = window.parent.document.querySelectorAll('button');
+              if (btns && btns.length > 0) btns[0].classList.add('rp-login-btn');
+            </script>
+            """,
+            unsafe_allow_html=True,
+        )
         st.caption("Need help? Contact your administrator.")
         st.markdown("</div>", unsafe_allow_html=True)
 
+    # ---------- Same logic as before ----------
     if login_clicked:
         code = (code_raw or "").strip().upper()
 
@@ -355,6 +374,7 @@ def require_team_access():
                     st.stop()
 
                 st.session_state.team_code = team_code
+                st.session_state["_clear_login_access_code"] = True
                 st.rerun()
             else:
                 st.error("Invalid access code.")
@@ -2766,45 +2786,6 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
