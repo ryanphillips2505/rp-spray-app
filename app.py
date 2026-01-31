@@ -241,8 +241,8 @@ def require_team_access():
 primary = SETTINGS.get("primary_color", "#b91c1c")
 
     # Professional login styling + brand the top chrome red (no fighting Streamlit)
-    st.markdown(
-        f"""
+st.markdown(
+    f"""
         <style>
         /* Brand the Streamlit top chrome so the "oval" looks intentional */
         header[data-testid="stHeader"],
@@ -1505,8 +1505,8 @@ with st.sidebar:
 
     # Daily quote card
     who, quote = get_daily_quote(HOF_QUOTES)
-    st.markdown(
-        f"""
+st.markdown(
+    f"""
         <div style="
             padding: 14px;
             border-radius: 14px;
@@ -1693,7 +1693,6 @@ st.write(f"**Hitters loaded:** {len(current_roster)}")
 season_team, season_players, games_played, processed_set, archived_players = db_load_season_totals(
     TEAM_CODE_SAFE, team_key, current_roster
 )
-
 st.markdown(
     f"""
 <div class="spray-card">
@@ -2050,8 +2049,8 @@ if process_clicked:
 # Title row (tight)
 hdr_left, _hdr_right = st.columns([10, 1], vertical_alignment="center")
 with hdr_left:
-    st.markdown(
-        f"""<h3 style='margin:0; padding:0;'>📔 Full Team Spray – SEASON TO DATE ({selected_team})</h3>""",
+st.markdown(
+    f"""<h3 style='margin:0; padding:0;'>📔 Full Team Spray – SEASON TO DATE ({selected_team})</h3>""",
         unsafe_allow_html=True,
     )
 
