@@ -1950,17 +1950,18 @@ if process_clicked:
 # -----------------------------
 # SEASON OUTPUTS
 # -----------------------------
-# Tight, one-line header directly above the table (reduces vertical dead space)
-hdr_left, hdr_mid, hdr_right = st.columns([6, 2, 2], vertical_alignment="center")
+# Tight header directly above the table (reduces vertical dead space)
+hdr_left, hdr_right = st.columns([8, 2], vertical_alignment="center")
 with hdr_left:
     st.markdown(
         f"""<h3 style='margin:0; padding:0;'>📔 Full Team Spray – SEASON TO DATE ({selected_team})</h3>""",
         unsafe_allow_html=True,
     )
-with hdr_mid:
-    show_archived = st.checkbox("Show archived players", value=False)
 with hdr_right:
     stat_edit_slot = st.empty()  # filled after df_season is built
+
+# Archived toggle directly under the title (left-aligned)
+show_archived = st.checkbox("Show archived players", value=False)
 
 season_rows = []
 
