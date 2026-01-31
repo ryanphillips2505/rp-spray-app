@@ -2519,99 +2519,7 @@ with pd.ExcelWriter(out, engine="openpyxl") as writer:
     ws.page_margins.footer = 0.15
     ws.page_setup.paperSize = ws.PAPERSIZE_LETTER
 
-    
     # -----------------------------
-    # WATERMARK (print header)
-    # -----------------------------
-    try:
-        ws.oddHeader.center.text = "RP Spray Analytics"
-        ws.oddHeader.center.size = 14
-        ws.oddHeader.center.color = "808080"
-    except Exception:
-        pass
-
-    # -----------------------------
-    # FORMAT GB% / FB% COLUMNS (no heatmap)
-    # -----------------------------
-    gbp_idx = None
-    fbp_idx = None
-    for j in range(1, ws.max_column + 1):
-        v = str(ws.cell(row=2, column=j).value or "").strip()
-        if v == "GB%":
-            gbp_idx = j
-        elif v == "FB%":
-            fbp_idx = j
-
-    # Percent format for data rows
-    for r in range(3, ws.max_row + 1):
-        if gbp_idx:
-            ws.cell(row=r, column=gbp_idx).number_format = "0%"
-        if fbp_idx:
-            ws.cell(row=r, column=fbp_idx).number_format = "0%"
-
-    # -----------------------------
-    # GROUP SEPARATORS (thick vertical borders)
-    #   Blocks: [Player | GB% FB%] | [GB-*] | [FB-*] | [RUN-*]
-    # -----------------------------
-    thick_side = Side(style="thick", color="000000")
-    def _add_right_thick(col_idx: int):
-        if not col_idx:
-            return
-        for rr in range(2, ws.max_row + 1):  # include header row 2
-            cell = ws.cell(row=rr, column=col_idx)
-            b = cell.border
-            cell.border = Border(
-                left=b.left, right=thick_side, top=b.top, bottom=b.bottom,
-                diagonal=b.diagonal, diagonal_direction=b.diagonal_direction,
-                outline=b.outline, vertical=b.vertical, horizontal=b.horizontal
-            )
-
-    # Identify last column of each block based on headers
-    headers = {j: str(ws.cell(row=2, column=j).value or "").strip() for j in range(1, ws.max_column + 1)}
-    gb_cols = [j for j, name in headers.items() if name.startswith("GB-")]
-    fb_cols = [j for j, name in headers.items() if name.startswith("FB-")]
-    run_cols = [j for j, name in headers.items() if name.startswith("SB") or name.startswith("CS")]
-
-    # Separator after FB% (profile block)
-    if fbp_idx:
-        _add_right_thick(fbp_idx)
-
-    # Separator after last GB-* and last FB-* (if they exist)
-    if gb_cols:
-        _add_right_thick(max(gb_cols))
-    if fb_cols:
-        _add_right_thick(max(fb_cols))
-
-    # -----------------------------
-    # DISCRETE HEATMAP (MLB-style bins)
-    #   Apply to all numeric stat columns EXCEPT: Player, GB%, FB%
-    # -----------------------------
-    # Fill colors (amber -> red)
-    fill_1_5   = PatternFill("solid", fgColor="FCE5CD")  # very light orange
-    fill_6_10  = PatternFill("solid", fgColor="F9CB9C")  # light orange
-    fill_11_15 = PatternFill("solid", fgColor="F6B26B")  # medium orange
-    fill_16_19 = PatternFill("solid", fgColor="E69138")  # dark orange
-    fill_20p   = PatternFill("solid", fgColor="CC0000")  # red
-
-    # Eligible columns: everything except Player / GB% / FB%
-    excluded = set([player_col_idx, gbp_idx, fbp_idx])
-    eligible_cols = [j for j in range(1, ws.max_column + 1) if j not in excluded]
-
-    # Add conditional formatting per column (Excel is more reliable this way)
-    start_row = 3
-    end_row = ws.max_row
-    for j in eligible_cols:
-        col_letter = get_column_letter(j)
-        rng = f"{col_letter}{start_row}:{col_letter}{end_row}"
-
-        # Note: order matters; last rule wins if overlaps. We use non-overlapping ranges.
-        ws.conditional_formatting.add(rng, CellIsRule(operator="between", formula=["1", "5"], fill=fill_1_5))
-        ws.conditional_formatting.add(rng, CellIsRule(operator="between", formula=["6", "10"], fill=fill_6_10))
-        ws.conditional_formatting.add(rng, CellIsRule(operator="between", formula=["11", "15"], fill=fill_11_15))
-        ws.conditional_formatting.add(rng, CellIsRule(operator="between", formula=["16", "19"], fill=fill_16_19))
-        ws.conditional_formatting.add(rng, CellIsRule(operator="greaterThanOrEqual", formula=["20"], fill=fill_20p))
-
-# -----------------------------
     # COACH NOTES BOX (EXCEL)
     # -----------------------------
     if notes_box_text:
@@ -2629,7 +2537,7 @@ with pd.ExcelWriter(out, engine="openpyxl") as writer:
 
         note_cell = ws.cell(row=top_row, column=left_col)
         note_cell.value = f"COACH NOTES:\n\n{notes_box_text}"
-        \1        note_cell.font = Font(size=12)
+        note_cell.alignment = Alignment(wrap_text=True, vertical="top")
 
         for r in range(top_row, top_row + box_height):
             ws.row_dimensions[r].height = 22
