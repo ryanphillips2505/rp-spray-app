@@ -125,7 +125,7 @@ except Exception:
 # -----------------------------
 def load_settings():
     defaults = {
-        "app_title": "RP Spray Charts",
+        "app_title": "RP Spray Analytics",
         "subtitle": "Coaches that want to win, WILL put in the time",
         "primary_color": "#b91c1c",
         "secondary_color": "#111111",
@@ -152,7 +152,7 @@ settings = SETTINGS  # alias so the rest of the code can use `settings`
 # ✅ MUST BE FIRST STREAMLIT CALL
 # -----------------------------
 st.set_page_config(
-    page_title=SETTINGS.get("app_title", "RP Spray Charts"),
+    page_title=SETTINGS.get("app_title", "RP Spray Analytics"),
     page_icon="⚾",
     layout="wide",
 )
@@ -2663,6 +2663,7 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
+
 
 
 
