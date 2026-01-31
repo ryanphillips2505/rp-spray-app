@@ -2285,30 +2285,135 @@ else:
 out = BytesIO()
 with pd.ExcelWriter(out, engine="openpyxl") as writer:
     sheet_name = "Season"
-    df_xl.to_excel(writer, index=False, sheet_name=sheet_name)
+
+    # -----------------------------
+    # Title row (Row 1) + table (starts Row 2)
+    # -----------------------------
+    title_text = str(selected_team or "").strip() or "Season Report"
+
+    # Write the dataframe starting on row 2 so row 1 can be a big header
+    df_xl.to_excel(writer, index=False, sheet_name=sheet_name, startrow=1)
 
     ws = writer.book[sheet_name]
-    ws.freeze_panes = "A2"
 
+    # Freeze just below the column headers (row 2)
+    ws.freeze_panes = "A3"
 
-    header_font = Font(bold=True)
+    # -----------------------------
+    # Watermark (prints on paper/PDF export from Excel)
+    # -----------------------------
+    try:
+        ws.oddHeader.center.text = "&K9E9E9E&20RP Spray Analytics"
+        ws.oddHeader.center.size = 20
+        ws.oddHeader.center.font = "Arial,Bold"
+    except Exception:
+        pass
+
+    # -----------------------------
+    # Styles
+    # -----------------------------
+    title_font = Font(name="Arial", size=28, bold=True)
+    title_align = Alignment(horizontal="center", vertical="center")
+    header_font = Font(name="Arial", size=14, bold=True)
     header_align = Alignment(horizontal="center", vertical="center", wrap_text=True)
-    header_fill = PatternFill("solid", fgColor="D9E1F2")
+    header_fill = PatternFill("solid", fgColor="D9E1F2")  # light blue-gray
 
-    for cell in ws[1]:
+    player_font = Font(name="Arial", size=14, bold=True)
+    cell_font = Font(name="Arial", size=12, bold=False)
+    num_align = Alignment(horizontal="center", vertical="center")
+
+    # Row heights
+    ws.row_dimensions[1].height = 35  # title row
+    ws.row_dimensions[2].height = 35  # header row
+    for r in range(3, ws.max_row + 1):
+        ws.row_dimensions[r].height = 35
+
+    # Title row merge across full width
+    max_col = ws.max_column if ws.max_column >= 1 else 1
+    ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=max_col)
+    tcell = ws.cell(row=1, column=1, value=title_text)
+    tcell.font = title_font
+    tcell.alignment = title_align
+
+    # Column header formatting (row 2)
+    for cell in ws[2]:
         cell.font = header_font
         cell.alignment = header_align
         cell.fill = header_fill
 
-    for col_idx, col_name in enumerate(df_xl.columns, start=1):
-        col_letter = get_column_letter(col_idx)
-        max_len = len(str(col_name))
-        sample = df_xl[col_name].astype(str).head(60).tolist()
-        for v in sample:
-            max_len = max(max_len, len(v))
-        ws.column_dimensions[col_letter].width = min(max(max_len + 2, 8), 22)
+    # Bold player names + font size 14 (Column A, data rows)
+    if ws.max_row >= 3:
+        for r in range(3, ws.max_row + 1):
+            c = ws.cell(row=r, column=1)
+            c.font = player_font
+            c.alignment = Alignment(horizontal="left", vertical="center")
 
-    start_row = 2
+    # Center numeric cells
+    for row in ws.iter_rows(min_row=3, max_row=ws.max_row, min_col=2, max_col=ws.max_column):
+        for cell in row:
+            if isinstance(cell.value, (int, float)):
+                cell.alignment = num_align
+                cell.font = cell_font
+
+    # -----------------------------
+    # Column widths (Column A fits names)
+    # -----------------------------
+    # Column A: fit to player names
+    try:
+        max_name = 6
+        if not df_xl.empty and "Player" in df_xl.columns:
+            sample_names = df_xl["Player"].astype(str).tolist()
+            for nm in sample_names:
+                if nm:
+                    max_name = max(max_name, len(str(nm)))
+        ws.column_dimensions["A"].width = min(max(max_name + 2, 10), 34)
+    except Exception:
+        ws.column_dimensions["A"].width = 22
+
+    # Other columns: reasonable width based on header length
+    for col_idx, col_name in enumerate(list(df_xl.columns), start=1):
+        col_letter = get_column_letter(col_idx)
+        if col_letter == "A":
+            continue
+        base = len(str(col_name))
+        ws.column_dimensions[col_letter].width = min(max(base + 2, 8), 16)
+
+    # -----------------------------
+    # Thick separators between GB / FB / RUN groups
+    # -----------------------------
+    thick_side = Side(style="thick", color="000000")
+
+    cols = list(df_xl.columns)
+    def _idxs(prefix):
+        return [i for i, c in enumerate(cols, start=1) if str(c).startswith(prefix)]
+
+    gb_cols = _idxs("GB")
+    fb_cols = _idxs("FB")
+
+    # Running group = SB/CS (and base buckets)
+    run_cols = [i for i, c in enumerate(cols, start=1) if str(c).startswith("SB") or str(c).startswith("CS")]
+
+    sep_after = []
+    if gb_cols:
+        sep_after.append(max(gb_cols))
+    if fb_cols:
+        sep_after.append(max(fb_cols))
+
+    # Apply thick RIGHT border to the separator columns for header+data
+    for sep_col in sep_after:
+        for r in range(2, ws.max_row + 1):  # header row 2 through data
+            cell = ws.cell(row=r, column=sep_col)
+            b = cell.border
+            cell.border = Border(
+                left=b.left, right=thick_side, top=b.top, bottom=b.bottom,
+                diagonal=b.diagonal, diagonal_direction=b.diagonal_direction,
+                outline=b.outline, vertical=b.vertical, horizontal=b.horizontal
+            )
+
+    # -----------------------------
+    # Conditional formatting + coach notes box (kept)
+    # -----------------------------
+    start_row = 3  # data starts here
     start_col = 2  # numeric starts after Player
     end_row = ws.max_row
     end_col = ws.max_column
@@ -2326,7 +2431,7 @@ with pd.ExcelWriter(out, engine="openpyxl") as writer:
             stopIfTrue=True,
         )
         if not no_season_data:
-                ws.conditional_formatting.add(data_range, zero_rule)
+            ws.conditional_formatting.add(data_range, zero_rule)
 
         # heatmap
         heat_rule = ColorScaleRule(
@@ -2336,19 +2441,10 @@ with pd.ExcelWriter(out, engine="openpyxl") as writer:
         )
         ws.conditional_formatting.add(data_range, heat_rule)
 
-    # center numbers
-    num_align = Alignment(horizontal="center", vertical="center")
-    for row in ws.iter_rows(min_row=2, max_row=ws.max_row):
-        for cell in row:
-            if isinstance(cell.value, (int, float)):
-                cell.alignment = num_align
-
     # -----------------------------
     # COACH NOTES BOX (EXCEL)
     # -----------------------------
     if notes_box_text:
-        from openpyxl.styles import Border, Side
-
         top_row = ws.max_row + 6  # 5 blank rows after the last player
         left_col = 1
         right_col = ws.max_column
