@@ -353,6 +353,9 @@ if st.button("Continue"):
         st.session_state["terms_accepted"] = True
         st.rerun()
 
+if "terms_accepted" not in st.session_state:
+    st.stop()
+
 
 
 # -----------------------------
@@ -2634,6 +2637,7 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
+
 
 
 
