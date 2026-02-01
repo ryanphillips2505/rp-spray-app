@@ -353,10 +353,10 @@ BALLTYPE_KEYS = ["GB", "FB"]
 COMBO_LOCS = [loc for loc in LOCATION_KEYS if loc not in ["Bunt", "Sac Bunt", "UNKNOWN"]]
 COMBO_KEYS = [f"GB-{loc}" for loc in COMBO_LOCS] + [f"FB-{loc}" for loc in COMBO_LOCS]
 
-# ✅ BASERUNNING REMOVED
-RUN_KEYS = []
 
+# Games Played tracking (per player)
 GP_KEY = "GP"
+
 
 # -----------------------------
 # STAT HELPERS
@@ -504,6 +504,19 @@ RIGHT_SIDE_PATTERNS = [
 PAREN_NAME_REGEX = re.compile(r"\(([^)]+)\)")
 
 
+def normalize_base_bucket(prefix: str, base_raw: Optional[str]) -> str:
+    if not base_raw:
+        return prefix
+    b = base_raw.strip().lower().strip("()").strip()
+    if b in ["2nd", "second"]:
+        return f"{prefix}-2B"
+    if b in ["3rd", "third"]:
+        return f"{prefix}-3B"
+    if b == "home":
+        return f"{prefix}-H"
+    return prefix
+
+
 BAD_FIRST_TOKENS = {
     "top", "bottom", "inning", "pitch", "ball", "strike", "foul",
     "runner", "runners", "advances", "advance", "steals", "stole", "caught",
@@ -553,6 +566,62 @@ def get_batter_name(line: str, roster: set[str]):
         return last_matches[0]
 
     return None
+
+
+def extract_runner_name_near_event(clean_line: str, match_start: int, roster: set[str]) -> Optional[str]:
+    left = (clean_line[:match_start] or "").strip()
+    if not left:
+        return None
+
+    chunk = left.split(",")[-1].strip()
+
+    runner = get_batter_name(chunk, roster)
+    if runner:
+        return runner
+
+    parts = chunk.split()
+    if len(parts) >= 2:
+        candidate = parts[-2] + " " + parts[-1]
+        if candidate in roster:
+            return candidate
+
+    return None
+
+
+def extract_runner_name_fallback(clean_line: str, roster: set[str]) -> Optional[str]:
+    runner = get_batter_name(clean_line, roster)
+    if runner:
+        return runner
+
+    pm = PAREN_NAME_REGEX.search(clean_line)
+    if pm:
+        inside = re.sub(r"\s+", " ", pm.group(1).strip())
+        runner = get_batter_name(inside, roster)
+        if runner:
+            return runner
+
+    return None
+
+
+def parse_running_event(clean_line: str, roster: set[str]) -> Tuple[Optional[str], Optional[str], Optional[str]]:
+    """
+    Returns (runner_name, total_key, base_key) or (None, None, None).
+    PICKOFFS REMOVED.
+    """
+    m = SB_ACTION_REGEX.search(clean_line)
+    if m:
+        base_key = normalize_base_bucket("SB", m.group(1) if (m.lastindex or 0) >= 1 else None)
+        runner = extract_runner_name_near_event(clean_line, m.start(), roster) or extract_runner_name_fallback(clean_line, roster)
+        return runner, "SB", base_key
+
+    m = CS_ACTION_REGEX.search(clean_line)
+    if m:
+        base_raw = m.group(1) if (m.lastindex or 0) >= 1 else None
+        base_key = normalize_base_bucket("CS", base_raw)
+        runner = extract_runner_name_near_event(clean_line, m.start(), roster) or extract_runner_name_fallback(clean_line, roster)
+        return runner, "CS", base_key
+
+    return None, None, None
 
 
 def is_ball_in_play(line_lower: str) -> bool:
@@ -1678,6 +1747,14 @@ if process_clicked:
                         if (" " + p.upper() + " ") in uline:
                             gp_in_game.add(p)
 
+            # running events (not BIP)
+            runner, total_key, base_key = parse_running_event(clean_line, current_roster)
+            if runner and total_key:
+                game_team[total_key] += 1
+                game_players[runner][total_key] += 1
+                if base_key and base_key in RUN_KEYS:
+                    game_team[base_key] += 1
+                    game_players[runner][base_key] += 1
 
             batter = get_batter_name(clean_line, current_roster)
             if batter is None:
@@ -2133,11 +2210,10 @@ out = BytesIO()
 with pd.ExcelWriter(out, engine="openpyxl") as writer:
     sheet_name = "Season"
 
-    # Build export frame (keep all other stats numeric)
-    # Convert GB/FB totals to GB% / FB% (percent of BIP) in the Excel export
+        # Build export frame
     df_export = df_xl.copy() if df_xl is not None else pd.DataFrame()
 
-    # Insert GP (Games Played) before GB%/FB% in the Excel export
+    # Insert GP (Games Played) after Player
     if not df_export.empty and "Player" in df_export.columns:
         def _gp_for(name):
             try:
@@ -2146,34 +2222,55 @@ with pd.ExcelWriter(out, engine="openpyxl") as writer:
                 return 0
         df_export.insert(1, "GP", df_export["Player"].apply(_gp_for))
 
+    # --- Build BIP + GB%/FB% (based on total BIP = GB + FB) ---
+    # NOTE: Your df_season currently has GB and FB totals present before COMBO columns.
     if not df_export.empty and ("GB" in df_export.columns) and ("FB" in df_export.columns):
         gb_vals = pd.to_numeric(df_export["GB"], errors="coerce").fillna(0)
         fb_vals = pd.to_numeric(df_export["FB"], errors="coerce").fillna(0)
-        denom = (gb_vals + fb_vals).replace({0: pd.NA})
+
+        bip_vals = (gb_vals + fb_vals).fillna(0)
+        denom = bip_vals.replace({0: pd.NA})
+
+        # Percent columns (DO NOT heatmap these)
         df_export["GB%"] = (gb_vals / denom).fillna(0)
         df_export["FB%"] = (fb_vals / denom).fillna(0)
 
-        # Drop raw totals (show percent instead)
+        # Convert positional columns (GB-* and FB-*) to % of TOTAL BIP
+        for c in list(df_export.columns):
+            if str(c).startswith("GB-") or str(c).startswith("FB-"):
+                num = pd.to_numeric(df_export[c], errors="coerce").fillna(0)
+                df_export[c] = (num / denom).fillna(0)
+
+        # Drop raw GB/FB totals (we're showing GB%/FB% now)
         df_export = df_export.drop(columns=["GB", "FB"])
 
-        # Place percent columns right after Player (and after GP if present)
+        # Put columns in the order you want:
+        # Player, GP, GB%, FB%, GB-*, FB-*, BIP
         cols = list(df_export.columns)
-        if "Player" in cols:
-            rest = [c for c in cols if c not in ["Player", "GP", "GB%", "FB%"]]
-            lead = ["Player"] + (["GP"] if "GP" in cols else []) + ["GB%", "FB%"]
-            df_export = df_export[lead + rest]
 
+        gb_pos = [c for c in cols if str(c).startswith("GB-")]
+        fb_pos = [c for c in cols if str(c).startswith("FB-")]
+
+        # Keep any other columns (if they exist) after BIP
+        fixed_lead = ["Player"] + (["GP"] if "GP" in cols else []) + ["GB%", "FB%"]
+        rest = [c for c in cols if c not in fixed_lead and c not in gb_pos and c not in fb_pos]
+
+        # Add BIP at the end of FB block (immediately after FB-P)
+        df_export["BIP"] = bip_vals.astype(int)
+
+        df_export = df_export[fixed_lead + gb_pos + fb_pos + ["BIP"] + rest]
+
+    # Write to Excel
     df_export.to_excel(writer, index=False, sheet_name=sheet_name, startrow=1)
     ws = writer.book[sheet_name]
 
-    # Safety: OpenPyXL requires at least one visible worksheet when saving
+    # Safety: ensure visible
     try:
         for _sh in writer.book.worksheets:
             _sh.sheet_state = "visible"
         writer.book.active = writer.book.worksheets.index(ws)
     except Exception:
         pass
-
 
     # Team title row (Row 1)
     total_cols = max(1, ws.max_column)
@@ -2182,7 +2279,6 @@ with pd.ExcelWriter(out, engine="openpyxl") as writer:
     title_cell.font = Font(bold=True, size=28)
     title_cell.alignment = Alignment(horizontal="center", vertical="center")
 
-    # Freeze panes below header row 2 (data starts row 3)
     ws.freeze_panes = "A3"
 
     # Row heights
@@ -2200,7 +2296,7 @@ with pd.ExcelWriter(out, engine="openpyxl") as writer:
         cell.alignment = header_align
         cell.fill = header_fill
 
-    # Player column formatting (bold, size 12) + autosize column A
+    # Player column formatting
     player_col_idx = None
     for j in range(1, ws.max_column + 1):
         if str(ws.cell(row=2, column=j).value).strip() == "Player":
@@ -2214,14 +2310,13 @@ with pd.ExcelWriter(out, engine="openpyxl") as writer:
     for r in range(3, ws.max_row + 1):
         for c in range(1, ws.max_column + 1):
             cell = ws.cell(row=r, column=c)
-            # Default body style
             cell.font = body_font
             cell.alignment = center_align
             if player_col_idx and c == player_col_idx:
                 cell.font = player_font
                 cell.alignment = left_align
 
-    # Autosize Column A (Player) to fit names, with a sane cap
+    # Autosize Player col
     if player_col_idx:
         max_len = len("Player")
         try:
@@ -2232,137 +2327,149 @@ with pd.ExcelWriter(out, engine="openpyxl") as writer:
             pass
         ws.column_dimensions[get_column_letter(player_col_idx)].width = min(max(max_len + 2, 12), 34)
 
-    # Locate GB% / FB% columns and format as percent
+    # Identify key columns
     gbp_idx = None
     fbp_idx = None
-    for j in range(1, ws.max_column + 1):
-        h = str(ws.cell(row=2, column=j).value or "").strip()
+    gp_idx = None
+    bip_idx = None
+
+    headers = [str(ws.cell(row=2, column=j).value or "").strip() for j in range(1, ws.max_column + 1)]
+    for j, h in enumerate(headers, start=1):
         if h == "GB%":
             gbp_idx = j
         elif h == "FB%":
             fbp_idx = j
+        elif h == "GP":
+            gp_idx = j
+        elif h == "BIP":
+            bip_idx = j
 
+    # Format GB%/FB% as percent
     if gbp_idx:
-        col_letter = get_column_letter(gbp_idx)
+        L = get_column_letter(gbp_idx)
         for r in range(3, ws.max_row + 1):
-            ws[f"{col_letter}{r}"].number_format = "0%"
+            ws[f"{L}{r}"].number_format = "0%"
     if fbp_idx:
-        col_letter = get_column_letter(fbp_idx)
+        L = get_column_letter(fbp_idx)
         for r in range(3, ws.max_row + 1):
-            ws[f"{col_letter}{r}"].number_format = "0%"
+            ws[f"{L}{r}"].number_format = "0%"
 
-    # Put a vertical border separating the percent columns from the other stats
-    # (thick line after FB% if present)
+    # Format positional % columns as percent too
+    for j, h in enumerate(headers, start=1):
+        if h.startswith("GB-") or h.startswith("FB-"):
+            L = get_column_letter(j)
+            for r in range(3, ws.max_row + 1):
+                ws[f"{L}{r}"].number_format = "0%"
+
+    # Thick borders helpers
     thick_side = Side(style="thick", color="000000")
-    thin_side = Side(style="thin", color="9E9E9E")
+
     def _set_right_thick(col_idx: int):
         for r in range(2, ws.max_row + 1):
             cell = ws.cell(row=r, column=col_idx)
             b = cell.border
             cell.border = Border(
-                left=b.left or Side(style=None),
+                left=b.left,
                 right=thick_side,
-                top=b.top or Side(style=None),
-                bottom=b.bottom or Side(style=None),
+                top=b.top,
+                bottom=b.bottom,
             )
 
+    # Thick vertical border after FB% (same as before)
     if fbp_idx:
         _set_right_thick(fbp_idx)
 
-    # -----------------------------
-    # THICK BORDERS separating GB / FB / RUN blocks
-    # We infer block boundaries from column names:
-    # - GB block: starts at first "GB-" and ends at last "GB-"
-    # - FB block: starts at first "FB-" and ends at last "FB-"
-    # - RUN block: starts at first "SB" or "CS" and goes to end
-    # -----------------------------
-    headers = [str(ws.cell(row=2, column=j).value or "").strip() for j in range(1, ws.max_column + 1)]
-
-    def _first_idx(prefixes):
-        for j, h in enumerate(headers, start=1):
-            for p in prefixes:
-                if h.startswith(p):
-                    return j
-        return None
-
-    def _last_idx(prefixes):
+    # Thick border after last GB- and last FB-
+    def _last_idx(prefix: str):
         last = None
         for j, h in enumerate(headers, start=1):
-            for p in prefixes:
-                if h.startswith(p):
-                    last = j
+            if h.startswith(prefix):
+                last = j
         return last
 
-    gb_start = _first_idx(["GB-"])
-    gb_end   = _last_idx(["GB-"])
-    fb_start = _first_idx(["FB-"])
-    fb_end   = _last_idx(["FB-"])
-    run_start = _first_idx(["SB", "CS"])
+    gb_end = _last_idx("GB-")
+    fb_end = _last_idx("FB-")
 
-    # Thick separator after GB block and after FB block
     if gb_end:
         _set_right_thick(gb_end)
     if fb_end:
-        _set_right_thick(fb_end)
+        _set_right_thick(fb_end)  # this becomes the thick border immediately LEFT of BIP
 
     # -----------------------------
-    # STATIC HEAT MAP (fills cells so it shows in previews/prints too)
-    # Applies to all numeric stats except Player, GB%, FB%
-    # 0 = no fill
-    # 1-5 light orange
-    # 6-10 darker orange
-    # 11-15 darker
-    # 16-19 darker
-    # >=20 red
+    # HEATMAPS
+    #   1) GP numeric heatmap (keep your existing scheme)
+    #   2) Positional % heatmap (your percent bins + same orange→red scheme)
+    #   NO heatmap on GB% / FB% / BIP
     # -----------------------------
-    fill_1_5   = PatternFill("solid", fgColor="FFE5CC")
-    fill_6_10  = PatternFill("solid", fgColor="FFCC99")
-    fill_11_15 = PatternFill("solid", fgColor="FFB266")
-    fill_16_19 = PatternFill("solid", fgColor="FF9933")
-    fill_20p   = PatternFill("solid", fgColor="F8696B")  # red-ish
+    # GP numeric heatmap fills (same scheme you had)
+    gp_fill_1_5   = PatternFill("solid", fgColor="FFE5CC")
+    gp_fill_6_10  = PatternFill("solid", fgColor="FFCC99")
+    gp_fill_11_15 = PatternFill("solid", fgColor="FFB266")
+    gp_fill_16_19 = PatternFill("solid", fgColor="FF9933")
+    gp_fill_20p   = PatternFill("solid", fgColor="F8696B")
 
-    exclude_idxs = set()
-    if player_col_idx:
-        exclude_idxs.add(player_col_idx)
-    if gbp_idx:
-        exclude_idxs.add(gbp_idx)
-    if fbp_idx:
-        exclude_idxs.add(fbp_idx)
+    # Percent-bin fills (0–5% white; 6–10% light orange; ...; 81–100% dark red)
+    pct_bins = [
+        (0.00, 0.05, None),
+        (0.06, 0.10, PatternFill("solid", fgColor="FFE5CC")),
+        (0.11, 0.20, PatternFill("solid", fgColor="FFCC99")),
+        (0.21, 0.30, PatternFill("solid", fgColor="FFB266")),
+        (0.31, 0.40, PatternFill("solid", fgColor="FF9933")),
+        (0.41, 0.50, PatternFill("solid", fgColor="F8A5A5")),
+        (0.51, 0.60, PatternFill("solid", fgColor="F8696B")),
+        (0.61, 0.70, PatternFill("solid", fgColor="E53935")),
+        (0.71, 0.80, PatternFill("solid", fgColor="C62828")),
+        (0.81, 1.00, PatternFill("solid", fgColor="8E0000")),
+    ]
 
-    data_min_row = 3
-    data_max_row = ws.max_row
+    def _pct_fill(v):
+        for lo, hi, f in pct_bins:
+            if lo <= v <= hi:
+                return f
+        return None
 
-    for r in range(data_min_row, data_max_row + 1):
+    # Apply GP heatmap only on GP column
+    if gp_idx:
+        for r in range(3, ws.max_row + 1):
+            cell = ws.cell(row=r, column=gp_idx)
+            try:
+                v = float(cell.value or 0)
+            except Exception:
+                continue
+            if v <= 0:
+                continue
+            if v >= 20:
+                cell.fill = gp_fill_20p
+            elif 16 <= v <= 19:
+                cell.fill = gp_fill_16_19
+            elif 11 <= v <= 15:
+                cell.fill = gp_fill_11_15
+            elif 6 <= v <= 10:
+                cell.fill = gp_fill_6_10
+            elif 1 <= v <= 5:
+                cell.fill = gp_fill_1_5
+
+    # Apply percent heatmap only to positional columns (GB-* and FB-*)
+    for r in range(3, ws.max_row + 1):
         for c in range(1, ws.max_column + 1):
-            if c in exclude_idxs:
+            h = str(ws.cell(row=2, column=c).value or "").strip()
+            if not (h.startswith("GB-") or h.startswith("FB-")):
                 continue
 
             cell = ws.cell(row=r, column=c)
-            v = cell.value
-
-            # Coerce to number (skip text/blanks)
             try:
-                if v is None or v == "":
-                    continue
-                if isinstance(v, bool):
-                    continue
-                v_num = float(v)
+                v = float(cell.value or 0)
             except Exception:
                 continue
 
-            if v_num <= 0:
-                continue
-            elif v_num >= 20:
-                cell.fill = fill_20p
-            elif 16 <= v_num <= 19:
-                cell.fill = fill_16_19
-            elif 11 <= v_num <= 15:
-                cell.fill = fill_11_15
-            elif 6 <= v_num <= 10:
-                cell.fill = fill_6_10
-            elif 1 <= v_num <= 5:
-                cell.fill = fill_1_5
-# Watermark via print header (shows on print/PDF)
+            if v <= 0:
+                continue  # keep white
+
+            f = _pct_fill(v)
+            if f:
+                cell.fill = f
+
+    # Watermark via print header
     try:
         ws.oddHeader.center.text = "RP Spray Analytics"
         ws.oddHeader.center.font = "Tahoma,Bold"
@@ -2371,7 +2478,7 @@ with pd.ExcelWriter(out, engine="openpyxl") as writer:
     except Exception:
         pass
 
-    # Print setup (nice defaults)
+    # Print setup
     ws.page_setup.orientation = ws.ORIENTATION_PORTRAIT
     ws.page_setup.fitToWidth = 1
     ws.page_setup.fitToHeight = 0
@@ -2384,9 +2491,6 @@ with pd.ExcelWriter(out, engine="openpyxl") as writer:
     ws.page_margins.header = 0.15
     ws.page_margins.footer = 0.15
     ws.page_setup.paperSize = ws.PAPERSIZE_LETTER
-
-    # -----------------------------
-    
 
     # -----------------------------
     # COACH NOTES BOX (EXCEL)
@@ -2465,7 +2569,6 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
-
 
 
 
