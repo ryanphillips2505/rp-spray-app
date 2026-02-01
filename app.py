@@ -1349,6 +1349,12 @@ h1.app-title {{
     unsafe_allow_html=True,
 )
 
+if "terms_accepted" not in st.session_state:
+    st.session_state["terms_accepted"] = False
+
+if not st.session_state["terms_accepted"]:
+    # (paste the full Terms scrollbox + checkbox + continue here)
+    st.stop()
 
 
 # -----------------------------
@@ -2637,6 +2643,7 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
+
 
 
 
