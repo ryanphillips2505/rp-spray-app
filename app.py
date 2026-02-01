@@ -2412,7 +2412,7 @@ with pd.ExcelWriter(out, engine="openpyxl") as writer:
     gp_fill_20p   = PatternFill("solid", fgColor="F8696B")
 
    # Percent-bin fills — 5% increments (0.00 → 1.00)
-pct_bins = [
+    pct_bins = [
     (0.00, 0.05, None),  # white
 
     (0.06, 0.10, PatternFill("solid", fgColor="FFE5CC")),
@@ -2589,6 +2589,7 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
+
 
 
 
