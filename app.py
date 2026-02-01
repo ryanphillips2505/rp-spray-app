@@ -2411,19 +2411,36 @@ with pd.ExcelWriter(out, engine="openpyxl") as writer:
     gp_fill_16_19 = PatternFill("solid", fgColor="FF9933")
     gp_fill_20p   = PatternFill("solid", fgColor="F8696B")
 
-    # Percent-bin fills (0–5% white; 6–10% light orange; ...; 81–100% dark red)
-    pct_bins = [
-        (0.00, 0.05, None),
-        (0.06, 0.10, PatternFill("solid", fgColor="FFE5CC")),
-        (0.11, 0.20, PatternFill("solid", fgColor="FFCC99")),
-        (0.21, 0.30, PatternFill("solid", fgColor="FFB266")),
-        (0.31, 0.40, PatternFill("solid", fgColor="FF9933")),
-        (0.41, 0.50, PatternFill("solid", fgColor="F8A5A5")),
-        (0.51, 0.60, PatternFill("solid", fgColor="F8696B")),
-        (0.61, 0.70, PatternFill("solid", fgColor="E53935")),
-        (0.71, 0.80, PatternFill("solid", fgColor="C62828")),
-        (0.81, 1.00, PatternFill("solid", fgColor="8E0000")),
-    ]
+   # Percent-bin fills — 5% increments (0.00 → 1.00)
+pct_bins = [
+    (0.00, 0.05, None),  # white
+
+    (0.06, 0.10, PatternFill("solid", fgColor="FFE5CC")),
+    (0.11, 0.15, PatternFill("solid", fgColor="FFDBB8")),
+    (0.16, 0.20, PatternFill("solid", fgColor="FFCC99")),
+    (0.21, 0.25, PatternFill("solid", fgColor="FFBE80")),
+    (0.26, 0.30, PatternFill("solid", fgColor="FFB266")),
+
+    (0.31, 0.35, PatternFill("solid", fgColor="FFA366")),
+    (0.36, 0.40, PatternFill("solid", fgColor="FF9933")),
+
+    (0.41, 0.45, PatternFill("solid", fgColor="F8A5A5")),  # transition to red
+    (0.46, 0.50, PatternFill("solid", fgColor="F28B82")),
+
+    (0.51, 0.55, PatternFill("solid", fgColor="F8696B")),
+    (0.56, 0.60, PatternFill("solid", fgColor="EF5350")),
+
+    (0.61, 0.65, PatternFill("solid", fgColor="E53935")),
+    (0.66, 0.70, PatternFill("solid", fgColor="D32F2F")),
+
+    (0.71, 0.75, PatternFill("solid", fgColor="C62828")),
+    (0.76, 0.80, PatternFill("solid", fgColor="B71C1C")),
+
+    (0.81, 0.85, PatternFill("solid", fgColor="A00000")),
+    (0.86, 0.90, PatternFill("solid", fgColor="8E0000")),
+    (0.91, 1.00, PatternFill("solid", fgColor="7F0000")),  # darkest red
+]
+ 
 
     def _pct_fill(v):
         for lo, hi, f in pct_bins:
@@ -2572,6 +2589,7 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
+
 
 
 
