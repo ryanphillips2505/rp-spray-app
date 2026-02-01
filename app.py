@@ -640,8 +640,14 @@ def extract_runner_name_fallback(clean_line: str, roster: set[str]) -> Optional[
 def parse_running_event(clean_line: str, roster: set[str]) -> Tuple[Optional[str], Optional[str], Optional[str]]:
     """
     Returns (runner_name, total_key, base_key) or (None, None, None).
-    PICKOFFS REMOVED.
+
+    ✅ BASERUNNING IS DISABLED when RUN_KEYS = [].
+    This prevents NameError/KeyError from SB/CS logic.
     """
+    if not globals().get("RUN_KEYS"):   # RUN_KEYS = [] means baserunning removed
+        return None, None, None
+
+    # If you ever re-enable baserunning later, you can restore your SB/CS logic below:
     m = SB_ACTION_REGEX.search(clean_line)
     if m:
         base_key = normalize_base_bucket("SB", m.group(1) if (m.lastindex or 0) >= 1 else None)
@@ -656,6 +662,7 @@ def parse_running_event(clean_line: str, roster: set[str]) -> Tuple[Optional[str
         return runner, "CS", base_key
 
     return None, None, None
+
 
 
 def is_ball_in_play(line_lower: str) -> bool:
@@ -2636,6 +2643,7 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
+
 
 
 
