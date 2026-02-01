@@ -28,12 +28,15 @@ supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 
 def hash_access_code(code: str) -> str:
+    """Hash an access code with a server-side pepper (case-insensitive)."""
     pepper = st.secrets["ACCESS_CODE_PEPPER"]
-    raw = (code.strip() + pepper).encode("utf-8")
+    # Normalize so "rock", "ROCK", and " Rock " all behave the same
+    norm = (code or "").strip().lower()
+    raw = (norm + pepper).encode("utf-8")
     return hashlib.sha256(raw).hexdigest()
 def admin_set_access_code(team_lookup: str, new_plain_code: str) -> bool:
     team_lookup = (team_lookup or "").strip().upper()
-    new_plain_code = (new_plain_code or "").strip().upper()  # <-- FIXED
+    new_plain_code = (new_plain_code or "").strip()  # allow lowercase codes like "rock"
 
     if not team_lookup or not new_plain_code:
         return False
@@ -185,16 +188,24 @@ def require_team_access():
     code_raw = st.text_input("Access Code", value="")
 
     if st.button("Enter into the door of Success"):
-        code = code_raw.strip().upper()
+        # Coach types the access code (example: "rock"). We do NOT store the plain code anywhere.
+        code = (code_raw or "").strip()
 
         if not code:
             st.error("Enter an access code")
         else:
+            # Hash what they typed, then find the matching team row by comparing hashes.
             hashed = hash_access_code(code).strip().lower()
-            row = codes.get(code)
-            stored = str((row or {}).get("code_hash", "")).strip().lower()
 
-            if row and hashed == stored:
+            # codes contains rows keyed by team_code and team_slug; we match by stored hash instead.
+            row = None
+            for r in (codes or {}).values():
+                stored = str((r or {}).get("code_hash", "")).strip().lower()
+                if stored and stored == hashed:
+                    row = r
+                    break
+
+            if row:
                 team_code = str(row.get("team_code", "")).strip().upper()
 
                 if not license_is_active(team_code):
@@ -203,7 +214,6 @@ def require_team_access():
 
                 st.session_state.team_code = team_code
                 st.rerun()
-
             else:
                 st.error("Invalid access code")
 
