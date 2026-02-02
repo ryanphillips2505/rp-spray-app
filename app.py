@@ -2611,7 +2611,7 @@ with st.container():
 
     with col_dl1:
         st.download_button(
-            label="📊 Download Season Report (Excel)",
+            label="📊 Download Season Report (Excel -Formatted)",
             data=excel_bytes,
             file_name=f"{TEAM_CODE}_{safe_team}_Season_Spray_Report.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -2664,6 +2664,7 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
+
 
 
 
