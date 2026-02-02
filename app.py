@@ -2893,55 +2893,6 @@ with pd.ExcelWriter(out, engine="openpyxl") as writer:
             b2.alignment = center
             b2.border = box
 
-            # =========================
-            # AT-BAT TRACKER (10 ABs)
-            # =========================
-            # Header row
-            ws_["A21"].value = "AB"
-            ws_["A21"].font = label_font
-            ws_["A21"].alignment = center
-            ws_["A21"].border = box
-
-            ws_.merge_cells("B21:E21")
-            ws_["B21"].value = "BALLS (○ ○ ○ ○)"
-            ws_["B21"].font = label_font
-            ws_["B21"].alignment = center
-            ws_["B21"].border = box
-
-            ws_.merge_cells("F21:H21")
-            ws_["F21"].value = "STRIKES (□ □ □)"
-            ws_["F21"].font = label_font
-            ws_["F21"].alignment = center
-            ws_["F21"].border = box
-
-            ws_["I21"].value = "NOTES"
-            ws_["I21"].font = label_font
-            ws_["I21"].alignment = center
-            ws_["I21"].border = box
-
-            # 10 rows: 22–31
-            for i in range(10):
-                r = 22 + i
-                ws_[f"A{r}"].value = i + 1
-                ws_[f"A{r}"].alignment = center
-                ws_[f"A{r}"].border = box
-
-                # Balls: B–E (4 circles)
-                for col in ["B","C","D","E"]:
-                    ws_[f"{col}{r}"].value = "○"
-                    ws_[f"{col}{r}"].alignment = center
-                    ws_[f"{col}{r}"].border = box
-
-                # Strikes: F–H (3 squares)
-                for col in ["F","G","H"]:
-                    ws_[f"{col}{r}"].value = "□"
-                    ws_[f"{col}{r}"].alignment = center
-                    ws_[f"{col}{r}"].border = box
-
-                # Notes: I (blank lined box)
-                ws_[f"I{r}"].value = ""
-                ws_[f"I{r}"].alignment = left
-                ws_[f"I{r}"].border = box
 
             # Print setup (single page)
             ws_.print_area = "A1:I40"
@@ -3044,6 +2995,7 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
+
 
 
 
