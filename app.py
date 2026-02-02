@@ -2775,318 +2775,231 @@ with pd.ExcelWriter(out, engine="openpyxl") as writer:
         wsp.page_setup.paperSize = wsp.PAPERSIZE_LETTER
         
                       # =====================================================
-        # PLAYER SCOUTING SHEET LAYOUT (PRINT CLEAN)
-        # Top: Aligned Twin-Cell Spray Heat Map (GB green / FB red)
-        # Divider band: separates sections for accurate formatting
-        # Bottom: 10 AB Tracker (1 symbol per cell + note lines)
-        # Top-right: BIP "stat card" (professional) — FB-P removed
-        # =====================================================
+# LOCKED PLAYER SCOUTING SHEET (A–I) — EXACT ROWS/CELLS
+# =====================================================
 
-        # ---- pull values from the single-row df (player totals row) ----
-        vals = one_df.iloc[0].to_dict() if (one_df is not None and not one_df.empty) else {}
+from openpyxl.cell.cell import MergedCell
 
-        # ---- clear sheet SAFELY (merged cells will crash if you write to them) ----
-        from openpyxl.cell.cell import MergedCell
+# --- pull player values (expects percent decimals like 0.07 for 7%) ---
+vals = one_df.iloc[0].to_dict() if (one_df is not None and not one_df.empty) else {}
 
-        try:
-            for rng in list(wsp.merged_cells.ranges):
-                wsp.unmerge_cells(str(rng))
-        except Exception:
-            pass
+def _safe_float(x):
+    try:
+        return float(x)
+    except Exception:
+        return 0.0
 
-        for r in range(1, 90):
-            for c in range(1, 30):
-                cell = wsp.cell(row=r, column=c)
-                if isinstance(cell, MergedCell):
-                    continue
-                cell.value = None
-                cell.border = Border()
-                cell.fill = PatternFill()
-                cell.alignment = Alignment()
+# ---- clear sheet safely ----
+try:
+    for rng in list(wsp.merged_cells.ranges):
+        wsp.unmerge_cells(str(rng))
+except Exception:
+    pass
 
-        # ---- styles ----
-        center = Alignment(horizontal="center", vertical="center")
-        left_wrap = Alignment(horizontal="left", vertical="center", wrap_text=True)
+for r in range(1, 60):
+    for c in range(1, 20):
+        cell = wsp.cell(row=r, column=c)
+        if isinstance(cell, MergedCell):
+            continue
+        cell.value = None
+        cell.border = Border()
+        cell.fill = PatternFill()
+        cell.alignment = Alignment()
 
-        thin = Side(style="thin", color="000000")
-        thick = Side(style="thick", color="000000")
+# ---- column widths (exact) ----
+wsp.column_dimensions["A"].width = 5
+wsp.column_dimensions["B"].width = 5
+for col in ["C","D","E","F","G","H","I"]:
+    wsp.column_dimensions[col].width = 13
 
-        box_thin = Border(left=thin, right=thin, top=thin, bottom=thin)
+# ---- row heights (clean print) ----
+wsp.row_dimensions[1].height = 30
+for rr in range(2, 19):
+    wsp.row_dimensions[rr].height = 20
+wsp.row_dimensions[16].height = 10   # divider
 
-        title_font = Font(bold=True, size=26)
-        label_font = Font(bold=True, size=14)
-        head_font  = Font(bold=True, size=11)
-        val_font   = Font(bold=True, size=12)
+# ---- styles ----
+center = Alignment(horizontal="center", vertical="center")
+thin = Side(style="thin", color="000000")
+thick = Side(style="thick", color="000000")
+box = Border(left=thin, right=thin, top=thin, bottom=thin)
 
-        # =====================================================
-        # TITLE
-        # =====================================================
-        wsp.merge_cells("B1:O1")
-        t = wsp["B1"]
-        t.value = str(player_name)
-        t.font = title_font
-        t.alignment = center
-        wsp.row_dimensions[1].height = 32
+title_font = Font(bold=True, size=20)
+label_font = Font(bold=True, size=12)
+val_font   = Font(bold=True, size=12)
 
-        # =====================================================
-        # TOP HALF: SPRAY HEAT MAP
-        # =====================================================
+gb_bins = [
+    (0.00, 0.05, None),
+    (0.05, 0.15, PatternFill("solid", fgColor="D9F2D9")),
+    (0.15, 0.30, PatternFill("solid", fgColor="A8E6A3")),
+    (0.30, 0.45, PatternFill("solid", fgColor="6FD36F")),
+    (0.45, 0.60, PatternFill("solid", fgColor="2EAF2E")),
+    (0.60, 1.01, PatternFill("solid", fgColor="0B7A0B")),
+]
+fb_bins = [
+    (0.00, 0.05, None),
+    (0.05, 0.15, PatternFill("solid", fgColor="FFE0E0")),
+    (0.15, 0.30, PatternFill("solid", fgColor="FFB3B3")),
+    (0.30, 0.45, PatternFill("solid", fgColor="FF8080")),
+    (0.45, 0.60, PatternFill("solid", fgColor="F04A4A")),
+    (0.60, 1.01, PatternFill("solid", fgColor="B71C1C")),
+]
 
-        # Widen a hair so Excel never shows ### for percents
-        for col in ["B", "C", "D", "E", "F", "G", "H"]:
-            wsp.column_dimensions[col].width = 7
+def _fill(v, bins):
+    x = _safe_float(v)
+    if x <= 0:
+        return None
+    if x > 1:
+        x = 1.0
+    for lo, hi, f in bins:
+        if f is None:
+            continue
+        if lo <= x < hi:
+            return f
+    return None
 
-        for rr in range(3, 15):
-            wsp.row_dimensions[rr].height = 22
+def _merge_label(rng, text):
+    wsp.merge_cells(rng)
+    c = wsp[rng.split(":")[0]]
+    c.value = text
+    c.font = label_font
+    c.alignment = center
 
-        def _label(rng, text):
-            wsp.merge_cells(rng)
-            c = wsp[rng.split(":")[0]]
-            c.value = text
-            c.font = label_font
-            c.alignment = center
+def _set_cell(addr, v, is_gb=True):
+    c = wsp[addr]
+    c.value = _safe_float(v)
+    c.number_format = "0%"
+    c.font = val_font
+    c.alignment = center
+    c.border = box
+    f = _fill(c.value, gb_bins if is_gb else fb_bins)
+    if f:
+        c.fill = f
 
-        def _gbfb_headers(gb_addr, fb_addr):
-            for addr, txt in [(gb_addr, "GB"), (fb_addr, "FB")]:
-                c = wsp[addr]
-                c.value = txt
-                c.font = head_font
-                c.alignment = center
-                c.border = box_thin
+# =====================================================
+# TITLE (A1:I1 merged)
+# =====================================================
+wsp.merge_cells("A1:I1")
+t = wsp["A1"]
+t.value = str(player_name)
+t.font = title_font
+t.alignment = center
+t.border = Border(bottom=thick)
 
-        # GB green / FB red bins (clean print)
-        gb_bins = [
-            (0.00, 0.05, None),
-            (0.05, 0.15, PatternFill("solid", fgColor="D9F2D9")),
-            (0.15, 0.30, PatternFill("solid", fgColor="A8E6A3")),
-            (0.30, 0.45, PatternFill("solid", fgColor="6FD36F")),
-            (0.45, 0.60, PatternFill("solid", fgColor="2EAF2E")),
-            (0.60, 1.01, PatternFill("solid", fgColor="0B7A0B")),
-        ]
-        fb_bins = [
-            (0.00, 0.05, None),
-            (0.05, 0.15, PatternFill("solid", fgColor="FFE0E0")),
-            (0.15, 0.30, PatternFill("solid", fgColor="FFB3B3")),
-            (0.30, 0.45, PatternFill("solid", fgColor="FF8080")),
-            (0.45, 0.60, PatternFill("solid", fgColor="F04A4A")),
-            (0.60, 1.01, PatternFill("solid", fgColor="B71C1C")),
-        ]
+# =====================================================
+# SPRAY CHART — EXACT CELLS
+# =====================================================
 
-        def _fill_from_bins(v, bins):
-            try:
-                x = float(v or 0)
-            except Exception:
-                return None
-            if x <= 0:
-                return None
-            if x > 1:
-                x = 1.0
-            for lo, hi, f in bins:
-                if f is None:
-                    continue
-                if lo <= x < hi:
-                    return f
-            return None
+# CF
+_merge_label("E3:F3", "CF")
+_set_cell("E4", vals.get("GB-CF", 0), is_gb=True)
+_set_cell("F4", vals.get("FB-CF", 0), is_gb=False)
 
-        def _gbfb_vals(gb_addr, fb_addr, loc):
-            gb = float(vals.get(f"GB-{loc}", 0) or 0)
-            fb = float(vals.get(f"FB-{loc}", 0) or 0)
+# LF
+_merge_label("C5:D5", "LF")
+_set_cell("C6", vals.get("GB-LF", 0), is_gb=True)
+_set_cell("D6", vals.get("FB-LF", 0), is_gb=False)
 
-            for addr, v, bins in [(gb_addr, gb, gb_bins), (fb_addr, fb, fb_bins)]:
-                c = wsp[addr]
-                c.value = v
-                c.number_format = "0%"
-                c.font = val_font
-                c.alignment = center
-                c.border = box_thin
-                f = _fill_from_bins(v, bins)
-                if f:
-                    c.fill = f
+# RF
+_merge_label("G5:H5", "RF")
+_set_cell("G6", vals.get("GB-RF", 0), is_gb=True)
+_set_cell("H6", vals.get("FB-RF", 0), is_gb=False)
 
-        # Layout (symmetry)
-        _label("E3:F3", "CF")
-        _gbfb_headers("E4", "F4"); _gbfb_vals("E4", "F4", "CF")
+# SS / 2B labels (single cells, like your screenshot)
+wsp["E7"].value = "SS"
+wsp["E7"].font = label_font
+wsp["E7"].alignment = center
 
-        _label("B5:C5", "LF")
-        _gbfb_headers("B6", "C6"); _gbfb_vals("B6", "C6", "LF")
+wsp["G7"].value = "2B"
+wsp["G7"].font = label_font
+wsp["G7"].alignment = center
 
-        _label("G5:H5", "RF")
-        _gbfb_headers("G6", "H6"); _gbfb_vals("G6", "H6", "RF")
+# SS values (E8/F8)
+_set_cell("E8", vals.get("GB-SS", 0), is_gb=True)
+_set_cell("F8", vals.get("FB-SS", 0), is_gb=False)
 
-        _label("D7:E7", "SS")
-        _gbfb_headers("D8", "E8"); _gbfb_vals("D8", "E8", "SS")
+# 2B values (G8/H8)
+_set_cell("G8", vals.get("GB-2B", 0), is_gb=True)
+_set_cell("H8", vals.get("FB-2B", 0), is_gb=False)
 
-        _label("F7:G7", "2B")
-        _gbfb_headers("F8", "G8"); _gbfb_vals("F8", "G8", "2B")
+# 3B
+_merge_label("C9:D9", "3B")
+_set_cell("C10", vals.get("GB-3B", 0), is_gb=True)
+_set_cell("D10", vals.get("FB-3B", 0), is_gb=False)
 
-        _label("B9:C9", "3B")
-        _gbfb_headers("B10", "C10"); _gbfb_vals("B10", "C10", "3B")
+# 1B
+_merge_label("G9:H9", "1B")
+_set_cell("G10", vals.get("GB-1B", 0), is_gb=True)
+_set_cell("H10", vals.get("FB-1B", 0), is_gb=False)
 
-        _label("G9:H9", "1B")
-        _gbfb_headers("G10", "H10"); _gbfb_vals("G10", "H10", "1B")
+# P
+_merge_label("E11:F11", "P")
+_set_cell("E12", vals.get("GB-P", 0), is_gb=True)
+_set_cell("F12", vals.get("FB-P", 0), is_gb=False)
 
-        _label("E11:F11", "P")
-        _gbfb_headers("E12", "F12"); _gbfb_vals("E12", "F12", "P")
+# C
+_merge_label("E13:F13", "C")
+_set_cell("E14", vals.get("GB-C", 0), is_gb=True)
+_set_cell("F14", vals.get("FB-C", 0), is_gb=False)
 
-        _label("E13:F13", "C")
-        _gbfb_headers("E14", "F14"); _gbfb_vals("E14", "F14", "C")
+# Add thin borders around label blocks for a clean look
+for addr in ["E3","C5","G5","C9","G9","E11","E13","E7","G7"]:
+    try:
+        wsp[addr].border = box
+    except Exception:
+        pass
 
-        # =====================================================
-        # TOP-RIGHT "STAT CARD" (BIP ONLY) — FB-P REMOVED
-        # =====================================================
+# =====================================================
+# DIVIDER ROW (Row 16, A–I) — solid black with thick edges
+# =====================================================
+for col in ["A","B","C","D","E","F","G","H","I"]:
+    cell = wsp[f"{col}16"]
+    cell.fill = PatternFill("solid", fgColor="000000")
+    cell.border = Border(top=thick, bottom=thick)
 
-        # BIP value: prefer vals["BIP"] if present; else try GB+FB counts
-        bip_val = vals.get("BIP", None)
-        if bip_val is None:
-            try:
-                bip_val = int((vals.get("GB", 0) or 0) + (vals.get("FB", 0) or 0))
-            except Exception:
-                bip_val = 0
+# =====================================================
+# BIP BOX (C17:D18 merged)
+# =====================================================
+# Compute BIP if not present
+bip_val = vals.get("BIP", None)
+if bip_val is None:
+    try:
+        # If you store raw totals elsewhere, adjust here
+        bip_val = int((_safe_float(vals.get("GB", 0)) + _safe_float(vals.get("FB", 0))))
+    except Exception:
+        bip_val = 0
 
-        # Card at N3:O4
-        wsp.merge_cells("N3:O3")
-        hdr = wsp["N3"]
-        hdr.value = "BIP"
-        hdr.font = Font(bold=True, size=12)
-        hdr.alignment = center
-        hdr.fill = PatternFill("solid", fgColor="E5E7EB")  # light gray header
-        hdr.border = Border(left=thin, right=thin, top=thin, bottom=thin)
+wsp.merge_cells("C17:D17")
+b1 = wsp["C17"]
+b1.value = "BIP"
+b1.font = Font(bold=True, size=12)
+b1.alignment = center
+b1.fill = PatternFill("solid", fgColor="E5E7EB")
+b1.border = box
 
-        wsp.merge_cells("N4:O4")
-        valc = wsp["N4"]
-        valc.value = int(bip_val)
-        valc.font = Font(bold=True, size=14)
-        valc.alignment = center
-        valc.fill = PatternFill("solid", fgColor="FFFFFF")
-        valc.border = Border(left=thin, right=thin, top=thin, bottom=thin)
+wsp.merge_cells("C18:D18")
+b2 = wsp["C18"]
+b2.value = int(bip_val)
+b2.font = Font(bold=True, size=14)
+b2.alignment = center
+b2.border = box
 
-        wsp.column_dimensions["N"].width = 7
-        wsp.column_dimensions["O"].width = 7
-        wsp.row_dimensions[3].height = 18
-        wsp.row_dimensions[4].height = 22
-
-        # =====================================================
-        # DIVIDER BAND — HARD SEPARATION (TOP vs BOTTOM)
-        # =====================================================
-
-        # Create a clean divider row with thick borders across B–O
-        DIV_ROW = 15
-        wsp.row_dimensions[DIV_ROW].height = 10
-
-        for col in list("BCDEFGHIJKLMNO"):
-            cell = wsp[f"{col}{DIV_ROW}"]
-            cell.value = None
-            cell.fill = PatternFill("solid", fgColor="FFFFFF")
-            cell.border = Border(top=thick, bottom=thick)
-
-        # =====================================================
-        # BOTTOM HALF: AT-BAT TRACKER (starts lower for separation)
-        # =====================================================
-
-        TITLE_ROW = 18
-        HEADER_ROW = 19
-        FIRST_AB_ROW = 20
-        AB_COUNT = 10
-
-        # Tracker columns B–O
-        for c, w in {
-            "B": 5,
-            "C": 4, "D": 4, "E": 4, "F": 4,
-            "G": 4, "H": 4, "I": 4,
-            "J": 12, "K": 12, "L": 12, "M": 12, "N": 12, "O": 12,
-        }.items():
-            wsp.column_dimensions[c].width = w
-
-        def _border_all(cell):
-            cell.border = Border(left=thin, right=thin, top=thin, bottom=thin)
-
-        def _border_bottom(cell):
-            cell.border = Border(bottom=thin)
-
-        # Tracker title
-        wsp.merge_cells("B18:O18")
-        tt = wsp["B18"]
-        tt.value = "AT-BAT TRACKER"
-        tt.font = Font(bold=True, size=14)
-        tt.alignment = center
-        wsp.row_dimensions[18].height = 22
-
-        # Headers
-        wsp["B19"].value = "AB"
-        wsp["B19"].font = Font(bold=True, size=12)
-        wsp["B19"].alignment = center
-
-        wsp.merge_cells("C19:F19")
-        wsp["C19"].value = "BALLS (○ → ●)"
-        wsp["C19"].font = Font(bold=True, size=12)
-        wsp["C19"].alignment = center
-
-        wsp.merge_cells("G19:I19")
-        wsp["G19"].value = "STRIKES (□ → ■)"
-        wsp["G19"].font = Font(bold=True, size=12)
-        wsp["G19"].alignment = center
-
-        wsp.merge_cells("J19:O19")
-        wsp["J19"].value = "NOTES"
-        wsp["J19"].font = Font(bold=True, size=12)
-        wsp["J19"].alignment = center
-
-        for col in ["B","C","D","E","F","G","H","I","J","K","L","M","N","O"]:
-            _border_all(wsp[f"{col}{HEADER_ROW}"])
-
-        ball_empty = "○"
-        strike_empty = "□"
-
-        for i in range(AB_COUNT):
-            r = FIRST_AB_ROW + i
-            wsp.row_dimensions[r].height = 22
-
-            ab = wsp[f"B{r}"]
-            ab.value = str(i + 1)
-            ab.font = Font(bold=True, size=12)
-            ab.alignment = center
-            _border_all(ab)
-
-            for col in ["C","D","E","F"]:
-                cc = wsp[f"{col}{r}"]
-                cc.value = ball_empty
-                cc.font = Font(size=16, bold=True)
-                cc.alignment = center
-                _border_all(cc)
-
-            for col in ["G","H","I"]:
-                cc = wsp[f"{col}{r}"]
-                cc.value = strike_empty
-                cc.font = Font(size=16, bold=True)
-                cc.alignment = center
-                _border_all(cc)
-
-            wsp.merge_cells(f"J{r}:O{r}")
-            note = wsp[f"J{r}"]
-            note.value = ""
-            note.font = Font(size=12)
-            note.alignment = left_wrap
-
-            # Notes: single clean writing line
-            for col in ["J","K","L","M","N","O"]:
-                _border_bottom(wsp[f"{col}{r}"])
-
-        # =====================================================
-        # PRINT SETUP (single page)
-        # =====================================================
-        wsp.print_area = "B1:O40"
-        wsp.page_setup.orientation = wsp.ORIENTATION_PORTRAIT
-        wsp.page_setup.fitToWidth = 1
-        wsp.page_setup.fitToHeight = 1
-        wsp.sheet_properties.pageSetUpPr.fitToPage = True
-        wsp.print_options.horizontalCentered = True
-        wsp.page_margins.left = 0.25
-        wsp.page_margins.right = 0.25
-        wsp.page_margins.top = 0.35
-        wsp.page_margins.bottom = 0.35
-        wsp.page_margins.header = 0.15
-        wsp.page_margins.footer = 0.15
-        wsp.page_setup.paperSize = wsp.PAPERSIZE_LETTER
+# =====================================================
+# PRINT SETUP (single page)
+# =====================================================
+wsp.print_area = "A1:I40"
+wsp.page_setup.orientation = wsp.ORIENTATION_PORTRAIT
+wsp.page_setup.fitToWidth = 1
+wsp.page_setup.fitToHeight = 1
+wsp.sheet_properties.pageSetUpPr.fitToPage = True
+wsp.print_options.horizontalCentered = True
+wsp.page_margins.left = 0.25
+wsp.page_margins.right = 0.25
+wsp.page_margins.top = 0.35
+wsp.page_margins.bottom = 0.35
+wsp.page_margins.header = 0.15
+wsp.page_margins.footer = 0.15
+wsp.page_setup.paperSize = wsp.PAPERSIZE_LETTER
 
          
 # ✅ AFTER writer closes: pull bytes
@@ -3163,6 +3076,7 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
+
 
 
 
