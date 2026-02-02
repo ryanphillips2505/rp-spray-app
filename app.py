@@ -1999,25 +1999,32 @@ default_cols = [c for c in default_cols if c in all_cols]
 if "Player" in all_cols and "Player" not in default_cols:
     default_cols = ["Player"] + default_cols
 
-
-
-# Render Stat Edit in the same row as the archived checkbox (top-right)
+# -----------------------------
+# STAT FILTERS (Popover / Expander)
+# -----------------------------
 with stat_edit_slot.container():
-    st.markdown('<div class="stat-edit-wrap">', unsafe_allow_html=True)
+
     if hasattr(st, "popover"):
         with st.popover("⚙ Stat Filters"):
             st.caption("Toggle which stats show in the table")
-            flt = st.text_input("Search", value="", placeholder="Type to filter stats...", key=f"{cols_key}__flt")
+            flt = st.text_input(
+                "Search",
+                value="",
+                placeholder="Type to filter stats...",
+                key=f"{cols_key}__flt",
+            )
 
-            c1, c2, c3 = st.columns([1, 1, 2])
+            c1, c2 = st.columns(2)
             with c1:
-                all_clicked = st.button("All", key=f"{cols_key}__all", use_container_width=True)
+                all_clicked = st.button(
+                    "All", key=f"{cols_key}__all", use_container_width=True
+                )
             with c2:
-                none_clicked = st.button("None", key=f"{cols_key}__none", use_container_width=True)
-            with c3:
-                st.caption(" ")
+                none_clicked = st.button(
+                    "None", key=f"{cols_key}__none", use_container_width=True
+                )
 
-            # Make All/None actually drive the checkbox states (Streamlit checkboxes are keyed)
+            # Apply All / None
             if all_clicked or none_clicked:
                 for _col in all_cols:
                     _safe = re.sub(r"[^A-Za-z0-9_]+", "_", str(_col))
@@ -2027,53 +2034,71 @@ with stat_edit_slot.container():
                     else:
                         st.session_state[_k] = True if all_clicked else False
 
-                st.session_state[cols_key] = list(all_cols) if all_clicked else (["Player"] if "Player" in all_cols else [])
+                st.session_state[cols_key] = (
+                    list(all_cols)
+                    if all_clicked
+                    else (["Player"] if "Player" in all_cols else [])
+                )
                 st.rerun()
 
             picked_set = set(st.session_state.get(cols_key, default_cols))
             if "Player" in all_cols:
-                picked_set.add("Player")  # lock Player ON
+                picked_set.add("Player")
 
             view_cols = list(all_cols)
             if flt.strip():
                 q = flt.strip().lower()
                 view_cols = [c for c in view_cols if q in str(c).lower()]
 
-            # Scroll so the popover stays compact
             with st.container(height=360):
                 if "Player" in view_cols:
-                    st.checkbox("Player", value=True, disabled=True, key=f"{cols_key}__cb__Player")
+                    st.checkbox(
+                        "Player",
+                        value=True,
+                        disabled=True,
+                        key=f"{cols_key}__cb__Player",
+                    )
                     view_cols = [c for c in view_cols if c != "Player"]
 
                 colA, colB, colC = st.columns(3)
                 grid = [colA, colB, colC]
+
                 for i, col in enumerate(view_cols):
                     target = grid[i % 3]
                     safe_col = re.sub(r"[^A-Za-z0-9_]+", "_", str(col))
                     cur_val = col in picked_set
-                    new_val = target.checkbox(str(col), value=cur_val, key=f"{cols_key}__cb__{safe_col}")
+                    new_val = target.checkbox(
+                        str(col),
+                        value=cur_val,
+                        key=f"{cols_key}__cb__{safe_col}",
+                    )
                     if new_val:
                         picked_set.add(col)
                     else:
                         picked_set.discard(col)
 
-            picked = [c for c in all_cols if c in picked_set]
-            st.session_state[cols_key] = picked
+            st.session_state[cols_key] = [c for c in all_cols if c in picked_set]
 
     else:
         with st.expander("⚙ Stat Filters", expanded=False):
             st.caption("Toggle which stats show in the table")
-            flt = st.text_input("Search", value="", placeholder="Type to filter stats...", key=f"{cols_key}__flt")
+            flt = st.text_input(
+                "Search",
+                value="",
+                placeholder="Type to filter stats...",
+                key=f"{cols_key}__flt",
+            )
 
-            c1, c2, c3 = st.columns([1, 1, 2])
+            c1, c2 = st.columns(2)
             with c1:
-                all_clicked = st.button("All", key=f"{cols_key}__all", use_container_width=True)
+                all_clicked = st.button(
+                    "All", key=f"{cols_key}__all", use_container_width=True
+                )
             with c2:
-                none_clicked = st.button("None", key=f"{cols_key}__none", use_container_width=True)
-            with c3:
-                st.caption(" ")
+                none_clicked = st.button(
+                    "None", key=f"{cols_key}__none", use_container_width=True
+                )
 
-            # Make All/None actually drive the checkbox states (Streamlit checkboxes are keyed)
             if all_clicked or none_clicked:
                 for _col in all_cols:
                     _safe = re.sub(r"[^A-Za-z0-9_]+", "_", str(_col))
@@ -2083,74 +2108,73 @@ with stat_edit_slot.container():
                     else:
                         st.session_state[_k] = True if all_clicked else False
 
-                st.session_state[cols_key] = list(all_cols) if all_clicked else (["Player"] if "Player" in all_cols else [])
+                st.session_state[cols_key] = (
+                    list(all_cols)
+                    if all_clicked
+                    else (["Player"] if "Player" in all_cols else [])
+                )
                 st.rerun()
 
             picked_set = set(st.session_state.get(cols_key, default_cols))
             if "Player" in all_cols:
-                picked_set.add("Player")  # lock Player ON
+                picked_set.add("Player")
 
             view_cols = list(all_cols)
             if flt.strip():
                 q = flt.strip().lower()
                 view_cols = [c for c in view_cols if q in str(c).lower()]
 
-            # Scroll so the popover stays compact
             with st.container(height=360):
                 if "Player" in view_cols:
-                    st.checkbox("Player", value=True, disabled=True, key=f"{cols_key}__cb__Player")
+                    st.checkbox(
+                        "Player",
+                        value=True,
+                        disabled=True,
+                        key=f"{cols_key}__cb__Player",
+                    )
                     view_cols = [c for c in view_cols if c != "Player"]
 
                 colA, colB, colC = st.columns(3)
                 grid = [colA, colB, colC]
+
                 for i, col in enumerate(view_cols):
                     target = grid[i % 3]
                     safe_col = re.sub(r"[^A-Za-z0-9_]+", "_", str(col))
                     cur_val = col in picked_set
-                    new_val = target.checkbox(str(col), value=cur_val, key=f"{cols_key}__cb__{safe_col}")
+                    new_val = target.checkbox(
+                        str(col),
+                        value=cur_val,
+                        key=f"{cols_key}__cb__{safe_col}",
+                    )
                     if new_val:
                         picked_set.add(col)
                     else:
                         picked_set.discard(col)
 
-            picked = [c for c in all_cols if c in picked_set]
-            st.session_state[cols_key] = picked
+            st.session_state[cols_key] = [c for c in all_cols if c in picked_set]
 
 
-    # Ensure Player stays visible (failsafe)
-    picked = list(st.session_state.get(cols_key, default_cols))
-    if "Player" in all_cols and "Player" not in picked:
-        picked = ["Player"] + picked
-        st.session_state[cols_key] = picked
+# -----------------------------
+# APPLY COLUMN SELECTION
+# -----------------------------
+picked_cols = [
+    c for c in st.session_state.get(cols_key, []) if c in df_season.columns
+]
 
-    st.markdown("</div>", unsafe_allow_html=True)
+if "Player" in df_season.columns and "Player" not in picked_cols:
+    picked_cols = ["Player"] + picked_cols
 
-# Apply the selection
-picked_cols = [c for c in st.session_state.get(cols_key, []) if c in all_cols]
 df_show = df_season[picked_cols] if picked_cols else df_season
 
 
 # -----------------------------
-# CURRENT VIEW COLUMNS (Stat Edit -> downloads)
+# TABLE RENDER (NO EMPTY GAP)
 # -----------------------------
-# Build visible_cols safely for both table display and downloads.
-try:
-    _vc = st.session_state.get(cols_key, list(df_season.columns))
-except Exception:
-    _vc = list(df_season.columns)
+if df_show is None or df_show.empty:
+    st.info("No season stats to display yet. Process at least one game to generate season totals.")
+else:
+    st.dataframe(df_show, use_container_width=True)
 
-if not isinstance(_vc, (list, tuple)):
-    _vc = list(df_season.columns)
-
-visible_cols = [c for c in _vc if c in df_season.columns]
-
-# Always keep Player if it exists
-if "Player" in df_season.columns and "Player" not in visible_cols:
-    visible_cols = ["Player"] + visible_cols
-
-if len(visible_cols) == 0:
-    visible_cols = list(df_season.columns)
-st.dataframe(df_show, use_container_width=True)
 
 # -----------------------------
 # 📝 COACHES SCOUTING NOTES (per selected opponent/team)
@@ -2664,6 +2688,7 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
+
 
 
 
