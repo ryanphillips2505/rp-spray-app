@@ -2486,32 +2486,36 @@ with pd.ExcelWriter(out, engine="openpyxl") as writer:
     gp_fill_16_19 = PatternFill("solid", fgColor="FF9933")
     gp_fill_20p   = PatternFill("solid", fgColor="F8696B")
 
-       # -----------------------------
-    # PERCENT HEATMAP (BIP % columns only)
-    # 0-5% = white, then every .05 gets darker to 1.00
-    # -----------------------------
-    pct_bins = [
-        (0.00, 0.05, None),
-        (0.06, 0.10, PatternFill("solid", fgColor="FFE5CC")),
-        (0.11, 0.15, PatternFill("solid", fgColor="FFDBB8")),
-        (0.16, 0.20, PatternFill("solid", fgColor="FFCC99")),
-        (0.21, 0.25, PatternFill("solid", fgColor="FFBE80")),
-        (0.26, 0.30, PatternFill("solid", fgColor="FFB266")),
-        (0.31, 0.35, PatternFill("solid", fgColor="FFA366")),
-        (0.36, 0.40, PatternFill("solid", fgColor="FF9933")),
-        (0.41, 0.45, PatternFill("solid", fgColor="F8A5A5")),
-        (0.46, 0.50, PatternFill("solid", fgColor="F28B82")),
-        (0.51, 0.55, PatternFill("solid", fgColor="F8696B")),
-        (0.56, 0.60, PatternFill("solid", fgColor="EF5350")),
-        (0.61, 0.65, PatternFill("solid", fgColor="E53935")),
-        (0.66, 0.70, PatternFill("solid", fgColor="D32F2F")),
-        (0.71, 0.75, PatternFill("solid", fgColor="C62828")),
-        (0.76, 0.80, PatternFill("solid", fgColor="B71C1C")),
-        (0.81, 0.85, PatternFill("solid", fgColor="A00000")),
-        (0.86, 0.90, PatternFill("solid", fgColor="8E0000")),
-        (0.91, 0.95, PatternFill("solid", fgColor="7F0000")),
-        (0.96, 1.00, PatternFill("solid", fgColor="6A0000")),
-    ]
+# ------------------------------------
+# PERCENT HEATMAP (BIP % columns only)
+# 0–5% = white, then every .05 darker
+# ------------------------------------
+
+from openpyxl.styles import PatternFill
+
+pct_bins = [
+    (0.00, 0.05, None),
+    (0.05, 0.10, PatternFill("solid", fgColor="FFE5CC")),
+    (0.10, 0.15, PatternFill("solid", fgColor="FFDBB8")),
+    (0.15, 0.20, PatternFill("solid", fgColor="FFCC99")),
+    (0.20, 0.25, PatternFill("solid", fgColor="FFBE80")),
+    (0.25, 0.30, PatternFill("solid", fgColor="FFB266")),
+    (0.30, 0.35, PatternFill("solid", fgColor="FFA366")),
+    (0.35, 0.40, PatternFill("solid", fgColor="FF9933")),
+    (0.40, 0.45, PatternFill("solid", fgColor="F8A5A5")),
+    (0.45, 0.50, PatternFill("solid", fgColor="F28B82")),
+    (0.50, 0.55, PatternFill("solid", fgColor="F8696B")),
+    (0.55, 0.60, PatternFill("solid", fgColor="EF5350")),
+    (0.60, 0.65, PatternFill("solid", fgColor="E53935")),
+    (0.65, 0.70, PatternFill("solid", fgColor="D32F2F")),
+    (0.70, 0.75, PatternFill("solid", fgColor="C62828")),
+    (0.75, 0.80, PatternFill("solid", fgColor="B71C1C")),
+    (0.80, 0.85, PatternFill("solid", fgColor="A00000")),
+    (0.85, 0.90, PatternFill("solid", fgColor="8E0000")),
+    (0.90, 0.95, PatternFill("solid", fgColor="7F0000")),
+    (0.95, 1.00, PatternFill("solid", fgColor="6A0000")),
+]
+
 
     def _pct_fill(v):
         if v is None or v == "":
@@ -2695,6 +2699,7 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
+
 
 
 
