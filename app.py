@@ -2698,9 +2698,9 @@ except Exception:
 
 excel_bytes = out.getvalue()
 
-# If excel_bytes is empty, something upstream failed (prevents “corrupt file” downloads)
+# If excel_bytes is empty, something upstream failed (prevents corrupt downloads)
 if not excel_bytes or len(excel_bytes) < 5000:
-    st.error("Excel export failed (file too small). Check ExcelWriter block above for an exception.")
+    st.error("Excel export failed (file too small). Scroll UP for the real exception above.")
 else:
     # Use SAME formatted XLSX bytes for Google Sheets upload
     gs_bytes = excel_bytes
@@ -2738,6 +2738,33 @@ else:
             key=f"dl_season_csv_{TEAM_CODE}_{_RP_RUN_NONCE}",
             use_container_width=True,
         )
+
+       
+# -----------------------------
+# FOOTER (Copyright)
+# -----------------------------
+st.markdown(
+    """
+    <style>
+    .rp-footer {
+        margin-top: 40px;
+        padding-top: 12px;
+        border-top: 1px solid rgba(0,0,0,0.12);
+        text-align: center;
+        font-size: 0.85rem;
+        color: rgba(0,0,0,0.55);
+    }
+    </style>
+
+    <div class="rp-footer">
+        © 2026 RP Spray Analytics. All rights reserved.<br>
+        Proprietary software. Unauthorized copying, redistribution, or reverse engineering prohibited.
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
+
+
 
 
 
