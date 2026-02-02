@@ -2518,87 +2518,104 @@ pct_bins = [
 
 
 def _pct_fill(v):
-        if v is None or v == "":
-            return None
-        try:
-            x = float(v)
-        except Exception:
-            return None
-
-        # clamp to [0, 1]
-        if x < 0:
-            x = 0.0
-        if x > 1:
-            x = 1.0
-
-        for lo, hi, fill in pct_bins:
-            if lo <= x <= hi:
-                return fill
+    if v is None or v == "":
+        return None
+    try:
+        x = float(v)
+    except Exception:
         return None
 
-    # Apply GP heatmap only on GP column
-        if gp_idx:
-            for r in range(3, ws.max_row + 1):
-                cell = ws.cell(row=r, column=gp_idx)
-            try:
-                v = float(cell.value or 0)
-            except Exception:
-                continue
-            if v <= 0:
-                continue
-            if v >= 20:
-                cell.fill = gp_fill_20p
-            elif 16 <= v <= 19:
-                cell.fill = gp_fill_16_19
-            elif 11 <= v <= 15:
-                cell.fill = gp_fill_11_15
-            elif 6 <= v <= 10:
-                cell.fill = gp_fill_6_10
-            elif 1 <= v <= 5:
-                cell.fill = gp_fill_1_5
+    # clamp to [0, 1]
+    if x < 0:
+        x = 0.0
+    if x > 1:
+        x = 1.0
 
-    # Apply percent heatmap only to positional columns (GB-* and FB-*)
+    for lo, hi, fill in pct_bins:
+        if fill is None:
+            continue
+        if (lo <= x < hi) or (hi == 1.00 and lo <= x <= hi):
+            return fill
+
+    return None
+
+
+# ------------------------------------
+# APPLY GP HEATMAP (GP column only)
+# ------------------------------------
+if gp_idx:
     for r in range(3, ws.max_row + 1):
-        for c in range(1, ws.max_column + 1):
-            h = str(ws.cell(row=2, column=c).value or "").strip()
-            if not (h.startswith("GB-") or h.startswith("FB-")):
-                continue
+        cell = ws.cell(row=r, column=gp_idx)
+        try:
+            v = float(cell.value or 0)
+        except Exception:
+            continue
 
-            cell = ws.cell(row=r, column=c)
-            try:
-                v = float(cell.value or 0)
-            except Exception:
-                continue
+        if v <= 0:
+            continue
+        if v >= 20:
+            cell.fill = gp_fill_20p
+        elif 16 <= v <= 19:
+            cell.fill = gp_fill_16_19
+        elif 11 <= v <= 15:
+            cell.fill = gp_fill_11_15
+        elif 6 <= v <= 10:
+            cell.fill = gp_fill_6_10
+        elif 1 <= v <= 5:
+            cell.fill = gp_fill_1_5
 
-            if v <= 0:
-                continue  # keep white
 
-            f = _pct_fill(v)
-            if f:
-                cell.fill = f
+# ------------------------------------
+# APPLY % HEATMAP (GB-* and FB-* only)
+# ------------------------------------
+for r in range(3, ws.max_row + 1):
+    for c in range(1, ws.max_column + 1):
+        h = str(ws.cell(row=2, column=c).value or "").strip()
+        if not (h.startswith("GB-") or h.startswith("FB-")):
+            continue
 
-    # Watermark via print header
-    try:
-        ws.oddHeader.center.text = "RP Spray Analytics"
-        ws.oddHeader.center.font = "Tahoma,Bold"
-        ws.oddHeader.center.size = 14
-        ws.oddHeader.center.color = "808080"
-    except Exception:
-        pass
+        cell = ws.cell(row=r, column=c)
+        try:
+            v = float(cell.value or 0)
+        except Exception:
+            continue
 
-    # Print setup
-    ws.page_setup.orientation = ws.ORIENTATION_PORTRAIT
-    ws.page_setup.fitToWidth = 1
-    ws.page_setup.fitToHeight = 0
-    ws.sheet_properties.pageSetUpPr.fitToPage = True
-    ws.print_options.horizontalCentered = True
-    ws.page_margins.left = 0.25
-    ws.page_margins.right = 0.25
-    ws.page_margins.top = 0.35
-    ws.page_margins.bottom = 0.35
-    ws.page_margins.header = 0.15
-    ws.page_margins.footer = 0.15
-    ws.page_setup.paperSize = ws.PAPERSIZE_LETTER
+        if v <= 0:
+            continue
+
+        f = _pct_fill(v)
+        if f:
+            cell.fill = f
+
+
+# ------------------------------------
+# WATERMARK
+# ------------------------------------
+try:
+    ws.oddHeader.center.text = "RP Spray Analytics"
+    ws.oddHeader.center.font = "Tahoma,Bold"
+    ws.oddHeader.center.size = 14
+    ws.oddHeader.center.color = "808080"
+except Exception:
+    pass
+
+
+# ------------------------------------
+# PRINT SETUP
+# ------------------------------------
+ws.page_setup.orientation = ws.ORIENTATION_PORTRAIT
+ws.page_setup.fitToWidth = 1
+ws.page_setup.fitToHeight = 0
+ws.sheet_properties.pageSetUpPr.fitToPage = True
+ws.print_options.horizontalCentered = True
+ws.page_margins.left = 0.25
+ws.page_margins.right = 0.25
+ws.page_margins.top = 0.35
+ws.page_margins.bottom = 0.35
+ws.page_margins.header = 0.15
+ws.page_margins.footer = 0.15
+ws.page_setup.paperSize = ws.PAPERSIZE_LETTER
+
 
     # -----------------------------
     # COACH NOTES BOX (EXCEL)
@@ -2699,6 +2716,7 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
+
 
 
 
