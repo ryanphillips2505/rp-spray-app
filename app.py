@@ -2438,13 +2438,22 @@ def _build_player_scout_sheet(ws_, player_name, stats):
         ws_.row_dimensions[rr].height = 20
     ws_.row_dimensions[16].height = 10
 
-    # title
-    ws_.merge_cells("A1:I1")
-    t = ws_["A1"]
-    t.value = str(player_name)
-    t.font = _title_font
-    t.alignment = _center
-    t.border = _thick_bottom
+    # title (FULL WIDTH THICK OUTLINE)
+ws_.merge_cells("A1:I1")
+t = ws_["A1"]
+t.value = str(player_name)
+t.font = _title_font
+t.alignment = _center
+
+# ✅ thick border around the whole merged title area A1:I1
+for col in ["A","B","C","D","E","F","G","H","I"]:
+    cell = ws_[f"{col}1"]
+    cell.border = Border(
+        left=_thick if col == "A" else Side(style=None),
+        right=_thick if col == "I" else Side(style=None),
+        top=_thick,
+        bottom=_thick,
+    )
 
     # ✅ Add GB / FB labels (global legend row)
     _set_gbfb_labels(ws_)
@@ -2473,8 +2482,8 @@ def _build_player_scout_sheet(ws_, player_name, stats):
     ws_["G7"].value = "2B"
     ws_["G7"].font = _label_font
     ws_["G7"].alignment = _center
-    ws_["G7"].border = _box_thin
-    ws_["H7"].border = _box_thin  # keep the right cell outlined too
+    ws_["G7"].border = _box_thick
+    ws_["H7"].border = _box_thick  # keep the right cell outlined too
     _set_pct_cell(ws_, "G8", vals.get("GB-2B", 0))
     _set_pct_cell(ws_, "H8", vals.get("FB-2B", 0))
 
@@ -2915,6 +2924,7 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
+
 
 
 
