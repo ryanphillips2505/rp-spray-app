@@ -2342,12 +2342,11 @@ def _pct_fill_player(v):
     return None
 
 _center = Alignment(horizontal="center", vertical="center")
-_thin = Side(style="thin", color="000000")
+_thin  = Side(style="thin",  color="000000")
 _thick = Side(style="thick", color="000000")
 
 _box_thin  = Border(left=_thin,  right=_thin,  top=_thin,  bottom=_thin)
 _box_thick = Border(left=_thick, right=_thick, top=_thick, bottom=_thick)
-_thick_bottom = Border(bottom=_thick)
 
 _title_font = Font(bold=True, size=20)
 _label_font = Font(bold=True, size=12)
@@ -2372,31 +2371,32 @@ def _clear_sheet_safely(ws_):
             cell.alignment = Alignment()
 
 def _merge_label(ws_, rng, text):
+    # ✅ Position label boxes THICK
     ws_.merge_cells(rng)
     c = ws_[rng.split(":")[0]]
     c.value = text
     c.font = _label_font
     c.alignment = _center
-    c.border = _box_thin
+    c.border = _box_thick  # ✅ was _box_thin
 
 def _set_pct_cell(ws_, addr, v):
+    # ✅ Data cells THICK
     c = ws_[addr]
     c.value = _safe_float(v)
     c.number_format = "0%"
     c.font = _val_font
     c.alignment = _center
-    c.border = _box_thick  # ✅ THICK border for data cells
+    c.border = _box_thick
     f = _pct_fill_player(c.value)
     if f:
         c.fill = f
 
 def _set_gbfb_labels(ws_):
     """
-    ✅ One clean GB/FB legend row that aligns with ALL data columns:
-    - GB columns: C, E, G
-    - FB columns: D, F, H
+    ✅ GB/FB row labels aligned to ALL value columns:
+    C/E/G = GB
+    D/F/H = FB
     """
-    # (Optional) give row 2 a little height so labels breathe
     ws_.row_dimensions[2].height = 18
 
     pairs = [("C", "D"), ("E", "F"), ("G", "H")]
@@ -2410,8 +2410,7 @@ def _set_gbfb_labels(ws_):
         for cell in (gb_cell, fb_cell):
             cell.font = _gbfb_font
             cell.alignment = _center
-            # subtle thin border is fine here (not “data”), but you can make thick if you want
-            cell.border = _box_thin
+            cell.border = _box_thick  # ✅ make these thick too (cleaner)
 
 def _build_player_scout_sheet(ws_, player_name, stats):
     gb = int(stats.get("GB", 0) or 0)
@@ -2445,17 +2444,17 @@ def _build_player_scout_sheet(ws_, player_name, stats):
     t.font = _title_font
     t.alignment = _center
 
-# ✅ thick border around the whole merged title area A1:I1
-for col in ["A","B","C","D","E","F","G","H","I"]:
-    cell = ws_[f"{col}1"]
-    cell.border = Border(
-        left=_thick if col == "A" else Side(style=None),
-        right=_thick if col == "I" else Side(style=None),
-        top=_thick,
-        bottom=_thick,
-    )
+    # ✅ thick border around the WHOLE merged title area A1:I1 (INSIDE the function!)
+    for col in ["A","B","C","D","E","F","G","H","I"]:
+        cell = ws_[f"{col}1"]
+        cell.border = Border(
+            left=_thick if col == "A" else _thin,
+            right=_thick if col == "I" else _thin,
+            top=_thick,
+            bottom=_thick,
+        )
 
-    # ✅ Add GB / FB labels (global legend row)
+    # ✅ Add GB / FB labels (row 2)
     _set_gbfb_labels(ws_)
 
     # CF
@@ -2483,7 +2482,7 @@ for col in ["A","B","C","D","E","F","G","H","I"]:
     ws_["G7"].font = _label_font
     ws_["G7"].alignment = _center
     ws_["G7"].border = _box_thick
-    ws_["H7"].border = _box_thick  # keep the right cell outlined too
+    ws_["H7"].border = _box_thick
     _set_pct_cell(ws_, "G8", vals.get("GB-2B", 0))
     _set_pct_cell(ws_, "H8", vals.get("FB-2B", 0))
 
@@ -2508,7 +2507,7 @@ for col in ["A","B","C","D","E","F","G","H","I"]:
         cell.fill = PatternFill("solid", fgColor="000000")
         cell.border = Border(top=_thick, bottom=_thick)
 
-    # BIP box (make it thick, since it’s data)
+    # BIP box (THICK)
     ws_.merge_cells("C17:D17")
     b1 = ws_["C17"]
     b1.value = "BIP"
@@ -2540,6 +2539,7 @@ for col in ["A","B","C","D","E","F","G","H","I"]:
     ws_.page_margins.header = 0.15
     ws_.page_margins.footer = 0.15
     ws_.page_setup.paperSize = ws_.PAPERSIZE_LETTER
+
 
 
 
@@ -2924,6 +2924,7 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
+
 
 
 
