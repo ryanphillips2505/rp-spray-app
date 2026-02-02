@@ -2603,6 +2603,36 @@ with pd.ExcelWriter(out, engine="openpyxl") as writer:
 
 excel_bytes = out.getvalue()
 
+# Use the SAME formatted XLSX bytes for Google Sheets
+gs_bytes = excel_bytes
+
+col_dl1, col_dl2, col_dl3 = st.columns(3)
+
+with col_dl1:
+    st.download_button(
+        label="📊 Download Season Report (Excel)",
+        data=excel_bytes,
+        file_name=f"{TEAM_CODE}_{safe_team}_Season_Spray_Report.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
+
+with col_dl2:
+    st.download_button(
+        label="🟩 Download Season Report (Google Sheets - Formatted)",
+        data=gs_bytes,
+        file_name=f"{TEAM_CODE}_{safe_team}_Season_Spray_Report_GoogleSheets.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
+
+with col_dl3:
+    st.download_button(
+        label="📄 Download Season Report (CSV - Raw Data)",
+        data=csv_bytes,
+        file_name=f"{TEAM_CODE}_{safe_team}_Season_Spray_Report.csv",
+        mime="text/csv",
+    )
+
+
 col_dl1, col_dl2 = st.columns(2)
 with col_dl1:
     st.download_button(
@@ -2643,6 +2673,7 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
+
 
 
 
