@@ -357,12 +357,14 @@ Access may be revoked immediately for violations without refund.
         submitted = st.form_submit_button("Continue")
 
     if submitted:
-        if st.session_state.get(_AGREE_KEY, False):
-            st.session_state[_TERMS_KEY] = True
-        else:
-            st.warning("You must agree before continuing.")
+    if st.session_state.get(_AGREE_KEY, False):
+        st.session_state[_TERMS_KEY] = True
+        st.rerun()
+    else:
+        st.warning("You must agree before continuing.")
 
-    st.stop()
+st.stop()
+
 
 
 # -----------------------------
@@ -2699,6 +2701,7 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
+
 
 
 
