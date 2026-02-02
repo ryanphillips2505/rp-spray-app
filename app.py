@@ -2636,24 +2636,6 @@ with col_dl3:
     )
 
 
-
-col_dl1, col_dl2 = st.columns(2)
-with col_dl1:
-    st.download_button(
-        label="📊 Download Season Report (Excel)",
-        data=excel_bytes,
-        file_name=f"{TEAM_CODE}_{safe_team}_Season_Spray_Report.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    )
-
-with col_dl2:
-    st.download_button(
-        label="📄 Download Season Report (CSV - Google Sheets Ready)",
-        data=csv_bytes,
-        file_name=f"{TEAM_CODE}_{safe_team}_Season_Spray_Report.csv",
-        mime="text/csv",
-    )
-
 # -----------------------------
 # FOOTER (Copyright)
 # -----------------------------
@@ -2677,6 +2659,7 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
+
 
 
 
