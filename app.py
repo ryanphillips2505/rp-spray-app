@@ -2774,20 +2774,36 @@ with pd.ExcelWriter(out, engine="openpyxl") as writer:
         wsp.page_margins.footer = 0.15
         wsp.page_setup.paperSize = wsp.PAPERSIZE_LETTER
         
-                # =====================================================
-        # PLAYER SCOUTING SHEET LAYOUT
-        # Top: Spray Heat Map (GB green / FB red)
+               # =====================================================
+        # PLAYER SCOUTING SHEET LAYOUT (PRINT CLEAN)
+        # Top: Aligned "Twin-Cell" Spray Heat Map (GB green / FB red)
         # Bottom: 10 AB Tracker (1 symbol per cell + note lines)
         # =====================================================
 
-        # ---- pull values from the single-row df ----
-        vals = one_df.iloc[0].to_dict()
+        # ---- pull values from the single-row df (player totals row) ----
+        # one_df is the player's single-row dataframe already built in your loop
+        vals = one_df.iloc[0].to_dict() if (one_df is not None and not one_df.empty) else {}
 
-        # ---- clear sheet completely (so it prints clean) ----
+        # ---- clear sheet SAFELY (merged cells will crash if you write to them) ----
+        from openpyxl.cell.cell import MergedCell
+
+        # 1) unmerge anything already on the sheet
+        try:
+            for rng in list(wsp.merged_cells.ranges):
+                wsp.unmerge_cells(str(rng))
+        except Exception:
+            pass
+
+        # 2) clear values/borders/fills (skip merged children)
         for r in range(1, 70):
             for c in range(1, 20):
-                wsp.cell(row=r, column=c).value = None
-                wsp.cell(row=r, column=c).border = Border()
+                cell = wsp.cell(row=r, column=c)
+                if isinstance(cell, MergedCell):
+                    continue
+                cell.value = None
+                cell.border = Border()
+                cell.fill = PatternFill()
+                cell.alignment = Alignment()
 
         # ---- basic styles ----
         center = Alignment(horizontal="center", vertical="center")
@@ -2800,7 +2816,9 @@ with pd.ExcelWriter(out, engine="openpyxl") as writer:
         head_font  = Font(bold=True, size=11)
         val_font   = Font(bold=True, size=12)
 
-        # ---- Title ----
+        # =====================================================
+        # TITLE
+        # =====================================================
         wsp.merge_cells("B1:O1")
         t = wsp["B1"]
         t.value = str(player_name)
@@ -2809,15 +2827,18 @@ with pd.ExcelWriter(out, engine="openpyxl") as writer:
         wsp.row_dimensions[1].height = 32
 
         # =====================================================
-        # TOP HALF: SPRAY HEAT MAP (your twin-cell layout)
-        # We use columns B–H, rows 3–14
+        # TOP HALF: ALIGNED "TWIN-CELL" SPRAY HEAT MAP
+        # Columns B–H, Rows 3–14 (compact squares)
         # =====================================================
 
-        # Column widths (tight squares)
-        for col in ["B","C","D","E","F","G","H"]:
+        # Narrow columns for square-ish GB/FB boxes
+        for col in ["B", "C", "D", "E", "F", "G", "H"]:
             wsp.column_dimensions[col].width = 6
 
-        # Helper: merge label
+        # Row heights for clean grid
+        for rr in range(3, 15):
+            wsp.row_dimensions[rr].height = 22
+
         def _label(rng, text):
             wsp.merge_cells(rng)
             c = wsp[rng.split(":")[0]]
@@ -2825,7 +2846,6 @@ with pd.ExcelWriter(out, engine="openpyxl") as writer:
             c.font = label_font
             c.alignment = center
 
-        # Helpers: GB/FB headers + values
         def _gbfb_headers(gb_addr, fb_addr):
             for addr, txt in [(gb_addr, "GB"), (fb_addr, "FB")]:
                 c = wsp[addr]
@@ -2834,8 +2854,8 @@ with pd.ExcelWriter(out, engine="openpyxl") as writer:
                 c.alignment = center
                 c.border = box
 
-        # --- color fills: GB green scale, FB red scale ---
-        # (simple stepped fills; clean print)
+        # ---- color fills: GB green scale, FB red scale ----
+        # Values are expected as decimals 0.00–1.00 (percent-of-BIP style)
         gb_bins = [
             (0.00, 0.05, None),
             (0.05, 0.15, PatternFill("solid", fgColor="D9F2D9")),
@@ -2884,11 +2904,13 @@ with pd.ExcelWriter(out, engine="openpyxl") as writer:
                 if f:
                     c.fill = f
 
-        # Position labels (merged over 2 cells) + their GB/FB cells under
+        # --- Position layout (your centered symmetry) ---
+        # CF aligned center
         _label("E3:F3", "CF")
         _gbfb_headers("E4", "F4")
         _gbfb_vals("E4", "F4", "CF")
 
+        # LF / RF mirrored
         _label("B5:C5", "LF")
         _gbfb_headers("B6", "C6")
         _gbfb_vals("B6", "C6", "LF")
@@ -2897,6 +2919,7 @@ with pd.ExcelWriter(out, engine="openpyxl") as writer:
         _gbfb_headers("G6", "H6")
         _gbfb_vals("G6", "H6", "RF")
 
+        # SS / 2B centered pair
         _label("D7:E7", "SS")
         _gbfb_headers("D8", "E8")
         _gbfb_vals("D8", "E8", "SS")
@@ -2905,6 +2928,7 @@ with pd.ExcelWriter(out, engine="openpyxl") as writer:
         _gbfb_headers("F8", "G8")
         _gbfb_vals("F8", "G8", "2B")
 
+        # 3B / 1B mirrored
         _label("B9:C9", "3B")
         _gbfb_headers("B10", "C10")
         _gbfb_vals("B10", "C10", "3B")
@@ -2913,6 +2937,7 @@ with pd.ExcelWriter(out, engine="openpyxl") as writer:
         _gbfb_headers("G10", "H10")
         _gbfb_vals("G10", "H10", "1B")
 
+        # P and C centered under CF
         _label("E11:F11", "P")
         _gbfb_headers("E12", "F12")
         _gbfb_vals("E12", "F12", "P")
@@ -2920,10 +2945,6 @@ with pd.ExcelWriter(out, engine="openpyxl") as writer:
         _label("E13:F13", "C")
         _gbfb_headers("E14", "F14")
         _gbfb_vals("E14", "F14", "C")
-
-        # Row heights for clean squares
-        for rr in range(3, 15):
-            wsp.row_dimensions[rr].height = 22
 
         # =====================================================
         # BOTTOM HALF: AT-BAT TRACKER (10 ABs, 1 symbol per cell)
@@ -2935,7 +2956,7 @@ with pd.ExcelWriter(out, engine="openpyxl") as writer:
         FIRST_AB_ROW = 18
         AB_COUNT = 10
 
-        # Use columns B–O for the tracker
+        # Columns for tracker B–O
         for c, w in {
             "B": 5,
             "C": 4, "D": 4, "E": 4, "F": 4,
@@ -2978,6 +2999,7 @@ with pd.ExcelWriter(out, engine="openpyxl") as writer:
         wsp["J17"].font = Font(bold=True, size=12)
         wsp["J17"].alignment = center
 
+        # Header borders
         for col in ["B","C","D","E","F","G","H","I","J","K","L","M","N","O"]:
             _border_all(wsp[f"{col}{HEADER_ROW}"])
 
@@ -2988,12 +3010,14 @@ with pd.ExcelWriter(out, engine="openpyxl") as writer:
             r = FIRST_AB_ROW + i
             wsp.row_dimensions[r].height = 22
 
+            # AB number
             ab = wsp[f"B{r}"]
             ab.value = str(i + 1)
             ab.font = Font(bold=True, size=12)
             ab.alignment = center
             _border_all(ab)
 
+            # Balls (C–F) boxed
             for col in ["C","D","E","F"]:
                 cc = wsp[f"{col}{r}"]
                 cc.value = ball_empty
@@ -3001,6 +3025,7 @@ with pd.ExcelWriter(out, engine="openpyxl") as writer:
                 cc.alignment = center
                 _border_all(cc)
 
+            # Strikes (G–I) boxed
             for col in ["G","H","I"]:
                 cc = wsp[f"{col}{r}"]
                 cc.value = strike_empty
@@ -3008,6 +3033,7 @@ with pd.ExcelWriter(out, engine="openpyxl") as writer:
                 cc.alignment = center
                 _border_all(cc)
 
+            # Notes (J–O merged)
             wsp.merge_cells(f"J{r}:O{r}")
             note = wsp[f"J{r}"]
             note.value = ""
@@ -3018,10 +3044,23 @@ with pd.ExcelWriter(out, engine="openpyxl") as writer:
             for col in ["J","K","L","M","N","O"]:
                 _border_bottom(wsp[f"{col}{r}"])
 
-        # Print to one page
+        # =====================================================
+        # PRINT SETUP FOR THIS PLAYER SHEET
+        # =====================================================
         wsp.print_area = "B1:O40"
+        wsp.page_setup.orientation = wsp.ORIENTATION_PORTRAIT
         wsp.page_setup.fitToWidth = 1
         wsp.page_setup.fitToHeight = 1
+        wsp.sheet_properties.pageSetUpPr.fitToPage = True
+        wsp.print_options.horizontalCentered = True
+        wsp.page_margins.left = 0.25
+        wsp.page_margins.right = 0.25
+        wsp.page_margins.top = 0.35
+        wsp.page_margins.bottom = 0.35
+        wsp.page_margins.header = 0.15
+        wsp.page_margins.footer = 0.15
+        wsp.page_setup.paperSize = wsp.PAPERSIZE_LETTER
+         
 
 
 # ✅ AFTER writer closes: pull bytes
@@ -3098,6 +3137,7 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
+
 
 
 
