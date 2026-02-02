@@ -2436,11 +2436,10 @@ def _build_player_scout_sheet(ws_, player_name, stats):
 
     _clear_sheet_safely(ws_)
 
-    # widths
-    ws_.column_dimensions["A"].width = 5
-    ws_.column_dimensions["B"].width = 5
-    for col in ["C","D","E","F","G","H","I"]:
-        ws_.column_dimensions[col].width = 13
+    # widths — keep all columns uniform
+for col in ["A","B","C","D","E","F","G","H","I"]:
+    ws_.column_dimensions[col].width = 13
+
 
     # ✅ heights: reset to 20 everywhere; title row 30; divider row 10
     for rr in range(1, 41):
@@ -2529,6 +2528,27 @@ try:
 
         df_export.to_excel(writer, sheet_name="Season", index=False)
         ws_season = writer.sheets["Season"]
+      
+# ============================
+# SEASON HEAT MAP (FULL TEAM)
+# ============================
+from openpyxl.formatting.rule import ColorScaleRule
+
+start_row = 2  # row 1 is headers
+end_row = ws_season.max_row
+end_col = ws_season.max_column
+
+if end_row >= start_row and end_col >= 2:
+    heat_rule = ColorScaleRule(
+        start_type="min", start_color="FFFFFF",
+        mid_type="percentile", mid_value=50, mid_color="FFCC99",
+        end_type="max", end_color="8E0000",
+    )
+
+    # apply to all numeric columns EXCEPT Player (column A)
+    rng = f"{get_column_letter(2)}{start_row}:{get_column_letter(end_col)}{end_row}"
+    ws_season.conditional_formatting.add(rng, heat_rule)
+
 
         # basic readability (won’t break your other formatting)
         ws_season.freeze_panes = "A3"
@@ -2658,6 +2678,7 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
+
 
 
 
