@@ -2634,6 +2634,9 @@ with col_dl3:
         mime="text/csv",
         key=f"dl_season_csv_{TEAM_CODE}_{_RP_RUN_NONCE}",
     )
+st.caption(
+    "To open in Google Sheets: download the file → go to sheets.google.com → File → Import → Upload."
+)
 
 
 # -----------------------------
@@ -2659,6 +2662,7 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
+
 
 
 
