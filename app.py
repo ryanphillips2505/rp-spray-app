@@ -2614,23 +2614,27 @@ with col_dl1:
         data=excel_bytes,
         file_name=f"{TEAM_CODE}_{safe_team}_Season_Spray_Report.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        key=f"dl_season_excel_{TEAM_CODE}_{_RP_RUN_NONCE}",
     )
 
 with col_dl2:
     st.download_button(
-        label="🟩 Download Season Report (Google Sheets - Formatted)",
+        label="🟩 Download Season Report (Google Sheets – Formatted)",
         data=gs_bytes,
         file_name=f"{TEAM_CODE}_{safe_team}_Season_Spray_Report_GoogleSheets.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        key=f"dl_season_gs_{TEAM_CODE}_{_RP_RUN_NONCE}",
     )
 
 with col_dl3:
     st.download_button(
-        label="📄 Download Season Report (CSV - Raw Data)",
+        label="📄 Download Season Report (CSV – Raw Data)",
         data=csv_bytes,
         file_name=f"{TEAM_CODE}_{safe_team}_Season_Spray_Report.csv",
         mime="text/csv",
+        key=f"dl_season_csv_{TEAM_CODE}_{_RP_RUN_NONCE}",
     )
+
 
 
 col_dl1, col_dl2 = st.columns(2)
@@ -2673,6 +2677,7 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
+
 
 
 
