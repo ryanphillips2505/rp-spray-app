@@ -2704,18 +2704,19 @@ def _safe_float(x):
     except Exception:
         return 0.0
 
-# -------------------------
-# ORANGE → RED HEAT MAP BINS
-# (same cutoffs as team heat map)
-# -------------------------
+# --- ORANGE → RED HEAT MAP BINS (matches TEAM heat map) ---
 heat_bins_orange_red = [
     (0.00, 0.05, None),
     (0.05, 0.15, PatternFill("solid", fgColor="FFE5CC")),  # light orange
     (0.15, 0.30, PatternFill("solid", fgColor="FFCC99")),  # orange
-    (0.30, 0.45, PatternFill("solid", fgColor="FFB266")),  # deep orange
+    (0.30, 0.45, PatternFill("solid", fgColor="FFB266")),  # deeper orange
     (0.45, 0.60, PatternFill("solid", fgColor="FF7A45")),  # orange-red
     (0.60, 1.01, PatternFill("solid", fgColor="B71C1C")),  # dark red
 ]
+
+# Keep these names so your existing code still works:
+gb_bins = heat_bins_orange_red
+fb_bins = heat_bins_orange_red
 
 def _fill(v, bins):
     x = _safe_float(v)
@@ -2730,15 +2731,21 @@ def _fill(v, bins):
             return f
     return None
 
-# -------------------------
-# percent cell writer
-# -------------------------
-def _set_pct_cell(ws, addr, value):
+def _set_pct_cell(ws, addr, value, is_gb=True):
+    """
+    IMPORTANT: keep 'is_gb' parameter so existing calls don't break.
+    We still shade using orange→red for BOTH GB and FB to match team heat map.
+    """
     cell = ws[addr]
     v = _safe_float(value)
+
+    # write percent
     cell.value = round(v * 100)
     cell.number_format = '0"%"'
-    fill = _fill(v, heat_bins_orange_red)
+
+    # orange→red fill (same bins for GB/FB)
+    bins = gb_bins if is_gb else fb_bins
+    fill = _fill(v, bins)
     if fill:
         cell.fill = fill
 
@@ -3004,6 +3011,7 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
+
 
 
 
