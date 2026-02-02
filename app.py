@@ -2439,11 +2439,11 @@ def _build_player_scout_sheet(ws_, player_name, stats):
     ws_.row_dimensions[16].height = 10
 
     # title (FULL WIDTH THICK OUTLINE)
-ws_.merge_cells("A1:I1")
-t = ws_["A1"]
-t.value = str(player_name)
-t.font = _title_font
-t.alignment = _center
+    ws_.merge_cells("A1:I1")
+    t = ws_["A1"]
+    t.value = str(player_name)
+    t.font = _title_font
+    t.alignment = _center
 
 # ✅ thick border around the whole merged title area A1:I1
 for col in ["A","B","C","D","E","F","G","H","I"]:
@@ -2924,6 +2924,7 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
+
 
 
 
