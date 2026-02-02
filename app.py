@@ -2606,40 +2606,39 @@ excel_bytes = out.getvalue()
 # Use the SAME formatted XLSX bytes for Google Sheets
 gs_bytes = excel_bytes
 
-col_dl1, col_dl2, col_dl3 = st.columns(3)
+with st.container():
+    col_dl1, col_dl2, col_dl3 = st.columns([1, 1, 1], gap="small")
 
-with col_dl1:
-    st.download_button(
-        label="📊 Download Season Report (Excel)",
-        data=excel_bytes,
-        file_name=f"{TEAM_CODE}_{safe_team}_Season_Spray_Report.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        key=f"dl_season_excel_{TEAM_CODE}_{_RP_RUN_NONCE}",
-    )
+    with col_dl1:
+        st.download_button(
+            label="📊 Download Season Report (Excel)",
+            data=excel_bytes,
+            file_name=f"{TEAM_CODE}_{safe_team}_Season_Spray_Report.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            key=f"dl_season_excel_{TEAM_CODE}_{_RP_RUN_NONCE}",
+        )
 
-with col_dl2:
-    st.download_button(
-        label="🟩 Download Season Report (Google Sheets – Formatted)",
-        data=gs_bytes,
-        file_name=f"{TEAM_CODE}_{safe_team}_Season_Spray_Report_GoogleSheets.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        key=f"dl_season_gs_{TEAM_CODE}_{_RP_RUN_NONCE}",
-    )
+    with col_dl2:
+        st.download_button(
+            label="🟩 Download Season Report (Google Sheets – Formatted)",
+            data=gs_bytes,
+            file_name=f"{TEAM_CODE}_{safe_team}_Season_Spray_Report_GoogleSheets.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            key=f"dl_season_gs_{TEAM_CODE}_{_RP_RUN_NONCE}",
+        )
 
-    # 👇 Caption lives ONLY under Google Sheets button
-    st.caption(
-        "To open in Google Sheets: download → go to **sheets.google.com** → "
-        "**File → Import → Upload**."
-    )
+        st.caption(
+            "To open in Google Sheets: download → sheets.google.com → File → Import → Upload."
+        )
 
-with col_dl3:
-    st.download_button(
-        label="📄 Download Season Report (CSV – Raw Data)",
-        data=csv_bytes,
-        file_name=f"{TEAM_CODE}_{safe_team}_Season_Spray_Report.csv",
-        mime="text/csv",
-        key=f"dl_season_csv_{TEAM_CODE}_{_RP_RUN_NONCE}",
-    )
+    with col_dl3:
+        st.download_button(
+            label="📄 Download Season Report (CSV – Raw Data)",
+            data=csv_bytes,
+            file_name=f"{TEAM_CODE}_{safe_team}_Season_Spray_Report.csv",
+            mime="text/csv",
+            key=f"dl_season_csv_{TEAM_CODE}_{_RP_RUN_NONCE}",
+        )
 
 
 # -----------------------------
@@ -2665,6 +2664,7 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
+
 
 
 
