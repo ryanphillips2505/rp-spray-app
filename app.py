@@ -2564,6 +2564,26 @@ with pd.ExcelWriter(out, engine="openpyxl") as writer:
     ws.page_margins.footer = 0.15
     ws.page_setup.paperSize = ws.PAPERSIZE_LETTER
 
+    # ==========================================================
+    # ✅ INSERTED: BUILD INDIVIDUAL PLAYER TABS (MUST BE INSIDE WRITER)
+    # ==========================================================
+    try:
+        roster_source = list(current_roster) if current_roster else list(df_export["Player"].astype(str))
+    except Exception:
+        roster_source = list(df_export["Player"].astype(str)) if "Player" in df_export.columns else []
+
+    active_for_tabs = sorted(set(roster_source), key=lambda x: str(x).lower())
+
+    for player_name in active_for_tabs:
+        stats = season_players.get(player_name, empty_stat_dict())
+
+        base = _safe_sheet_name(player_name)
+        sheet = _unique_sheet_name(writer.book, base)
+
+        ws_player = writer.book.create_sheet(title=sheet)
+        _build_player_scout_sheet(ws_player, player_name, stats)
+
+    # Debug (temporary)
     st.write("DEBUG sheets RIGHT BEFORE writer closes:", writer.book.sheetnames)
     st.write("DEBUG roster size RIGHT BEFORE writer closes:", len(list(current_roster)) if current_roster else 0)
 
