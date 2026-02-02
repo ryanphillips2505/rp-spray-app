@@ -300,16 +300,8 @@ _AGREE_KEY = f"terms_agree__{str(TEAM_CODE).strip().upper()}"
 
 if _TERMS_KEY not in st.session_state:
     st.session_state[_TERMS_KEY] = False
-if _AGREE_KEY not in st.session_state:
-    st.session_state[_AGREE_KEY] = False
 
 if not st.session_state[_TERMS_KEY]:
-
-    st.set_page_config(
-        page_title="RP Spray Analytics — Terms of Use",
-        page_icon="⚾",
-        layout="centered",
-    )
 
     st.title("Terms of Use")
 
@@ -328,9 +320,9 @@ Licenses are issued per program, per season. One license covers unlimited games,
 Access is restricted to authorized coaches and staff of the licensed program. Access codes may not be shared, transferred, or reused by another team, individual, or organization.
 
 4. PROHIBITED USE
-• Unauthorized copying, redistribution, resale, sublicensing, or public sharing  
-• Reverse engineering, decompilation, or replication of logic or outputs  
-• Competitive, commercial, or third-party use  
+• Unauthorized copying, redistribution, resale, sublicensing, or public sharing
+• Reverse engineering, decompilation, or replication of logic or outputs
+• Competitive, commercial, or third-party use
 
 5. DATA OWNERSHIP
 Teams retain ownership of raw data. All analytics, workflows, and outputs remain proprietary.
@@ -342,7 +334,7 @@ Access may be revoked immediately for violations without refund.
     st.markdown(
         f"""
         <div style="
-            height: 360px;              /* fixed height (not max-height) */
+            height: 360px;
             overflow-y: auto;
             padding: 16px;
             border: 1px solid #d1d5db;
@@ -356,18 +348,19 @@ Access may be revoked immediately for violations without refund.
         unsafe_allow_html=True,
     )
 
-    st.checkbox(
-        "I have read and agree to the Terms of Use",
-        key=_AGREE_KEY,
-    )
+    # ✅ Form prevents rerun on checkbox click (no more jump)
+    with st.form(key=f"terms_form__{str(TEAM_CODE).strip().upper()}"):
+        agree = st.checkbox(
+            "I have read and agree to the Terms of Use",
+            key=_AGREE_KEY,
+        )
+        submitted = st.form_submit_button("Continue")
 
-    # Button is disabled until checkbox is checked (prevents warning layout jump too)
-    st.button(
-        "Continue",
-        disabled=not st.session_state[_AGREE_KEY],
-        key=f"terms_continue__{str(TEAM_CODE).strip().upper()}",
-        on_click=lambda: st.session_state.__setitem__(_TERMS_KEY, True),
-    )
+    if submitted:
+        if st.session_state.get(_AGREE_KEY, False):
+            st.session_state[_TERMS_KEY] = True
+        else:
+            st.warning("You must agree before continuing.")
 
     st.stop()
 
@@ -2670,6 +2663,7 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
+
 
 
 
