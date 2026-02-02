@@ -2516,36 +2516,6 @@ out = BytesIO()
 try:
     with pd.ExcelWriter(out, engine="openpyxl") as writer:
                
-        # ============================
-        # ✅ HEAT MAP (Season sheet)
-        # ============================
-        try:
-            from openpyxl.formatting.rule import ColorScaleRule
-
-            # data rows start at row 2 because row 1 is headers
-            start_row = 2
-            end_row = ws_season.max_row
-            end_col = ws_season.max_column
-
-            if end_row >= start_row and end_col >= 2:
-                # Build a 3-color scale (white -> orange -> dark red)
-                heat_rule = ColorScaleRule(
-                    start_type="min", start_color="FFFFFF",
-                    mid_type="percentile", mid_value=50, mid_color="FFCC99",
-                    end_type="max", end_color="8E0000",
-                )
-
-                # Apply to all numeric cells excluding Player column (col 1)
-                # If you later add GB% / FB% columns, they’ll still be colored;
-                # if you want those excluded, see optional block below.
-                rng = f"{get_column_letter(2)}{start_row}:{get_column_letter(end_col)}{end_row}"
-                ws_season.conditional_formatting.add(rng, heat_rule)
-
-        except Exception as e:
-            st.warning("Heat map formatting skipped due to an Excel formatting error.")
-            st.exception(e)
-
-
         # --- SEASON SHEET ---
         # df_xl is built above in your code. Use it if present, otherwise safe fallback.
         df_export = None
@@ -2688,6 +2658,7 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
+
 
 
 
