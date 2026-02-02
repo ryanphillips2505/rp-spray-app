@@ -2564,6 +2564,10 @@ with pd.ExcelWriter(out, engine="openpyxl") as writer:
     ws.page_margins.footer = 0.15
     ws.page_setup.paperSize = ws.PAPERSIZE_LETTER
 
+    st.write("DEBUG sheets RIGHT BEFORE writer closes:", writer.book.sheetnames)
+    st.write("DEBUG roster size RIGHT BEFORE writer closes:", len(list(current_roster)) if current_roster else 0)
+
+
  # -----------------------------
 # COACH NOTES BOX (EXCEL)
 # -----------------------------
@@ -2608,10 +2612,6 @@ if notes_box_text:
 # - Scouting-sheet layout (NO TABLE)
 # - Heatmap matches TEAM (orange → red)
 # ==========================================================
-
-st.write("DEBUG roster size:", len(list(current_roster)) if current_roster else 0)
-st.write("DEBUG sheets BEFORE player tabs:", writer.book.sheetnames)
-
 
 from openpyxl.cell.cell import MergedCell
 from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
@@ -2914,7 +2914,6 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
-
 
 
 
