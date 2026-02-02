@@ -2346,13 +2346,15 @@ _center = Alignment(horizontal="center", vertical="center")
 _thin  = Side(style="thin",  color="000000")
 _thick = Side(style="thick", color="000000")
 
-_box_thin  = Border(left=_thin,  right=_thin,  top=_thin,  bottom=_thin)
 _box_thick = Border(left=_thick, right=_thick, top=_thick, bottom=_thick)
 
 _title_font = Font(bold=True, size=20)
 _label_font = Font(bold=True, size=12)
 _val_font   = Font(bold=True, size=12)
 _gbfb_font  = Font(bold=True, size=11)
+
+# ✅ light grey for position header cells
+_pos_fill = PatternFill("solid", fgColor="F2F2F2")
 
 def _clear_sheet_safely(ws_):
     try:
@@ -2373,24 +2375,19 @@ def _clear_sheet_safely(ws_):
 
 def _apply_outer_thick_border(ws_, rng: str):
     """
-    OpenPyXL only keeps the style of the top-left cell for merged ranges.
-    This forces a thick outline around the entire range (merged or not).
+    Ensures a thick outline around the entire range (merged or not).
     """
     min_col, min_row, max_col, max_row = range_boundaries(rng)
-
     for r in range(min_row, max_row + 1):
         for c in range(min_col, max_col + 1):
             cell = ws_.cell(row=r, column=c)
-
             left   = _thick if c == min_col else _thin
             right  = _thick if c == max_col else _thin
             top    = _thick if r == min_row else _thin
             bottom = _thick if r == max_row else _thin
-
             cell.border = Border(left=left, right=right, top=top, bottom=bottom)
 
 def _set_pct_cell(ws_, addr, v):
-    # ✅ Data cells THICK
     c = ws_[addr]
     c.value = _safe_float(v)
     c.number_format = "0%"
@@ -2401,19 +2398,22 @@ def _set_pct_cell(ws_, addr, v):
     if f:
         c.fill = f
 
-def _position_block(ws_, label_rng, gb_addr, fb_addr, val_gb_addr, val_fb_addr, label_text, gb_key, fb_key, vals):
+def _position_block(ws_, label_rng, gb_addr, fb_addr, val_gb_addr, val_fb_addr,
+                    label_text, gb_key, fb_key, vals):
     """
-    Builds one position block exactly like your RIGHT image:
-      row A: merged label (thick outline)
-      row B: GB / FB labels (two cells)
-      row C: GB% / FB% values (two cells)
+    Position block layout (matches your screenshot):
+      1) merged position label
+      2) GB / FB labels
+      3) values
     """
-    # label (merged)
+    # merged position label
     ws_.merge_cells(label_rng)
     tl = ws_[label_rng.split(":")[0]]
     tl.value = label_text
     tl.font = _label_font
     tl.alignment = _center
+    # ✅ grey background behind position name
+    tl.fill = _pos_fill
     _apply_outer_thick_border(ws_, label_rng)
 
     # GB / FB label row
@@ -2426,7 +2426,7 @@ def _position_block(ws_, label_rng, gb_addr, fb_addr, val_gb_addr, val_fb_addr, 
         c.alignment = _center
         c.border = _box_thick
 
-    # value row
+    # values row
     _set_pct_cell(ws_, val_gb_addr, vals.get(gb_key, 0))
     _set_pct_cell(ws_, val_fb_addr, vals.get(fb_key, 0))
 
@@ -2449,17 +2449,10 @@ def _build_player_scout_sheet(ws_, player_name, stats):
     for col in ["C","D","E","F","G","H","I"]:
         ws_.column_dimensions[col].width = 13
 
-    # heights
+    # ✅ heights (reset to 20 everywhere like you asked)
+    for rr in range(1, 41):
+        ws_.row_dimensions[rr].height = 20
     ws_.row_dimensions[1].height = 30
-
-    # ✅ Position label rows = 30 height (per your request)
-    for rr in [3, 5, 7, 9, 11]:
-        ws_.row_dimensions[rr].height = 30
-
-    # other rows (keep consistent)
-    for rr in range(2, 19):
-        if rr not in [3, 5, 7, 9, 11, 16]:
-            ws_.row_dimensions[rr].height = 20
     ws_.row_dimensions[16].height = 10
 
     # title (FULL WIDTH THICK OUTLINE)
@@ -2471,12 +2464,11 @@ def _build_player_scout_sheet(ws_, player_name, stats):
     _apply_outer_thick_border(ws_, "A1:I1")
 
     # ----------------------------------------------------------
-    # POSITION BLOCKS (matches your RIGHT image layout)
+    # POSITION BLOCKS — MATCH THE SCREENSHOT COORDINATES
     # ----------------------------------------------------------
 
-    # CF block (E3:F3 label, E4/F4 GB/FB, E5/F5 values)
-    _position_block(
-        ws_,
+    # CF (row 3–5)
+    _position_block(ws_,
         label_rng="E3:F3",
         gb_addr="E4", fb_addr="F4",
         val_gb_addr="E5", val_fb_addr="F5",
@@ -2485,9 +2477,8 @@ def _build_player_scout_sheet(ws_, player_name, stats):
         vals=vals
     )
 
-    # LF block (C5:D5 label, C6/D6 GB/FB, C7/D7 values)
-    _position_block(
-        ws_,
+    # LF (row 5–7)
+    _position_block(ws_,
         label_rng="C5:D5",
         gb_addr="C6", fb_addr="D6",
         val_gb_addr="C7", val_fb_addr="D7",
@@ -2496,9 +2487,8 @@ def _build_player_scout_sheet(ws_, player_name, stats):
         vals=vals
     )
 
-    # RF block (G5:H5 label, G6/H6 GB/FB, G7/H7 values)
-    _position_block(
-        ws_,
+    # RF (row 5–7)
+    _position_block(ws_,
         label_rng="G5:H5",
         gb_addr="G6", fb_addr="H6",
         val_gb_addr="G7", val_fb_addr="H7",
@@ -2507,82 +2497,77 @@ def _build_player_scout_sheet(ws_, player_name, stats):
         vals=vals
     )
 
-    # ✅ SS shifted LEFT one column (now D7:E7 ... D9/E9)
-    _position_block(
-        ws_,
-        label_rng="D7:E7",
-        gb_addr="D8", fb_addr="E8",
-        val_gb_addr="D9", val_fb_addr="E9",
+    # SS (row 8–10)
+    _position_block(ws_,
+        label_rng="D8:E8",
+        gb_addr="D9", fb_addr="E9",
+        val_gb_addr="D10", val_fb_addr="E10",
         label_text="SS",
         gb_key="GB-SS", fb_key="FB-SS",
         vals=vals
     )
 
-    # ✅ 2B shifted LEFT one column (now F7:G7 ... F9/G9)
-    _position_block(
-        ws_,
-        label_rng="F7:G7",
-        gb_addr="F8", fb_addr="G8",
-        val_gb_addr="F9", val_fb_addr="G9",
+    # 2B (row 8–10)
+    _position_block(ws_,
+        label_rng="F8:G8",
+        gb_addr="F9", fb_addr="G9",
+        val_gb_addr="F10", val_fb_addr="G10",
         label_text="2B",
         gb_key="GB-2B", fb_key="FB-2B",
         vals=vals
     )
 
-    # 3B block (C9:D9 label, C10/D10 GB/FB, C11/D11 values)
-    _position_block(
-        ws_,
-        label_rng="C9:D9",
-        gb_addr="C10", fb_addr="D10",
-        val_gb_addr="C11", val_fb_addr="D11",
+    # 3B (row 11–13)
+    _position_block(ws_,
+        label_rng="A11:B11",
+        gb_addr="A12", fb_addr="B12",
+        val_gb_addr="A13", val_fb_addr="B13",
         label_text="3B",
         gb_key="GB-3B", fb_key="FB-3B",
         vals=vals
     )
 
-    # 1B block (G9:H9 label, G10/H10 GB/FB, G11/H11 values)
-    _position_block(
-        ws_,
-        label_rng="G9:H9",
-        gb_addr="G10", fb_addr="H10",
-        val_gb_addr="G11", val_fb_addr="H11",
+    # 1B (row 11–13)
+    _position_block(ws_,
+        label_rng="H11:I11",
+        gb_addr="H12", fb_addr="I12",
+        val_gb_addr="H13", val_fb_addr="I13",
         label_text="1B",
         gb_key="GB-1B", fb_key="FB-1B",
         vals=vals
     )
 
-    # P block (E11:F11 label, E12/F12 GB/FB, E13/F13 values)
-    _position_block(
-        ws_,
-        label_rng="E11:F11",
-        gb_addr="E12", fb_addr="F12",
-        val_gb_addr="E13", val_fb_addr="F13",
+    # P (row 13–15)
+    _position_block(ws_,
+        label_rng="E13:F13",
+        gb_addr="E14", fb_addr="F14",
+        val_gb_addr="E15", val_fb_addr="F15",
         label_text="P",
         gb_key="GB-P", fb_key="FB-P",
         vals=vals
     )
 
-    # divider row 16
+    # divider row 16 (black bar)
     for col in ["A","B","C","D","E","F","G","H","I"]:
         cell = ws_[f"{col}16"]
         cell.fill = PatternFill("solid", fgColor="000000")
         cell.border = Border(top=_thick, bottom=_thick)
 
-    # BIP box (THICK)
-    ws_.merge_cells("C17:D17")
-    b1 = ws_["C17"]
+    # BIP box (match screenshot: starts at B17)
+    ws_.merge_cells("B17:D17")
+    b1 = ws_["B17"]
     b1.value = "BIP"
     b1.font = Font(bold=True, size=12)
     b1.alignment = _center
     b1.fill = PatternFill("solid", fgColor="E5E7EB")
-    _apply_outer_thick_border(ws_, "C17:D17")
+    _apply_outer_thick_border(ws_, "B17:D17")
 
-    ws_.merge_cells("C18:D18")
-    b2 = ws_["C18"]
+    ws_.merge_cells("B18:D18")
+    b2 = ws_["B18"]
     b2.value = int(vals.get("BIP", 0) or 0)
     b2.font = Font(bold=True, size=14)
     b2.alignment = _center
-    _apply_outer_thick_border(ws_, "C18:D18")
+    _apply_outer_thick_border(ws_, "B18:D18")
 
     # print setup
     ws_.print_area = "A1:I40"
@@ -2599,264 +2584,6 @@ def _build_player_scout_sheet(ws_, player_name, stats):
     ws_.page_margins.footer = 0.15
     ws_.page_setup.paperSize = ws_.PAPERSIZE_LETTER
 
-
-
-
-
-
-
-# -----------------------------
-# Build downloadable files
-# -----------------------------
-out = BytesIO()
-
-with pd.ExcelWriter(out, engine="openpyxl") as writer:
-    sheet_name = "Season"
-
-    # Build export frame
-    df_export = df_xl.copy() if df_xl is not None else pd.DataFrame()
-
-    # Insert GP (Games Played) after Player
-    if not df_export.empty and "Player" in df_export.columns:
-        def _gp_for(name):
-            try:
-                return int((season_players.get(str(name), {}) or {}).get(GP_KEY, 0) or 0)
-            except Exception:
-                return 0
-        if "GP" not in df_export.columns:
-            df_export.insert(1, "GP", df_export["Player"].apply(_gp_for))
-
-    # --- Build BIP + GB%/FB% (based on total BIP = GB + FB) ---
-    if not df_export.empty and ("GB" in df_export.columns) and ("FB" in df_export.columns):
-        gb_vals = pd.to_numeric(df_export["GB"], errors="coerce").fillna(0)
-        fb_vals = pd.to_numeric(df_export["FB"], errors="coerce").fillna(0)
-
-        bip_vals = (gb_vals + fb_vals).fillna(0)
-        denom = bip_vals.replace({0: pd.NA})
-
-        # Percent columns (DO NOT heatmap these)
-        df_export["GB%"] = (gb_vals / denom).fillna(0)
-        df_export["FB%"] = (fb_vals / denom).fillna(0)
-
-        # Convert positional columns (GB-* and FB-*) to % of TOTAL BIP
-        for c in list(df_export.columns):
-            if str(c).startswith("GB-") or str(c).startswith("FB-"):
-                num = pd.to_numeric(df_export[c], errors="coerce").fillna(0)
-                df_export[c] = (num / denom).fillna(0)
-
-        # Drop raw GB/FB totals (we're showing GB%/FB% now)
-        df_export = df_export.drop(columns=["GB", "FB"])
-
-        # Order columns
-        cols = list(df_export.columns)
-        gb_pos = [c for c in cols if str(c).startswith("GB-")]
-        fb_pos = [c for c in cols if str(c).startswith("FB-")]
-
-        fixed_lead = ["Player"] + (["GP"] if "GP" in cols else []) + ["GB%", "FB%"]
-        rest = [c for c in cols if c not in fixed_lead and c not in gb_pos and c not in fb_pos]
-
-        # Add BIP at end of FB block
-        df_export["BIP"] = bip_vals.astype(int)
-
-        df_export = df_export[fixed_lead + gb_pos + fb_pos + ["BIP"] + rest]
-
-    # Write to Excel
-    df_export.to_excel(writer, index=False, sheet_name=sheet_name, startrow=1)
-    ws = writer.book[sheet_name]
-
-    # Safety: ensure visible
-    try:
-        for _sh in writer.book.worksheets:
-            _sh.sheet_state = "visible"
-        writer.book.active = writer.book.worksheets.index(ws)
-    except Exception:
-        pass
-
-    # Team title row (Row 1)
-    total_cols = max(1, ws.max_column)
-    ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=total_cols)
-    title_cell = ws.cell(row=1, column=1, value=str(selected_team))
-    title_cell.font = Font(bold=True, size=28)
-    title_cell.alignment = Alignment(horizontal="center", vertical="center")
-
-    ws.freeze_panes = "A3"
-
-    # Row heights
-    ws.row_dimensions[1].height = 35
-    ws.row_dimensions[2].height = 35
-    for r in range(3, ws.max_row + 1):
-        ws.row_dimensions[r].height = 35
-
-    # Header styling (Row 2)
-    header_font = Font(bold=True, size=12)
-    header_align = Alignment(horizontal="center", vertical="center", wrap_text=True)
-    header_fill = PatternFill("solid", fgColor="D9E1F2")
-    for cell in ws[2]:
-        cell.font = header_font
-        cell.alignment = header_align
-        cell.fill = header_fill
-
-    # Player column formatting
-    player_col_idx = None
-    for j in range(1, ws.max_column + 1):
-        if str(ws.cell(row=2, column=j).value).strip() == "Player":
-            player_col_idx = j
-            break
-
-    body_font = Font(size=12)
-    player_font = Font(size=12, bold=True)
-    center_align = Alignment(horizontal="center", vertical="center")
-    left_align = Alignment(horizontal="left", vertical="center")
-    for r in range(3, ws.max_row + 1):
-        for c in range(1, ws.max_column + 1):
-            cell = ws.cell(row=r, column=c)
-            cell.font = body_font
-            cell.alignment = center_align
-            if player_col_idx and c == player_col_idx:
-                cell.font = player_font
-                cell.alignment = left_align
-
-    # Autosize Player col
-    if player_col_idx:
-        max_len = len("Player")
-        try:
-            series = df_export["Player"].astype(str).tolist() if "Player" in df_export.columns else []
-            for v in series[:200]:
-                max_len = max(max_len, len(v))
-        except Exception:
-            pass
-        ws.column_dimensions[get_column_letter(player_col_idx)].width = min(max(max_len + 2, 12), 34)
-
-    # Identify key columns
-    headers = [str(ws.cell(row=2, column=j).value or "").strip() for j in range(1, ws.max_column + 1)]
-    gbp_idx = headers.index("GB%") + 1 if "GB%" in headers else None
-    fbp_idx = headers.index("FB%") + 1 if "FB%" in headers else None
-    gp_idx  = headers.index("GP") + 1  if "GP"  in headers else None
-
-    # Format GB%/FB% as percent
-    if gbp_idx:
-        L = get_column_letter(gbp_idx)
-        for r in range(3, ws.max_row + 1):
-            ws[f"{L}{r}"].number_format = "0%"
-    if fbp_idx:
-        L = get_column_letter(fbp_idx)
-        for r in range(3, ws.max_row + 1):
-            ws[f"{L}{r}"].number_format = "0%"
-
-    # Format positional % columns as percent too
-    for j, h in enumerate(headers, start=1):
-        if h.startswith("GB-") or h.startswith("FB-"):
-            L = get_column_letter(j)
-            for r in range(3, ws.max_row + 1):
-                ws[f"{L}{r}"].number_format = "0%"
-
-    # Thick borders helpers
-    thick_side = Side(style="thick", color="000000")
-
-    def _set_right_thick(col_idx: int):
-        for r in range(2, ws.max_row + 1):
-            cell = ws.cell(row=r, column=col_idx)
-            b = cell.border
-            cell.border = Border(left=b.left, right=thick_side, top=b.top, bottom=b.bottom)
-
-    def _last_idx(prefix: str):
-        last = None
-        for j, h in enumerate(headers, start=1):
-            if h.startswith(prefix):
-                last = j
-        return last
-
-    gb_end = _last_idx("GB-")
-    fb_end = _last_idx("FB-")
-
-    if fbp_idx:
-        _set_right_thick(fbp_idx)
-    if gb_end:
-        _set_right_thick(gb_end)
-    if fb_end:
-        _set_right_thick(fb_end)
-
-    # -----------------------------
-    # HEATMAPS
-    # -----------------------------
-    gp_fill_1_5   = PatternFill("solid", fgColor="FFE5CC")
-    gp_fill_6_10  = PatternFill("solid", fgColor="FFCC99")
-    gp_fill_11_15 = PatternFill("solid", fgColor="FFB266")
-    gp_fill_16_19 = PatternFill("solid", fgColor="FF9933")
-    gp_fill_20p   = PatternFill("solid", fgColor="F8696B")
-
-    # GP heatmap
-    if gp_idx:
-        for r in range(3, ws.max_row + 1):
-            cell = ws.cell(row=r, column=gp_idx)
-            try:
-                v = float(cell.value or 0)
-            except Exception:
-                continue
-            if v <= 0:
-                continue
-            if v >= 20:
-                cell.fill = gp_fill_20p
-            elif 16 <= v <= 19:
-                cell.fill = gp_fill_16_19
-            elif 11 <= v <= 15:
-                cell.fill = gp_fill_11_15
-            elif 6 <= v <= 10:
-                cell.fill = gp_fill_6_10
-            elif 1 <= v <= 5:
-                cell.fill = gp_fill_1_5
-
-    # % heatmap (GB-/FB- only)
-    def _pct_fill_team(v):
-        if v is None or v == "":
-            return None
-        try:
-            x = float(v)
-        except Exception:
-            return None
-        if x <= 0:
-            return None
-        if x > 1:
-            x = 1.0
-        for lo, hi, fill in _pct_bins_player:
-            if fill is None:
-                continue
-            if (lo <= x < hi) or (hi == 1.00 and lo <= x <= hi):
-                return fill
-        return None
-
-    for r in range(3, ws.max_row + 1):
-        for c in range(1, ws.max_column + 1):
-            h = str(ws.cell(row=2, column=c).value or "").strip()
-            if not (h.startswith("GB-") or h.startswith("FB-")):
-                continue
-            cell = ws.cell(row=r, column=c)
-            f = _pct_fill_team(cell.value)
-            if f:
-                cell.fill = f
-
-    # Watermark
-    try:
-        ws.oddHeader.center.text = "RP Spray Analytics"
-        ws.oddHeader.center.font = "Tahoma,Bold"
-        ws.oddHeader.center.size = 14
-        ws.oddHeader.center.color = "808080"
-    except Exception:
-        pass
-
-    # Print setup (Season)
-    ws.page_setup.orientation = ws.ORIENTATION_PORTRAIT
-    ws.page_setup.fitToWidth = 1
-    ws.page_setup.fitToHeight = 0
-    ws.sheet_properties.pageSetUpPr.fitToPage = True
-    ws.print_options.horizontalCentered = True
-    ws.page_margins.left = 0.25
-    ws.page_margins.right = 0.25
-    ws.page_margins.top = 0.35
-    ws.page_margins.bottom = 0.35
-    ws.page_margins.header = 0.15
-    ws.page_margins.footer = 0.15
-    ws.page_setup.paperSize = ws.PAPERSIZE_LETTER
 
     # -----------------------------
     # COACH NOTES BOX (Season sheet)
@@ -2986,6 +2713,7 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
+
 
 
 
