@@ -2166,6 +2166,13 @@ if "Player" in df_season.columns and "Player" not in picked_cols:
 
 df_show = df_season[picked_cols] if picked_cols else df_season
 
+# -----------------------------
+# VISIBLE COLS (for CSV / downloads)
+# -----------------------------
+if df_show is not None and not df_show.empty:
+    visible_cols = list(df_show.columns)
+else:
+    visible_cols = list(df_season.columns) if df_season is not None else []
 
 # -----------------------------
 # TABLE RENDER (NO EMPTY GAP)
@@ -2209,7 +2216,11 @@ with st.expander("📝 Coaches Scouting Notes (prints on Excel/CSV)", expanded=F
 
 notes_box_text = str(st.session_state.get(notes_key, "") or "").strip()
 
-_csv_text = (df_season[visible_cols].to_csv(index=False) if (df_season is not None and not df_season.empty) else '')
+_csv_text = (
+    df_season[[c for c in visible_cols if c in df_season.columns]].to_csv(index=False)
+    if (df_season is not None and not df_season.empty)
+    else ""
+)
 
 # CSV can't merge cells, but we can push notes to the bottom for printing
 if notes_box_text:
@@ -2688,6 +2699,7 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
+
 
 
 
