@@ -2474,25 +2474,23 @@ with pd.ExcelWriter(out, engine="openpyxl") as writer:
         _set_right_thick(fb_end)  # this becomes the thick border immediately LEFT of BIP
 
     # -----------------------------
-    # HEATMAPS
-    #   1) GP numeric heatmap (keep your existing scheme)
-    #   2) Positional % heatmap (your percent bins + same orange→red scheme)
-    #   NO heatmap on GB% / FB% / BIP
-    # -----------------------------
-    # GP numeric heatmap fills (same scheme you had)
-    gp_fill_1_5   = PatternFill("solid", fgColor="FFE5CC")
-    gp_fill_6_10  = PatternFill("solid", fgColor="FFCC99")
-    gp_fill_11_15 = PatternFill("solid", fgColor="FFB266")
-    gp_fill_16_19 = PatternFill("solid", fgColor="FF9933")
-    gp_fill_20p   = PatternFill("solid", fgColor="F8696B")
+# HEATMAPS
+#   1) GP numeric heatmap (keep your existing scheme)
+#   2) Positional % heatmap (percent bins)
+#   NO heatmap on GB% / FB% / BIP
+# -----------------------------
+
+# GP numeric heatmap fills (same scheme you had)
+gp_fill_1_5   = PatternFill("solid", fgColor="FFE5CC")
+gp_fill_6_10  = PatternFill("solid", fgColor="FFCC99")
+gp_fill_11_15 = PatternFill("solid", fgColor="FFB266")
+gp_fill_16_19 = PatternFill("solid", fgColor="FF9933")
+gp_fill_20p   = PatternFill("solid", fgColor="F8696B")
 
 # ------------------------------------
-# PERCENT HEATMAP (BIP % columns only)
+# PERCENT HEATMAP (GB-* / FB-* columns only)
 # 0–5% = white, then every .05 darker
 # ------------------------------------
-
-from openpyxl.styles import PatternFill
-
 pct_bins = [
     (0.00, 0.05, None),
     (0.05, 0.10, PatternFill("solid", fgColor="FFE5CC")),
@@ -2516,7 +2514,6 @@ pct_bins = [
     (0.95, 1.00, PatternFill("solid", fgColor="6A0000")),
 ]
 
-
 def _pct_fill(v):
     if v is None or v == "":
         return None
@@ -2527,20 +2524,18 @@ def _pct_fill(v):
         if s == "":
             return None
         try:
-            x = float(s)
+            x = float(s) / 100.0
         except Exception:
             return None
-        x = x / 100.0  # convert 16 -> 0.16
     else:
         try:
             x = float(v)
         except Exception:
             return None
-        # if it's 16 instead of 0.16, convert
         if x > 1.0:
             x = x / 100.0
 
-    # clamp to [0, 1]
+    # clamp
     if x < 0:
         x = 0.0
     if x > 1:
@@ -2549,12 +2544,11 @@ def _pct_fill(v):
     for lo, hi, fill in pct_bins:
         if fill is None:
             continue
+        # inclusive lower bound, exclusive upper (except last)
         if (lo <= x < hi) or (hi == 1.00 and lo <= x <= hi):
             return fill
 
     return None
-
-
 
 # ------------------------------------
 # APPLY GP HEATMAP (GP column only)
@@ -2580,21 +2574,22 @@ if gp_idx:
         elif 1 <= v <= 5:
             cell.fill = gp_fill_1_5
 
-
 # ------------------------------------
 # APPLY % HEATMAP (GB-* and FB-* only)
 # ------------------------------------
 for r in range(3, ws.max_row + 1):
     for c in range(1, ws.max_column + 1):
         h = str(ws.cell(row=2, column=c).value or "").strip()
+
+        # Only positional columns
         if not (h.startswith("GB-") or h.startswith("FB-")):
             continue
 
         cell = ws.cell(row=r, column=c)
-
         f = _pct_fill(cell.value)
         if f:
             cell.fill = f
+
 
 
 # ------------------------------------
@@ -2726,6 +2721,7 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
+
 
 
 
