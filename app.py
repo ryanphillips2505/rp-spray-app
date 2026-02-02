@@ -2563,6 +2563,24 @@ with pd.ExcelWriter(out, engine="openpyxl") as writer:
     ws.page_margins.header = 0.15
     ws.page_margins.footer = 0.15
     ws.page_setup.paperSize = ws.PAPERSIZE_LETTER
+    # --- helpers for player sheet names (must exist here) ---
+def _safe_sheet_name(name: str) -> str:
+    name = str(name or "").strip()
+    name = re.sub(r'[:\\/?*\[\]]', "", name)  # invalid Excel sheet chars
+    name = re.sub(r"\s+", " ", name)
+    return name[:31] if name else "Player"
+
+def _unique_sheet_name(wb, base: str) -> str:
+    if base not in wb.sheetnames:
+        return base
+    i = 2
+    while True:
+        suffix = f" {i}"
+        cand = (base[:31 - len(suffix)] + suffix)[:31]
+        if cand not in wb.sheetnames:
+            return cand
+        i += 1
+
 
     # ==========================================================
     # ✅ INSERTED: BUILD INDIVIDUAL PLAYER TABS (MUST BE INSIDE WRITER)
@@ -2934,6 +2952,4 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
-
-
 
