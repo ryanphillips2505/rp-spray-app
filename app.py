@@ -348,12 +348,8 @@ Access may be revoked immediately for violations without refund.
         unsafe_allow_html=True,
     )
 
-    # ✅ Form prevents rerun on checkbox click (no more jump)
     with st.form(key=f"terms_form__{str(TEAM_CODE).strip().upper()}"):
-        agree = st.checkbox(
-            "I have read and agree to the Terms of Use",
-            key=_AGREE_KEY,
-        )
+        st.checkbox("I have read and agree to the Terms of Use", key=_AGREE_KEY)
         submitted = st.form_submit_button("Continue")
 
     if submitted:
@@ -363,9 +359,7 @@ Access may be revoked immediately for violations without refund.
         else:
             st.warning("You must agree before continuing.")
 
-st.stop()
-
-
+    st.stop()  # ✅ ONLY stop while locked
 
 # -----------------------------
 # RESOLVED TEAM BRANDING (logo + background)
@@ -2701,6 +2695,7 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
+
 
 
 
