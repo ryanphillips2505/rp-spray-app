@@ -2351,7 +2351,7 @@ _box_thick = Border(left=_thick, right=_thick, top=_thick, bottom=_thick)
 _title_font = Font(bold=True, size=20)
 _label_font = Font(bold=True, size=12)
 _val_font   = Font(bold=True, size=12)
-_gbfb_font  = Font(bold=True, size=11)
+_gbfb_font  = Font(bold=True, size=10)
 
 def _clear_sheet_safely(ws_):
     try:
@@ -2370,14 +2370,47 @@ def _clear_sheet_safely(ws_):
             cell.fill = PatternFill()
             cell.alignment = Alignment()
 
-def _merge_label(ws_, rng, text):
-    # ✅ Position label boxes THICK
+def _outline_range(ws_, rng: str, border: Border):
+    """
+    Excel merged cells only keep border on the top-left cell.
+    This forces a full outline around the entire merged (or normal) range.
+    """
+    from openpyxl.utils.cell import range_boundaries
+
+    min_col, min_row, max_col, max_row = range_boundaries(rng)
+
+    for r in range(min_row, max_row + 1):
+        for c in range(min_col, max_col + 1):
+            cell = ws_.cell(row=r, column=c)
+
+            left   = border.left   if c == min_col else cell.border.left
+            right  = border.right  if c == max_col else cell.border.right
+            top    = border.top    if r == min_row else cell.border.top
+            bottom = border.bottom if r == max_row else cell.border.bottom
+
+            cell.border = Border(
+                left=left, right=right, top=top, bottom=bottom,
+                diagonal=cell.border.diagonal,
+                diagonal_direction=cell.border.diagonal_direction,
+                outline=cell.border.outline,
+                vertical=cell.border.vertical,
+                horizontal=cell.border.horizontal,
+            )
+
+def _pos_label(text: str) -> str:
+    # ✅ Put GB/FB inside label box so NOTHING shifts
+    # Using unicode EN SPACE to keep it readable when centered.
+    return f"{text}\nGB\u2002\u2002\u2002\u2002FB"
+
+def _merge_label(ws_, rng, text, show_gbfb: bool = True):
+    # ✅ Position label boxes THICK + full outline
     ws_.merge_cells(rng)
-    c = ws_[rng.split(":")[0]]
-    c.value = text
-    c.font = _label_font
-    c.alignment = _center
-    c.border = _box_thick  # ✅ was _box_thin
+    anchor = ws_[rng.split(":")[0]]
+    anchor.value = _pos_label(text) if show_gbfb else str(text)
+    anchor.font = _label_font
+    anchor.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+
+    _outline_range(ws_, rng, _box_thick)
 
 def _set_pct_cell(ws_, addr, v):
     # ✅ Data cells THICK
@@ -2390,27 +2423,6 @@ def _set_pct_cell(ws_, addr, v):
     f = _pct_fill_player(c.value)
     if f:
         c.fill = f
-
-def _set_gbfb_labels(ws_):
-    """
-    ✅ GB/FB row labels aligned to ALL value columns:
-    C/E/G = GB
-    D/F/H = FB
-    """
-    ws_.row_dimensions[2].height = 18
-
-    pairs = [("C", "D"), ("E", "F"), ("G", "H")]
-    for gb_col, fb_col in pairs:
-        gb_cell = ws_[f"{gb_col}2"]
-        fb_cell = ws_[f"{fb_col}2"]
-
-        gb_cell.value = "GB"
-        fb_cell.value = "FB"
-
-        for cell in (gb_cell, fb_cell):
-            cell.font = _gbfb_font
-            cell.alignment = _center
-            cell.border = _box_thick  # ✅ make these thick too (cleaner)
 
 def _build_player_scout_sheet(ws_, player_name, stats):
     gb = int(stats.get("GB", 0) or 0)
@@ -2432,72 +2444,65 @@ def _build_player_scout_sheet(ws_, player_name, stats):
         ws_.column_dimensions[col].width = 13
 
     # heights
-    ws_.row_dimensions[1].height = 30
-    for rr in range(2, 19):
+    ws_.row_dimensions[1].height = 32
+    ws_.row_dimensions[2].height = 18  # breathing room under the title (keeps look clean)
+    for rr in range(3, 19):
         ws_.row_dimensions[rr].height = 20
     ws_.row_dimensions[16].height = 10
 
-    # title (FULL WIDTH THICK OUTLINE)
+    # -----------------------------
+    # TITLE (FULL WIDTH THICK OUTLINE)
+    # -----------------------------
     ws_.merge_cells("A1:I1")
     t = ws_["A1"]
     t.value = str(player_name)
     t.font = _title_font
     t.alignment = _center
 
-    # ✅ thick border around the WHOLE merged title area A1:I1 (INSIDE the function!)
-    for col in ["A","B","C","D","E","F","G","H","I"]:
-        cell = ws_[f"{col}1"]
-        cell.border = Border(
-            left=_thick if col == "A" else _thin,
-            right=_thick if col == "I" else _thin,
-            top=_thick,
-            bottom=_thick,
-        )
+    # Full outline around merged title area
+    _outline_range(ws_, "A1:I1", _box_thick)
 
-    # ✅ Add GB / FB labels (row 2)
-    _set_gbfb_labels(ws_)
+    # -----------------------------
+    # POSITION BLOCKS (labels include GB/FB line)
+    # -----------------------------
 
     # CF
-    _merge_label(ws_, "E3:F3", "CF")
+    _merge_label(ws_, "E3:F3", "CF", True)
     _set_pct_cell(ws_, "E4", vals.get("GB-CF", 0))
     _set_pct_cell(ws_, "F4", vals.get("FB-CF", 0))
 
     # LF
-    _merge_label(ws_, "C5:D5", "LF")
+    _merge_label(ws_, "C5:D5", "LF", True)
     _set_pct_cell(ws_, "C6", vals.get("GB-LF", 0))
     _set_pct_cell(ws_, "D6", vals.get("FB-LF", 0))
 
     # RF
-    _merge_label(ws_, "G5:H5", "RF")
+    _merge_label(ws_, "G5:H5", "RF", True)
     _set_pct_cell(ws_, "G6", vals.get("GB-RF", 0))
     _set_pct_cell(ws_, "H6", vals.get("FB-RF", 0))
 
     # SS
-    _merge_label(ws_, "E7:F7", "SS")
+    _merge_label(ws_, "E7:F7", "SS", True)
     _set_pct_cell(ws_, "E8", vals.get("GB-SS", 0))
     _set_pct_cell(ws_, "F8", vals.get("FB-SS", 0))
 
-    # 2B (label in G7, values in G8/H8)
-    ws_["G7"].value = "2B"
-    ws_["G7"].font = _label_font
-    ws_["G7"].alignment = _center
-    ws_["G7"].border = _box_thick
-    ws_["H7"].border = _box_thick
+    # 2B  (MAKE IT MERGED so border is perfect)
+    _merge_label(ws_, "G7:H7", "2B", True)
     _set_pct_cell(ws_, "G8", vals.get("GB-2B", 0))
     _set_pct_cell(ws_, "H8", vals.get("FB-2B", 0))
 
     # 3B
-    _merge_label(ws_, "C9:D9", "3B")
+    _merge_label(ws_, "C9:D9", "3B", True)
     _set_pct_cell(ws_, "C10", vals.get("GB-3B", 0))
     _set_pct_cell(ws_, "D10", vals.get("FB-3B", 0))
 
     # 1B
-    _merge_label(ws_, "G9:H9", "1B")
+    _merge_label(ws_, "G9:H9", "1B", True)
     _set_pct_cell(ws_, "G10", vals.get("GB-1B", 0))
     _set_pct_cell(ws_, "H10", vals.get("FB-1B", 0))
 
     # P
-    _merge_label(ws_, "E11:F11", "P")
+    _merge_label(ws_, "E11:F11", "P", True)
     _set_pct_cell(ws_, "E12", vals.get("GB-P", 0))
     _set_pct_cell(ws_, "F12", vals.get("FB-P", 0))
 
@@ -2507,23 +2512,23 @@ def _build_player_scout_sheet(ws_, player_name, stats):
         cell.fill = PatternFill("solid", fgColor="000000")
         cell.border = Border(top=_thick, bottom=_thick)
 
+    # -----------------------------
     # BIP box (THICK)
+    # -----------------------------
     ws_.merge_cells("C17:D17")
     b1 = ws_["C17"]
     b1.value = "BIP"
     b1.font = Font(bold=True, size=12)
     b1.alignment = _center
     b1.fill = PatternFill("solid", fgColor="E5E7EB")
-    b1.border = _box_thick
-    ws_["D17"].border = _box_thick
+    _outline_range(ws_, "C17:D17", _box_thick)
 
     ws_.merge_cells("C18:D18")
     b2 = ws_["C18"]
     b2.value = int(vals.get("BIP", 0) or 0)
     b2.font = Font(bold=True, size=14)
     b2.alignment = _center
-    b2.border = _box_thick
-    ws_["D18"].border = _box_thick
+    _outline_range(ws_, "C18:D18", _box_thick)
 
     # print setup
     ws_.print_area = "A1:I40"
@@ -2539,6 +2544,7 @@ def _build_player_scout_sheet(ws_, player_name, stats):
     ws_.page_margins.header = 0.15
     ws_.page_margins.footer = 0.15
     ws_.page_setup.paperSize = ws_.PAPERSIZE_LETTER
+
 
 
 
@@ -2924,6 +2930,7 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
+
 
 
 
