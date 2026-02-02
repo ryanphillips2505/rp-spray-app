@@ -67,8 +67,9 @@ import pandas as pd
 from io import BytesIO
 
 from openpyxl.utils import get_column_letter
-from openpyxl.formatting.rule import ColorScaleRule, FormulaRule, CellIsRule
+from openpyxl.formatting.rule import ColorScaleRule
 from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
+
 from supabase import create_client, Client
 
 SUPABASE_URL = st.secrets["SUPABASE_URL"]
@@ -2532,9 +2533,8 @@ try:
 # ============================
 # SEASON HEAT MAP (FULL TEAM)
 # ============================
-from openpyxl.formatting.rule import ColorScaleRule
 
-start_row = 2  # row 1 is headers
+start_row = 2  # row 1 = headers
 end_row = ws_season.max_row
 end_col = ws_season.max_column
 
@@ -2545,9 +2545,9 @@ if end_row >= start_row and end_col >= 2:
         end_type="max", end_color="8E0000",
     )
 
-    # apply to all numeric columns EXCEPT Player (column A)
     rng = f"{get_column_letter(2)}{start_row}:{get_column_letter(end_col)}{end_row}"
     ws_season.conditional_formatting.add(rng, heat_rule)
+
 
 
         # basic readability (won’t break your other formatting)
@@ -2678,6 +2678,7 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
+
 
 
 
