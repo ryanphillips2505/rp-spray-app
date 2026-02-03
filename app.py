@@ -2379,10 +2379,11 @@ def _build_individual_spray_sheet(
     hc.fill = PatternFill("solid", fgColor="D9D9D9")
 
     ws.merge_cells(
-        start_row=HEADER_TOP, start_column=COL_LEFT,
-        end_row=HEADER_BOT, end_column=COL_RIGHT
+    start_row=HEADER_TOP, start_column=COL_LEFT,
+    end_row=HEADER_BOT, end_column=11  # ← include column K
     )
-    border_box(HEADER_TOP, COL_LEFT, HEADER_BOT, COL_RIGHT, thick_outer=True)
+    border_box(HEADER_TOP, COL_LEFT, HEADER_BOT, 11, thick_outer=True)
+
 
     # -----------------------------
     # FINAL SPEC — Individual tab Excel adjustments
@@ -3028,6 +3029,7 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
+
 
 
 
