@@ -2851,6 +2851,36 @@ with pd.ExcelWriter(out, engine="openpyxl") as writer:
         _set_right_thick(gb_end)
     if fb_end:
         _set_right_thick(fb_end)
+            
+    # -----------------------------
+    # HEADER ROW 1 (A:J) — Individual tab
+    # -----------------------------
+    ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=10)
+    h1 = ws.cell(row=1, column=1, value=str(player_name))
+    h1.font = Font(bold=True, size=22)
+    h1.alignment = Alignment(horizontal="center", vertical="center")
+    
+    # Row heights
+    for r in [5, 9, 13, 15]:
+        ws.row_dimensions[r].height = 24
+    
+    # Bottom merges + numbering (1–8) + B/C in column C
+    merge_pairs = [(21, 22), (23, 24), (25, 26), (27, 28), (29, 30), (31, 32), (33, 34), (35, 36)]
+    
+    for i, (top, bot) in enumerate(merge_pairs, start=1):
+        ws.merge_cells(start_row=top, start_column=2, end_row=bot, end_column=2)  # col B
+        ncell = ws.cell(row=top, column=2, value=i)
+        ncell.font = Font(size=12)
+        ncell.alignment = Alignment(horizontal="left", vertical="center", indent=1)
+    
+        # Column C letters
+        bcell = ws.cell(row=top, column=3, value="B")
+        bcell.font = Font(bold=True, size=10)
+        bcell.alignment = Alignment(horizontal="center", vertical="center")
+    
+        ccell = ws.cell(row=bot, column=3, value="C")
+        ccell.font = Font(bold=True, size=10)
+        ccell.alignment = Alignment(horizontal="center", vertical="center")
 
     # -----------------------------
     # HEATMAPS
@@ -2935,38 +2965,7 @@ with pd.ExcelWriter(out, engine="openpyxl") as writer:
             f = _pct_fill(cell.value)
             if f:
                 cell.fill = f
-                
-        # -----------------------------
-        # HEADER ROW 1 (A:J) — Individual tab
-        # -----------------------------
-        ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=10)
-        h1 = ws.cell(row=1, column=1, value=str(player_name))
-        h1.font = Font(bold=True, size=22)
-        h1.alignment = Alignment(horizontal="center", vertical="center")
         
-        # Row heights
-        for r in [5, 9, 13, 15]:
-            ws.row_dimensions[r].height = 24
-        
-        # Bottom merges + numbering (1–8) + B/C in column C
-        merge_pairs = [(21, 22), (23, 24), (25, 26), (27, 28), (29, 30), (31, 32), (33, 34), (35, 36)]
-        
-        for i, (top, bot) in enumerate(merge_pairs, start=1):
-            ws.merge_cells(start_row=top, start_column=2, end_row=bot, end_column=2)  # col B
-            ncell = ws.cell(row=top, column=2, value=i)
-            ncell.font = Font(size=12)
-            ncell.alignment = Alignment(horizontal="left", vertical="center", indent=1)
-        
-            # Column C letters
-            bcell = ws.cell(row=top, column=3, value="B")
-            bcell.font = Font(bold=True, size=10)
-            bcell.alignment = Alignment(horizontal="center", vertical="center")
-        
-            ccell = ws.cell(row=bot, column=3, value="C")
-            ccell.font = Font(bold=True, size=10)
-            ccell.alignment = Alignment(horizontal="center", vertical="center")
-
-
     # Watermark
     try:
         ws.oddHeader.center.text = "RP Spray Analytics"
@@ -3099,6 +3098,7 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
+
 
 
 
