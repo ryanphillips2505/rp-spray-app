@@ -2904,8 +2904,7 @@ with pd.ExcelWriter(out, engine="openpyxl") as writer:
             writer.book,
             tab_name,
             player_name=p,
-            stats=(season_players.get(p) or {}),
-            notes_text=""
+            stats=(season_players.get(p) or {}),""
         )
 
 
@@ -3018,6 +3017,7 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
+
 
 
 
