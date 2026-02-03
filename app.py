@@ -582,33 +582,39 @@ def get_batter_name(line: str, roster: set[str]):
     if not line:
         return None
 
-    line = re.sub(r"\([^)]*\)", "", line)
-    line = re.sub(r"\s+", " ", line).strip()
+    # Remove parenthetical junk and normalize spacing
+    clean = re.sub(r"\([^)]*\)", "", line)
+    clean = re.sub(r"\s+", " ", clean).strip()
+    if not clean:
+        return None
 
-    parts = line.split()
+    parts = clean.split()
     if not parts:
         return None
 
+    # First token must look like a name starter
     if not starts_like_name(parts[0]):
         return None
 
-    if len(parts) >= 2:
-        candidate_two = parts[0] + " " + parts[1]
-        if candidate_two in roster:
-            return candidate_two
+    # 🔥 PRIMARY MATCH: longest roster name that matches the start of the line
+    roster_sorted = sorted(
+        (r.strip().strip('"') for r in roster if r),
+        key=len,
+        reverse=True
+    )
 
-    last = parts[0]
-    last_matches = [p for p in roster if p.split() and p.split()[-1] == last]
-    if len(last_matches) == 1:
-        return last_matches[0]
+    for rname in roster_sorted:
+        if clean == rname or clean.startswith(rname + " "):
+            return rname
+
+    # Fallback: first initial + last token
+    if len(parts) >= 2:
+        candidate = parts[0] + " " + parts[-1]
+        if candidate in roster:
+            return candidate
 
     return None
 
-
-def extract_runner_name_near_event(clean_line: str, match_start: int, roster: set[str]) -> Optional[str]:
-    left = (clean_line[:match_start] or "").strip()
-    if not left:
-        return None
 
     chunk = left.split(",")[-1].strip()
 
@@ -3030,6 +3036,7 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
+
 
 
 
