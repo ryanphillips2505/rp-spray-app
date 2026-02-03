@@ -2317,7 +2317,7 @@ def _build_individual_spray_sheet(
     # Layout constants (matches your screenshot grid style)
     # -----------------------------
     COL_LEFT = 2   # B
-    COL_RIGHT = 10  # J
+    COL_RIGHT = 11  # k
 
     # Header bar
     HEADER_TOP = 2
@@ -2380,9 +2380,10 @@ def _build_individual_spray_sheet(
 
     ws.merge_cells(
     start_row=HEADER_TOP, start_column=COL_LEFT,
-    end_row=HEADER_BOT, end_column=11  # ← include column K
+    end_row=HEADER_BOT, end_column=COL_RIGHT
     )
-    border_box(HEADER_TOP, COL_LEFT, HEADER_BOT, 11, thick_outer=True)
+    border_box(HEADER_TOP, COL_LEFT, HEADER_BOT, COL_RIGHT, thick_outer=True)
+
 
 
     # -----------------------------
@@ -3029,6 +3030,7 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
+
 
 
 
