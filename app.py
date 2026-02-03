@@ -2937,47 +2937,34 @@ with pd.ExcelWriter(out, engine="openpyxl") as writer:
                 cell.fill = f
                 
     # -----------------------------
-    # HEADER ROW 1 (A:J)
-    # -----------------------------
-    ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=10)
-    h1 = ws.cell(row=1, column=1, value=player_name)
-    h1.font = Font(bold=True, size=22)
-    h1.alignment = Alignment(horizontal="center", vertical="center")
-    
-    # -----------------------------
-    # ROW HEIGHT ADJUSTMENTS
-    # -----------------------------
-    for r in [5, 9, 13, 15]:
-        ws.row_dimensions[r].height = 24
-    
-    # -----------------------------
-    # BOTTOM NUMBERED LOG BLOCK (1–8)
-    # -----------------------------
-    num_start_row = 21
-    num_pairs = 8
-    
-    for i in range(num_pairs):
-        r1 = num_start_row + i * 2
-        r2 = r1 + 1
-    
-        # Merge column B
-        ws.merge_cells(start_row=r1, start_column=2, end_row=r2, end_column=2)
-        ncell = ws.cell(row=r1, column=2, value=str(i + 1))
-        ncell.font = Font(bold=True, size=12)
-        ncell.alignment = Alignment(horizontal="left", vertical="center")
-        ncell.border = Border(
-            left=Side(style="thick"),
-            right=Side(style="thick"),
-            top=Side(style="thick"),
-            bottom=Side(style="thick"),
-        )
-    
-        # Column C labels
-        ws.cell(row=r1, column=3, value="B").font = Font(bold=True)
-        ws.cell(row=r2, column=3, value="C").font = Font(bold=True)
-    
-        ws.cell(row=r1, column=3).alignment = Alignment(horizontal="center", vertical="center")
-        ws.cell(row=r2, column=3).alignment = Alignment(horizontal="center", vertical="center")
+# HEADER ROW 1 (A:J) — Individual tab
+# -----------------------------
+ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=10)
+h1 = ws.cell(row=1, column=1, value=str(player_name))
+h1.font = Font(bold=True, size=22)
+h1.alignment = Alignment(horizontal="center", vertical="center")
+
+# Row heights
+for r in [5, 9, 13, 15]:
+    ws.row_dimensions[r].height = 24
+
+# Bottom merges + numbering (1–8) + B/C in column C
+merge_pairs = [(21, 22), (23, 24), (25, 26), (27, 28), (29, 30), (31, 32), (33, 34), (35, 36)]
+
+for i, (top, bot) in enumerate(merge_pairs, start=1):
+    ws.merge_cells(start_row=top, start_column=2, end_row=bot, end_column=2)  # col B
+    ncell = ws.cell(row=top, column=2, value=i)
+    ncell.font = Font(size=12)
+    ncell.alignment = Alignment(horizontal="left", vertical="center", indent=1)
+
+    # Column C letters
+    bcell = ws.cell(row=top, column=3, value="B")
+    bcell.font = Font(bold=True, size=10)
+    bcell.alignment = Alignment(horizontal="center", vertical="center")
+
+    ccell = ws.cell(row=bot, column=3, value="C")
+    ccell.font = Font(bold=True, size=10)
+    ccell.alignment = Alignment(horizontal="center", vertical="center")
 
 
     # Watermark
@@ -3112,6 +3099,7 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
+
 
 
 
