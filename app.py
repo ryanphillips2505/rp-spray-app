@@ -2622,83 +2622,7 @@ with pd.ExcelWriter(out, engine="openpyxl") as writer:
         bip_vals = (gb_vals + fb_vals).fillna(0)
         denom = bip_vals.replace({0: pd.NA})
 
-        df_export["GB%"] = (gb_vals / denom).fillna(0)
-        df_export["FB%"] = (fb_vals / denom).fillna(0)
-
-        for c in list(df_export.columns):
-            if str(c).startswith("GB-") or str(c).startswith("FB-"):
-                num = pd.to_numeric(df_export[c], errors="coerce").fillna(0)
-                df_export[c] = (num / denom).fillna(0)
-
-        df_export = df_export.drop(columns=["GB", "FB"])
-
-        cols = list(df_export.columns)
-        gb_pos = [c for c in cols if str(c).startswith("GB-")]
-        fb_pos = [c for c in cols if str(c).startswith("FB-")]
-
-        fixed_lead = ["Player"] + (["GP"] if "GP" in cols else []) + ["GB%", "FB%"]
-        rest = [c for c in cols if c not in fixed_lead and c not in gb_pos and c not in fb_pos]
-
-        df_export["BIP"] = bip_vals.astype(int)
-        df_export = df_export[fixed_lead + gb_pos + fb_pos + ["BIP"] + rest]
-
-    # Write Season sheet
-    df_export.to_excel(writer, index=False, sheet_name=sheet_name, startrow=1)
-    ws = writer.book[sheet_name]
-
-    # Safety: ensure visible
-    try:
-        for _sh in writer.book.worksheets:
-            _sh.sheet_state = "visible"
-        writer.book.active = writer.book.worksheets.index(ws)
-    except Exception:
-        pass
-
-    # -----------------------------
-    # (Your existing Season formatting continues below)
-    # -----------------------------
-    # ... keep all your Season formatting code exactly as-is ...
-
-    # -------------------------------------------------
-    # ✅ INDIVIDUAL SPRAY CHART TABS (AFTER Season is written)
-    # -------------------------------------------------
-    used_names = set(sh.title for sh in writer.book.worksheets)
-
-    export_players = display_players[:] if isinstance(display_players, list) else list(season_players.keys())
-    export_players = [p for p in export_players if p in season_players]
-
-    for p in export_players:
-        tab_name = _safe_sheet_name(p, used_names)
-        _build_individual_spray_sheet(
-            writer.book,
-            tab_name,
-            player_name=p,
-            stats=(season_players.get(p) or {}),
-            notes_text=""
-        )
-
-
-    # Build export frame
-    df_export = df_xl.copy() if df_xl is not None else pd.DataFrame()
-
-    # Insert GP (Games Played) after Player
-    if not df_export.empty and "Player" in df_export.columns:
-        def _gp_for(name):
-            try:
-                return int((season_players.get(str(name), {}) or {}).get(GP_KEY, 0) or 0)
-            except Exception:
-                return 0
-        df_export.insert(1, "GP", df_export["Player"].apply(_gp_for))
-
-    # --- Build BIP + GB%/FB% (based on total BIP = GB + FB) ---
-    if not df_export.empty and ("GB" in df_export.columns) and ("FB" in df_export.columns):
-        gb_vals = pd.to_numeric(df_export["GB"], errors="coerce").fillna(0)
-        fb_vals = pd.to_numeric(df_export["FB"], errors="coerce").fillna(0)
-
-        bip_vals = (gb_vals + fb_vals).fillna(0)
-        denom = bip_vals.replace({0: pd.NA})
-
-        # Percent columns (DO NOT heatmap these)
+        # Percent columns
         df_export["GB%"] = (gb_vals / denom).fillna(0)
         df_export["FB%"] = (fb_vals / denom).fillna(0)
 
@@ -2708,10 +2632,10 @@ with pd.ExcelWriter(out, engine="openpyxl") as writer:
                 num = pd.to_numeric(df_export[c], errors="coerce").fillna(0)
                 df_export[c] = (num / denom).fillna(0)
 
-        # Drop raw GB/FB totals (we're showing GB%/FB% now)
+        # Drop raw GB/FB totals
         df_export = df_export.drop(columns=["GB", "FB"])
 
-        # Put columns in the order you want:
+        # Put columns in desired order
         cols = list(df_export.columns)
         gb_pos = [c for c in cols if str(c).startswith("GB-")]
         fb_pos = [c for c in cols if str(c).startswith("FB-")]
@@ -2724,7 +2648,7 @@ with pd.ExcelWriter(out, engine="openpyxl") as writer:
 
         df_export = df_export[fixed_lead + gb_pos + fb_pos + ["BIP"] + rest]
 
-    # Write to Excel
+    # Write Season sheet
     df_export.to_excel(writer, index=False, sheet_name=sheet_name, startrow=1)
     ws = writer.book[sheet_name]
 
@@ -2851,36 +2775,6 @@ with pd.ExcelWriter(out, engine="openpyxl") as writer:
         _set_right_thick(gb_end)
     if fb_end:
         _set_right_thick(fb_end)
-            
-    # -----------------------------
-    # HEADER ROW 1 (A:J) — Individual tab
-    # -----------------------------
-    ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=10)
-    h1 = ws.cell(row=1, column=1, value=str(player_name))
-    h1.font = Font(bold=True, size=22)
-    h1.alignment = Alignment(horizontal="center", vertical="center")
-    
-    # Row heights
-    for r in [5, 9, 13, 15]:
-        ws.row_dimensions[r].height = 24
-    
-    # Bottom merges + numbering (1–8) + B/C in column C
-    merge_pairs = [(21, 22), (23, 24), (25, 26), (27, 28), (29, 30), (31, 32), (33, 34), (35, 36)]
-    
-    for i, (top, bot) in enumerate(merge_pairs, start=1):
-        ws.merge_cells(start_row=top, start_column=2, end_row=bot, end_column=2)  # col B
-        ncell = ws.cell(row=top, column=2, value=i)
-        ncell.font = Font(size=12)
-        ncell.alignment = Alignment(horizontal="left", vertical="center", indent=1)
-    
-        # Column C letters
-        bcell = ws.cell(row=top, column=3, value="B")
-        bcell.font = Font(bold=True, size=10)
-        bcell.alignment = Alignment(horizontal="center", vertical="center")
-    
-        ccell = ws.cell(row=bot, column=3, value="C")
-        ccell.font = Font(bold=True, size=10)
-        ccell.alignment = Alignment(horizontal="center", vertical="center")
 
     # -----------------------------
     # HEATMAPS
@@ -2965,7 +2859,7 @@ with pd.ExcelWriter(out, engine="openpyxl") as writer:
             f = _pct_fill(cell.value)
             if f:
                 cell.fill = f
-        
+
     # Watermark
     try:
         ws.oddHeader.center.text = "RP Spray Analytics"
@@ -2988,6 +2882,25 @@ with pd.ExcelWriter(out, engine="openpyxl") as writer:
     ws.page_margins.header = 0.15
     ws.page_margins.footer = 0.15
     ws.page_setup.paperSize = ws.PAPERSIZE_LETTER
+
+    # -------------------------------------------------
+    # ✅ INDIVIDUAL SPRAY CHART TABS (one tab per player)
+    # -------------------------------------------------
+    used_names = set(sh.title for sh in writer.book.worksheets)
+
+    export_players = display_players[:] if isinstance(display_players, list) else list(season_players.keys())
+    export_players = [p for p in export_players if p in season_players]
+
+    for p in export_players:
+        tab_name = _safe_sheet_name(p, used_names)
+        _build_individual_spray_sheet(
+            writer.book,
+            tab_name,
+            player_name=p,
+            stats=(season_players.get(p) or {}),
+            notes_text=""
+        )
+
 
     # -----------------------------
     # COACH NOTES BOX (EXCEL)
@@ -3098,6 +3011,7 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
+
 
 
 
