@@ -2394,6 +2394,37 @@ def _build_individual_spray_sheet(
     )
     border_box(HEADER_TOP, COL_LEFT, HEADER_BOT, COL_RIGHT, thick_outer=True)
 
+        # -----------------------------
+    # FINAL SPEC — Individual tab Excel adjustments
+    # -----------------------------
+
+    # 1️⃣ Header Row 1: merge A1:J1 (rows 2–3 header stays as-is)
+    ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=10)
+    ws.cell(row=1, column=1, value="").alignment = Alignment(horizontal="center", vertical="center")
+
+    # 2️⃣ Row heights = 24 for rows 5, 9, 13, 15
+    for rr in [5, 9, 13, 15]:
+        ws.row_dimensions[rr].height = 24
+
+    # 3️⃣ Bottom log numbering ONLY 1–8 (merge column B row pairs)
+    merge_pairs = [(21, 22), (23, 24), (25, 26), (27, 28), (29, 30), (31, 32), (33, 34), (35, 36)]
+
+    for i, (top, bot) in enumerate(merge_pairs, start=1):
+        ws.merge_cells(start_row=top, start_column=2, end_row=bot, end_column=2)  # B
+        ncell = ws.cell(row=top, column=2, value=i)
+        ncell.font = Font(size=12)
+        ncell.alignment = Alignment(horizontal="left", vertical="center", indent=1)
+
+        # 4️⃣ Column C labels: B on top row, C on bottom row
+        bcell = ws.cell(row=top, column=3, value="B")
+        bcell.font = Font(bold=True, size=10)
+        bcell.alignment = Alignment(horizontal="center", vertical="center")
+
+        ccell = ws.cell(row=bot, column=3, value="C")
+        ccell.font = Font(bold=True, size=10)
+        ccell.alignment = Alignment(horizontal="center", vertical="center")
+
+
     # -----------------------------
     # Percent heatmap bins (same as Season style)
     # -----------------------------
@@ -3011,6 +3042,7 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
+
 
 
 
