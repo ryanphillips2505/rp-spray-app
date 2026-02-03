@@ -2299,7 +2299,6 @@ def _build_individual_spray_sheet(
     sheet_name: str,
     player_name: str,
     stats: dict,
-    notes_text: str = "",   # ✅ added back so your existing call doesn't crash
 ):
     """
     Builds the EXACT style 'Individual Spray' tab:
@@ -2585,20 +2584,6 @@ def _build_individual_spray_sheet(
         cell.alignment = center
         cell.font = Font(size=10)
     border_box(LOG_TOP, res_col, LOG_TOP + LOG_ROWS - 1, res_col, thick_outer=True)
-
-    # -----------------------------
-    # Notes box ✅ value BEFORE merge
-    # -----------------------------
-    ncell = ws.cell(row=NOTES_TOP, column=NOTES_LEFT)
-    ncell.value = "Notes" + (f"\n\n{notes_text}" if notes_text else "")
-    ncell.font = Font(size=11)
-    ncell.alignment = Alignment(horizontal="left", vertical="top", wrap_text=True)
-
-    ws.merge_cells(
-        start_row=NOTES_TOP, start_column=NOTES_LEFT,
-        end_row=NOTES_TOP + NOTES_HEIGHT - 1, end_column=NOTES_RIGHT + 1
-    )
-    border_box(NOTES_TOP, NOTES_LEFT, NOTES_TOP + NOTES_HEIGHT - 1, NOTES_RIGHT + 1, thick_outer=True)
 
     # -----------------------------
     # Print setup (portrait, fit)
@@ -3033,6 +3018,7 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
+
 
 
 
