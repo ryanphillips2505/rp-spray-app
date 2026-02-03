@@ -2316,7 +2316,7 @@ def _build_individual_spray_sheet(
     # Layout constants (matches your screenshot grid style)
     # -----------------------------
     COL_LEFT = 2   # B
-    COL_RIGHT = 9  # I
+    COL_RIGHT = 10  # J
 
     # Header bar
     HEADER_TOP = 2
@@ -2344,14 +2344,8 @@ def _build_individual_spray_sheet(
     # Log table area
     LOG_TOP = 21
     LOG_LEFT = 2   # B
-    LOG_RIGHT = 9  # I
+    LOG_RIGHT = 10  # j
     LOG_ROWS = 20
-
-    # Notes box
-    NOTES_TOP = LOG_TOP + LOG_ROWS + 3
-    NOTES_LEFT = 2
-    NOTES_RIGHT = 9
-    NOTES_HEIGHT = 6
 
     # -----------------------------
     # Styling
@@ -2398,7 +2392,7 @@ def _build_individual_spray_sheet(
     # FINAL SPEC — Individual tab Excel adjustments
     # -----------------------------
 
-    # 1️⃣ Header Row 1: merge A1:k1 (rows 2–3 header stays as-is)
+    # 1️⃣ Header Row 1: merge A1:J1 (rows 2–3 header stays as-is)
     ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=10)
     ws.cell(row=1, column=1, value="").alignment = Alignment(horizontal="center", vertical="center")
 
@@ -2420,7 +2414,7 @@ def _build_individual_spray_sheet(
         bcell.font = Font(bold=True, size=10)
         bcell.alignment = Alignment(horizontal="center", vertical="center")
 
-        ccell = ws.cell(row=bot, column=3, value="C")
+        ccell = ws.cell(row=bot, column=3, value="S")
         ccell.font = Font(bold=True, size=10)
         ccell.alignment = Alignment(horizontal="center", vertical="center")
 
@@ -3042,6 +3036,7 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
+
 
 
 
