@@ -2515,76 +2515,154 @@ out = BytesIO()
 
 try:
     with pd.ExcelWriter(out, engine="openpyxl") as writer:
-               
-        # --- SEASON SHEET ---
-        # df_xl is built above in your code. Use it if present, otherwise safe fallback.
+
+    # --- SEASON SHEET ---
+    # df_xl is built above in your code. Use it if present, otherwise safe fallback.
+    df_export = None
+    try:
+        df_export = df_xl.copy() if isinstance(df_xl, pd.DataFrame) else None
+    except Exception:
         df_export = None
+
+    if df_export is None or df_export.empty:
+        df_export = pd.DataFrame(columns=["Player"])
+
+    df_export.to_excel(writer, sheet_name="Season", index=False)
+    ws_season = writer.sheets["Season"]
+
+    # ============================
+    # FORMAT % COLUMNS (GB% / FB%) AS PERCENT
+    # ============================
+    header_map = {}
+    for c in range(1, ws_season.max_column + 1):
+        v = ws_season.cell(row=1, column=c).value
+        if v is not None:
+            header_map[str(v).strip()] = c
+
+    for pct_name in ("GB%", "FB%"):
+        if pct_name in header_map:
+            cidx = header_map[pct_name]
+            for r in range(2, ws_season.max_row + 1):
+                ws_season.cell(row=r, column=cidx).number_format = "0%"
+
+    # ============================
+    # SEASON HEAT MAP (DISCRETE BINS)
+    # - applies to numeric columns only
+    # - excludes GB% and FB%
+    # ============================
+    exclude_cols = {"GB%", "FB%"}  # keep visible but DO NOT heatmap them
+
+    # Discrete bins (0–5% = no fill; then orange → red)
+    pct_bins = [
+        (0.00, 0.05, None),
+        (0.05, 0.10, PatternFill("solid", fgColor="FFE5CC")),
+        (0.10, 0.15, PatternFill("solid", fgColor="FFCC99")),
+        (0.15, 0.20, PatternFill("solid", fgColor="FFB266")),
+        (0.20, 0.25, PatternFill("solid", fgColor="FF9933")),
+        (0.25, 0.30, PatternFill("solid", fgColor="F8A5A5")),
+        (0.30, 0.35, PatternFill("solid", fgColor="F8696B")),
+        (0.35, 0.45, PatternFill("solid", fgColor="E53935")),
+        (0.45, 0.60, PatternFill("solid", fgColor="D32F2F")),
+        (0.60, 1.01, PatternFill("solid", fgColor="B71C1C")),
+    ]
+
+    def _to_float(x):
         try:
-            df_export = df_xl.copy() if isinstance(df_xl, pd.DataFrame) else None
+            return float(x)
         except Exception:
-            df_export = None
+            return None
 
-        if df_export is None or df_export.empty:
-            df_export = pd.DataFrame(columns=["Player"])
+    def _fill_for_ratio(ratio):
+        if ratio is None:
+            return None
+        if ratio < 0:
+            ratio = 0.0
+        if ratio > 1:
+            ratio = 1.0
+        for lo, hi, fill in pct_bins:
+            if fill is None:
+                continue
+            if lo <= ratio < hi:
+                return fill
+        return None
 
-        df_export.to_excel(writer, sheet_name="Season", index=False)
-        ws_season = writer.sheets["Season"]
-      
-        # ============================
-        # SEASON HEAT MAP (FULL TEAM)
-        # ============================
-        start_row = 2  # row 1 = headers
-        end_row = ws_season.max_row
-        end_col = ws_season.max_column
+    start_row = 2  # row 1 headers
+    end_row = ws_season.max_row
+    end_col = ws_season.max_column
 
-        if end_row >= start_row and end_col >= 2:
-            heat_rule = ColorScaleRule(
-                start_type="min", start_color="FFFFFF",
-                mid_type="percentile", mid_value=50, mid_color="FFCC99",
-                end_type="max", end_color="8E0000",
-            )
+    if end_row >= start_row and end_col >= 2:
+        # Loop through each data column (skip Player column)
+        for c in range(2, end_col + 1):
+            col_name = str(ws_season.cell(row=1, column=c).value or "").strip()
+            if not col_name:
+                continue
+            if col_name in exclude_cols:
+                continue
 
-            rng = f"{get_column_letter(2)}{start_row}:{get_column_letter(end_col)}{end_row}"
-            ws_season.conditional_formatting.add(rng, heat_rule)
+            # Gather numeric values for this column
+            vals = []
+            for r in range(start_row, end_row + 1):
+                v = _to_float(ws_season.cell(row=r, column=c).value)
+                if v is not None:
+                    vals.append(v)
+
+            if not vals:
+                continue
+
+            vmax = max(vals)
+            if vmax == 0:
+                continue
+
+            # Fill cells based on value/max for that column
+            for r in range(start_row, end_row + 1):
+                cell = ws_season.cell(row=r, column=c)
+                v = _to_float(cell.value)
+                if v is None:
+                    continue
+                ratio = v / vmax
+                f = _fill_for_ratio(ratio)
+                if f:
+                    cell.fill = f
+
+    # basic readability (won’t break your other formatting)
+    ws_season.freeze_panes = "A3"
+    ws_season.row_dimensions[1].height = 30
+    ws_season.row_dimensions[2].height = 20
+
+    # --- COACH NOTES BOX on Season sheet ---
+    notes_box_text_local = str(notes_box_text or "").strip()
+    if notes_box_text_local:
+        top_row = ws_season.max_row + 4
+        left_col = 1
+        right_col = max(1, ws_season.max_column)
+        box_height = 10
+
+        ws_season.merge_cells(
+            start_row=top_row,
+            start_column=left_col,
+            end_row=top_row + box_height - 1,
+            end_column=right_col,
+        )
+        note_cell = ws_season.cell(row=top_row, column=left_col)
+        note_cell.value = f"COACHES NOTES:\n\n{notes_box_text_local}"
+        note_cell.font = Font(size=12)
+        note_cell.alignment = Alignment(wrap_text=True, vertical="top")
+
+        for rr in range(top_row, top_row + box_height):
+            ws_season.row_dimensions[rr].height = 22
+
+        thick = Side(style="thick", color="000000")
+        for rr in range(top_row, top_row + box_height):
+            for cc in range(left_col, right_col + 1):
+                cur = ws_season.cell(row=rr, column=cc).border
+                ws_season.cell(row=rr, column=cc).border = Border(
+                    left=thick if cc == left_col else cur.left,
+                    right=thick if cc == right_col else cur.right,
+                    top=thick if rr == top_row else cur.top,
+                    bottom=thick if rr == top_row + box_height - 1 else cur.bottom,
+                )
 
 
-        # basic readability (won’t break your other formatting)
-        ws_season.freeze_panes = "A3"
-        ws_season.row_dimensions[1].height = 30
-        ws_season.row_dimensions[2].height = 20
-
-        # --- COACH NOTES BOX on Season sheet ---
-        notes_box_text_local = str(notes_box_text or "").strip()
-        if notes_box_text_local:
-            top_row = ws_season.max_row + 4
-            left_col = 1
-            right_col = max(1, ws_season.max_column)
-            box_height = 10
-
-            ws_season.merge_cells(
-                start_row=top_row,
-                start_column=left_col,
-                end_row=top_row + box_height - 1,
-                end_column=right_col,
-            )
-            note_cell = ws_season.cell(row=top_row, column=left_col)
-            note_cell.value = f"COACHES NOTES:\n\n{notes_box_text_local}"
-            note_cell.font = Font(size=12)
-            note_cell.alignment = Alignment(wrap_text=True, vertical="top")
-
-            for rr in range(top_row, top_row + box_height):
-                ws_season.row_dimensions[rr].height = 22
-
-            thick = Side(style="thick", color="000000")
-            for rr in range(top_row, top_row + box_height):
-                for cc in range(left_col, right_col + 1):
-                    cur = ws_season.cell(row=rr, column=cc).border
-                    ws_season.cell(row=rr, column=cc).border = Border(
-                        left=thick if cc == left_col else cur.left,
-                        right=thick if cc == right_col else cur.right,
-                        top=thick if rr == top_row else cur.top,
-                        bottom=thick if rr == top_row + box_height - 1 else cur.bottom,
-                    )
 
         # --- INDIVIDUAL PLAYER TABS ---
         # Prefer current_roster; fallback to df_export Player column
@@ -2676,6 +2754,7 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
+
 
 
 
