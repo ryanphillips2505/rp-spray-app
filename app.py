@@ -2513,8 +2513,7 @@ def _build_player_scout_sheet(ws_, player_name, stats):
 # ==========================================================
 out = BytesIO()
 
-try:
-    with pd.ExcelWriter(out, engine="openpyxl") as writer:
+with pd.ExcelWriter(out, engine="openpyxl") as writer:
 
     # --- SEASON SHEET ---
     # df_xl is built above in your code. Use it if present, otherwise safe fallback.
@@ -2754,6 +2753,7 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
+
 
 
 
