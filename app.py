@@ -2384,7 +2384,7 @@ def _build_individual_spray_sheet(
     )
     border_box(HEADER_TOP, COL_LEFT, HEADER_BOT, COL_RIGHT, thick_outer=True)
 
-    # -----------------------------
+        # -----------------------------
     # FINAL SPEC — Individual tab Excel adjustments
     # -----------------------------
 
@@ -2401,7 +2401,7 @@ def _build_individual_spray_sheet(
     rcell.font = Font(bold=True, size=10)
     rcell.alignment = Alignment(horizontal="center", vertical="center")
 
-    # 3️⃣ Bottom log numbering ONLY 1–8 (merge column B + ALSO merge column K for same rows)
+    # 3️⃣ Bottom log numbering ONLY 1–8 (merge column B AND column K for same row pairs)
     merge_pairs = [(21, 22), (23, 24), (25, 26), (27, 28), (29, 30), (31, 32), (33, 34), (35, 36)]
 
     for i, (top, bot) in enumerate(merge_pairs, start=1):
@@ -2414,7 +2414,7 @@ def _build_individual_spray_sheet(
         # Merge Column K (same row pairs)
         ws.merge_cells(start_row=top, start_column=11, end_row=bot, end_column=11)  # K
 
-        # 4️⃣ Column C labels: B on top row, S on bottom row
+        # Column C labels: B on top row, S on bottom row
         bcell = ws.cell(row=top, column=3, value="B")
         bcell.font = Font(bold=True, size=10)
         bcell.alignment = Alignment(horizontal="center", vertical="center")
@@ -2422,6 +2422,7 @@ def _build_individual_spray_sheet(
         ccell = ws.cell(row=bot, column=3, value="S")
         ccell.font = Font(bold=True, size=10)
         ccell.alignment = Alignment(horizontal="center", vertical="center")
+
 
 
 
@@ -3029,6 +3030,7 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
+
 
 
 
