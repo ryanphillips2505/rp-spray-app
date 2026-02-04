@@ -1565,75 +1565,86 @@ with st.sidebar:
                         else:
                             st.error("Update failed. Team not found in team_access.")
 
-    # =============================
-    # ADMIN — CREATE NEW SCHOOL
-    # =============================
-    st.markdown("### ➕ Add New School")
+            # =============================
+        # ADMIN — CREATE NEW SCHOOL
+        # =============================
+        st.markdown("### ➕ Add New School")
 
-    with st.expander("Create School", expanded=False):
+        with st.expander("Create School", expanded=False):
 
-        colA, colB = st.columns(2)
+            colA, colB = st.columns(2)
 
-        with colA:
-            new_team_name = st.text_input("School Name", key="new_team_name")
-            new_team_code = st.text_input("Team Code (ex: ROCK, YUKON)", key="new_team_code")
+            with colA:
+                new_team_name = st.text_input("School Name", key="new_team_name")
+                new_team_code = st.text_input("Team Code (ex: ROCK, YUKON)", key="new_team_code")
 
-        with colB:
-            new_team_slug = st.text_input("Team Slug (unique)", key="new_team_slug")
-            new_active = st.checkbox("Active", value=True, key="new_team_active")
+            with colB:
+                new_team_slug = st.text_input("Team Slug (unique)", key="new_team_slug")
+                new_active = st.checkbox("Active", value=True, key="new_team_active")
 
-        new_logo = st.file_uploader("Team Logo", type=["png","jpg","jpeg","webp"], key="new_logo")
-        new_bg = st.file_uploader("Background Image", type=["png","jpg","jpeg","webp"], key="new_bg")
+            new_logo = st.file_uploader("Team Logo", type=["png","jpg","jpeg","webp"], key="new_logo")
+            new_bg = st.file_uploader("Background Image", type=["png","jpg","jpeg","webp"], key="new_bg")
 
-        if st.button("🚀 Create School"):
-            if not new_team_name or not new_team_code:
-                st.error("School name and team code are required.")
-            else:
-                team_slug = (new_team_slug or new_team_name.lower().replace(" ","_")).strip()
-                team_code = new_team_code.upper().strip()
-
-                # Check for duplicate slug
-                exists = supabase.table("team_access").select("id").eq("team_slug", team_slug).execute()
-                if exists.data:
-                    st.error("That team slug already exists.")
+            if st.button("🚀 Create School", key="create_school_btn"):
+                if not new_team_name or not new_team_code:
+                    st.error("School name and team code are required.")
                 else:
-                    # Upload assets to Supabase Storage
-                    bucket = "team-assets"
-                    try:
-                        supabase.storage.create_bucket(bucket, public=True)
-                    except:
-                        pass
+                    team_slug = (new_team_slug or new_team_name.lower().replace(" ","_")).strip()
+                    team_code = new_team_code.upper().strip()
 
-                    logo_url = None
-                    bg_url = None
+                    # Check for duplicate slug
+                    exists = supabase.table("team_access").select("id").eq("team_slug", team_slug).execute()
+                    if exists.data:
+                        st.error("That team slug already exists.")
+                    else:
+                        # Upload assets to Supabase Storage
+                        bucket = "team-assets"
+                        try:
+                            supabase.storage.create_bucket(bucket, public=True)
+                        except Exception:
+                            pass
 
-                    if new_logo:
-                        path = f"{team_slug}/logo.png"
-                        supabase.storage.from_(bucket).upload(path, new_logo.getvalue(), {"content-type": new_logo.type})
-                        logo_url = supabase.storage.from_(bucket).get_public_url(path)
+                        logo_url = None
+                        bg_url = None
 
-                    if new_bg:
-                        path = f"{team_slug}/background.png"
-                        supabase.storage.from_(bucket).upload(path, new_bg.getvalue(), {"content-type": new_bg.type})
-                        bg_url = supabase.storage.from_(bucket).get_public_url(path)
+                        if new_logo:
+                            path = f"{team_slug}/logo.png"
+                            supabase.storage.from_(bucket).upload(
+                                path,
+                                new_logo.getvalue(),
+                                {"content-type": new_logo.type, "upsert": "true"},
+                            )
+                            logo_url = supabase.storage.from_(bucket).get_public_url(path)
 
-                    # Generate access key
-                    raw_key = secrets.token_hex(3).upper()
-                    key_hash = hash_access_code(raw_key)
+                        if new_bg:
+                            path = f"{team_slug}/background.png"
+                            supabase.storage.from_(bucket).upload(
+                                path,
+                                new_bg.getvalue(),
+                                {"content-type": new_bg.type, "upsert": "true"},
+                            )
+                            bg_url = supabase.storage.from_(bucket).get_public_url(path)
 
-                    # Insert into Supabase
-                    supabase.table("team_access").insert({
-                        "team_slug": team_slug,
-                        "team_code": team_code,
-                        "team_name": new_team_name,
-                        "code_hash": key_hash,
-                        "is_active": new_active,
-                        "logo_url": logo_url,
-                        "background_url": bg_url
-                    }).execute()
+                        # Generate access key
+                        raw_key = secrets.token_hex(3).upper()
+                        key_hash = hash_access_code(raw_key)
 
-                    st.success("School created!")
-                    st.code(f"Access Key: {raw_key}")
+                        # Insert into Supabase
+                        supabase.table("team_access").insert({
+                            "team_slug": team_slug,
+                            "team_code": team_code,
+                            "team_name": new_team_name,
+                            "code_hash": key_hash,
+                            "is_active": new_active,
+                            "logo_url": logo_url,
+                            "background_url": bg_url
+                        }).execute()
+
+                        st.success("School created!")
+                        st.code(f"Access Key: {raw_key}")
+                        load_team_codes.clear()
+                        st.rerun()
+
 
 
    
@@ -3222,6 +3233,7 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
+
 
 
 
