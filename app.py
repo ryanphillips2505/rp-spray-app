@@ -1493,85 +1493,100 @@ with st.sidebar:
     st.markdown("---")
 
     # -----------------------------
-    # ADMIN: CHANGE ACCESS CODE (CLEAN + HIDDEN)
-    # -----------------------------
-    with st.expander("🔐 Admin", expanded=False):
-        st.markdown(
-            """
-            <div style="
-                padding: 12px;
-                border-radius: 14px;
-                background: rgba(255,255,255,0.72);
-                border: 1px solid rgba(0,0,0,0.10);
-                box-shadow: 0 6px 18px rgba(0,0,0,0.06);
-                margin-bottom: 10px;
-            ">
-                <div style="font-size:0.92rem; font-weight:800; margin-bottom:6px;">
-                    Change Access Code
-                </div>
-                <div style="font-size:0.85rem; opacity:0.85;">
-                    Updates Supabase instantly.
-                </div>
+# ADMIN: CHANGE ACCESS CODE + CREATE SCHOOL (TRULY HIDDEN BEHIND PIN)
+# -----------------------------
+with st.expander("🔐 Admin", expanded=False):
+    st.markdown(
+        """
+        <div style="
+            padding: 12px;
+            border-radius: 14px;
+            background: rgba(255,255,255,0.72);
+            border: 1px solid rgba(0,0,0,0.10);
+            box-shadow: 0 6px 18px rgba(0,0,0,0.06);
+            margin-bottom: 10px;
+        ">
+            <div style="font-size:0.92rem; font-weight:800; margin-bottom:6px;">
+                Change Access Code
             </div>
-            """,
-            unsafe_allow_html=True,
-        )
+            <div style="font-size:0.85rem; opacity:0.85;">
+                Updates Supabase instantly.
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
-        pin = st.text_input(
-            "Admin PIN",
-            type="password",
-            label_visibility="collapsed",
-            placeholder="Admin PIN",
-        )
+    pin = st.text_input(
+        "Admin PIN",
+        type="password",
+        label_visibility="collapsed",
+        placeholder="Admin PIN",
+        key="admin_pin_input",
+    )
 
-        if pin != st.secrets.get("ADMIN_PIN", ""):
-            st.caption("Admin access only.")
+    is_admin = (pin == st.secrets.get("ADMIN_PIN", ""))
+
+    if not is_admin:
+        st.caption("Admin access only.")
+    else:
+        # -----------------------------
+        # CHANGE ACCESS CODE
+        # -----------------------------
+        codes_map = load_team_codes()
+        teams = sorted({
+            (v.get("team_code") or "").strip().upper()
+            for v in (codes_map.values() if isinstance(codes_map, dict) else [])
+            if v and v.get("team_code")
+        })
+
+        if not teams:
+            st.error("No active teams found in team_access.")
         else:
-            codes_map = load_team_codes()
-            teams = sorted({
-                (v.get("team_code") or "").strip().upper()
-                for v in (codes_map.values() if isinstance(codes_map, dict) else [])
-                if v and v.get("team_code")
-            })
+            team_pick = st.selectbox("Team", options=teams, key="admin_team_pick")
 
-            if not teams:
-                st.error("No active teams found in team_access.")
-            else:
-                team_pick = st.selectbox("Team", options=teams)
+            new_code = st.text_input(
+                "New Code",
+                type="password",
+                placeholder="New access code",
+                key="admin_new_code",
+            )
+            confirm = st.text_input(
+                "Confirm",
+                type="password",
+                placeholder="Confirm new access code",
+                key="admin_confirm",
+            )
 
-                new_code = st.text_input("New Code", type="password", placeholder="New access code")
-                confirm  = st.text_input("Confirm", type="password", placeholder="Confirm new access code")
+            c1, c2 = st.columns(2)
+            with c1:
+                update_btn = st.button("Update", use_container_width=True, key="admin_update_btn")
+            with c2:
+                clear_btn = st.button("Clear", use_container_width=True, key="admin_clear_btn")
 
-                c1, c2 = st.columns(2)
-                with c1:
-                    update_btn = st.button("Update", use_container_width=True)
-                with c2:
-                    clear_btn = st.button("Clear", use_container_width=True)
+            if clear_btn:
+                st.rerun()
 
-                if clear_btn:
-                    st.rerun()
-
-                if update_btn:
-                    if not new_code.strip():
-                        st.error("Enter a new code.")
-                    elif new_code != confirm:
-                        st.error("Codes don’t match.")
+            if update_btn:
+                if not new_code.strip():
+                    st.error("Enter a new code.")
+                elif new_code != confirm:
+                    st.error("Codes don’t match.")
+                else:
+                    ok = admin_set_access_code(team_pick, new_code)
+                    if ok:
+                        st.success("✅ Access code updated.")
+                        load_team_codes.clear()
+                        st.rerun()
                     else:
-                        ok = admin_set_access_code(team_pick, new_code)
-                        if ok:
-                            st.success("✅ Access code updated.")
-                            load_team_codes.clear()  # clear cached codes
-                            st.rerun()
-                        else:
-                            st.error("Update failed. Team not found in team_access.")
+                        st.error("Update failed. Team not found in team_access.")
 
-            # =============================
-        # ADMIN — CREATE NEW SCHOOL
-        # =============================
+        # -----------------------------
+        # CREATE NEW SCHOOL (ONLY VISIBLE WHEN ADMIN)
+        # -----------------------------
         st.markdown("### ➕ Add New School")
 
         with st.expander("Create School", expanded=False):
-
             colA, colB = st.columns(2)
 
             with colA:
@@ -1582,14 +1597,22 @@ with st.sidebar:
                 new_team_slug = st.text_input("Team Slug (unique)", key="new_team_slug")
                 new_active = st.checkbox("Active", value=True, key="new_team_active")
 
-            new_logo = st.file_uploader("Team Logo", type=["png","jpg","jpeg","webp"], key="new_logo")
-            new_bg = st.file_uploader("Background Image", type=["png","jpg","jpeg","webp"], key="new_bg")
+            new_logo = st.file_uploader(
+                "Team Logo",
+                type=["png", "jpg", "jpeg", "webp"],
+                key="new_logo",
+            )
+            new_bg = st.file_uploader(
+                "Background Image",
+                type=["png", "jpg", "jpeg", "webp"],
+                key="new_bg",
+            )
 
             if st.button("🚀 Create School", key="create_school_btn"):
                 if not new_team_name or not new_team_code:
                     st.error("School name and team code are required.")
                 else:
-                    team_slug = (new_team_slug or new_team_name.lower().replace(" ","_")).strip()
+                    team_slug = (new_team_slug or new_team_name.lower().replace(" ", "_")).strip()
                     team_code = new_team_code.upper().strip()
 
                     # Check for duplicate slug
@@ -1637,7 +1660,7 @@ with st.sidebar:
                             "code_hash": key_hash,
                             "is_active": new_active,
                             "logo_url": logo_url,
-                            "background_url": bg_url
+                            "background_url": bg_url,
                         }).execute()
 
                         st.success("School created!")
@@ -3233,6 +3256,7 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
+
 
 
 
