@@ -1966,36 +1966,42 @@ if process_clicked:
 # -----------------------------
 # SEASON OUTPUTS
 # -----------------------------
+
 # Title row (tight)
-hdr_left, _hdr_right = st.columns([10, 1], vertical_alignment="center")
+hdr_left, _hdr_right = st.columns([10, 1])
 with hdr_left:
     st.markdown(
-        f"""<h3 style='margin:0; padding:0;'>📔 Full Team Spray – SEASON TO DATE ({selected_team})</h3>""",
+        f"<h3 style='margin:0; padding:0;'>📔 Full Team Spray – SEASON TO DATE ({selected_team})</h3>",
         unsafe_allow_html=True,
     )
 
-# Controls row (directly under title, same line)
-ctl_left, ctl_right = st.columns([8, 2], vertical_alignment="center")
+# Controls row (directly under title)
+ctl_left, ctl_right = st.columns([8, 2])
 with ctl_left:
     show_archived = st.checkbox("Show archived players", value=False)
 with ctl_right:
     stat_edit_slot = st.empty()  # filled after df_season is built
 
 
+# -----------------------------
+# Build season table
+# -----------------------------
 season_rows = []
 
-active_players = sorted([p for p in current_roster if p in season_players])
+# Defensive: make sure these are the right types
+_roster_set = set(current_roster or [])
+_season_players = season_players or {}
+_archived_set = set(archived_players or set())
 
-# ✅ archived list comes from DB (NOT recomputed)
-archived_list = sorted([p for p in (archived_players or set()) if p in season_players and p not in current_roster])
+active_players = sorted([p for p in _roster_set if p in _season_players])
 
-if show_archived:
-    display_players = active_players + archived_list
-else:
-    display_players = active_players
+# archived list comes from DB (NOT recomputed)
+archived_list = sorted([p for p in _archived_set if p in _season_players and p not in _roster_set])
+
+display_players = active_players + archived_list if show_archived else active_players
 
 for player in display_players:
-    stats = season_players[player]
+    stats = _season_players.get(player, {}) or {}
     row = {"Player": player}
 
     # Totals
@@ -2003,36 +2009,40 @@ for player in display_players:
     row["FB"] = stats.get("FB", 0)
 
     # GB/FB by position (keep)
-    for ck in COMBO_KEYS:
+    for ck in (COMBO_KEYS or []):
         row[ck] = stats.get(ck, 0)
-         
-    # ✅ BUNT total (combined bunt stat)
+
+    # BUNT total
     row["BUNT"] = stats.get("BUNT", 0)
 
-    # ✅ SB / CS totals + base buckets (NO -H buckets)
-    for rk in RUN_KEYS:
+    # SB / CS totals + base buckets (NO -H buckets)
+    for rk in (RUN_KEYS or []):
         row[rk] = stats.get(rk, 0)
-   
 
     season_rows.append(row)
 
+# Build DataFrame
 df_season = pd.DataFrame(season_rows)
-col_order = (["Player"] + ["GB", "FB"] + COMBO_KEYS + RUN_KEYS)
-# If no rows yet, preserve the expected columns so Stat Edit can still work
-if df_season.empty and len(df_season.columns) == 0:
-    df_season = pd.DataFrame(columns=col_order)
 
-col_order = [c for c in col_order if c in df_season.columns]
-df_season = df_season[col_order]
+# Expected columns (keeps Stat Edit stable even when empty)
+col_order = ["Player", "GB", "FB"] + list(COMBO_KEYS or []) + ["BUNT"] + list(RUN_KEYS or [])
+
+if df_season.empty:
+    df_season = pd.DataFrame(columns=col_order)
+else:
+    # keep only columns that exist and preserve order
+    col_order = [c for c in col_order if c in df_season.columns]
+    df_season = df_season[col_order]
+
 
 # -----------------------------
 # Stat Edit (column visibility) — per selected opponent/team
 # -----------------------------
-# Hide Streamlit's built-in dataframe download icon (you already have download buttons below)
+
+# Hide Streamlit dataframe download icon (you already have download buttons)
 st.markdown(
     """
     <style>
-      /* Try multiple selectors because Streamlit versions vary */
       [data-testid="stDataFrameToolbar"] button[title="Download data as CSV"] { display: none !important; }
       [data-testid="stDataFrameToolbar"] button[aria-label="Download data as CSV"] { display: none !important; }
       [data-testid="stDataFrameToolbar"] button[title="Download data"] { display: none !important; }
@@ -2042,11 +2052,10 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# UI polish for the Stat Edit control (does NOT touch title sizing)
+# UI polish for the Stat Edit control
 st.markdown(
     """
     <style>
-    /* Sleek MLB-style Stat Filters control */
     .stat-edit-wrap {
         display: flex;
         justify-content: flex-end;
@@ -2086,12 +2095,13 @@ if cols_key not in st.session_state:
 all_cols = list(df_season.columns)
 default_cols = list(st.session_state.get(cols_key, []))
 
-# Keep only columns that still exist (safe if you add/remove stats later)
+# Keep only columns that still exist
 default_cols = [c for c in default_cols if c in all_cols]
 
 # Always keep Player visible
 if "Player" in all_cols and "Player" not in default_cols:
     default_cols = ["Player"] + default_cols
+
 
 # -----------------------------
 # STAT FILTERS (Popover / Expander)
@@ -3181,6 +3191,7 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
+
 
 
 
