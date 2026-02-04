@@ -1891,7 +1891,7 @@ if process_clicked:
                 combo_key = f"{ball_type}-{loc}"
                 game_team[combo_key] += 1
                 game_players[batter][combo_key] += 1
-try:
+
     # Apply GP (games played) for this game
     for _p in gp_in_game:
         if _p in game_players:
@@ -3166,6 +3166,7 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
+
 
 
 
