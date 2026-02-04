@@ -2318,11 +2318,13 @@ def _safe_sheet_name(name: str, used: set[str]) -> str:
 
 def _build_individual_spray_sheet(
     wb,
-    sheet_name: str,
-    player_name: str,
-    stats: dict,
-    notes_text: str = "",
+    sheet_name,
+    player_name,
+    stats,
+    notes_text="",
+    template_mode=False  # ✅ ADD THIS
 ):
+
 
     """
     Builds the EXACT style 'Individual Spray' tab:
@@ -2334,6 +2336,11 @@ def _build_individual_spray_sheet(
     """
 
     ws = wb.create_sheet(title=sheet_name)
+
+    if template_mode:
+    stats = {}
+    player_name = ""
+
 
     # -----------------------------
     # Layout constants (matches your screenshot grid style)
@@ -3038,8 +3045,6 @@ with pd.ExcelWriter(out, engine="openpyxl") as writer:
     )
 
 
-
-
     # -----------------------------
     # COACH NOTES BOX (EXCEL)
     # -----------------------------
@@ -3149,6 +3154,7 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
+
 
 
 
