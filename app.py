@@ -3007,35 +3007,36 @@ with pd.ExcelWriter(out, engine="openpyxl") as writer:
     ws.page_setup.paperSize = ws.PAPERSIZE_LETTER
 
     # -------------------------------------------------
-    # ✅ INDIVIDUAL SPRAY CHART TABS (one tab per player)
-    # -------------------------------------------------
-    used_names = set(sh.title for sh in writer.book.worksheets)
+# ✅ INDIVIDUAL SPRAY CHART TABS (one tab per player)
+# -------------------------------------------------
+used_names = set(sh.title for sh in writer.book.worksheets)
 
-    export_players = display_players[:] if isinstance(display_players, list) else list(season_players.keys())
-    export_players = [p for p in export_players if p in season_players]
+export_players = display_players[:] if isinstance(display_players, list) else list(season_players.keys())
+export_players = [p for p in export_players if p in season_players]
 
-    for p in export_players:
-        tab_name = _safe_sheet_name(p, used_names)
-        _build_individual_spray_sheet(
-            writer.book,
-            tab_name,
-            p,
-            (season_players.get(p) or {}),
-            ""
-        )
-        # -------------------------------------------------
-        # ✅ BLANK INDIVIDUAL TEMPLATE (ALWAYS LAST)
-        # -------------------------------------------------
-        template_tab = _safe_sheet_name("NEW PLAYER TEMPLATE", used_names)
-        _build_individual_spray_sheet(
-            writer.book,
-            template_tab,
-            "",                 # no player name
-            {},                 # no stats
-            "",
-            template_mode=True
-        )   
-        
+for p in export_players:
+    tab_name = _safe_sheet_name(p, used_names)
+    _build_individual_spray_sheet(
+        writer.book,
+        tab_name,
+        p,
+        (season_players.get(p) or {}),
+        ""
+    )
+
+# -------------------------------------------------
+# ✅ BLANK INDIVIDUAL TEMPLATE (ALWAYS LAST — EXPORT ONLY)
+# -------------------------------------------------
+template_tab = _safe_sheet_name("NEW PLAYER TEMPLATE", used_names)
+_build_individual_spray_sheet(
+    writer.book,
+    template_tab,
+    "",                 # no player name
+    {},                 # no stats
+    "",
+    template_mode=True  # requires template_mode param in function
+)
+
 
     # -----------------------------
     # COACH NOTES BOX (EXCEL)
@@ -3146,6 +3147,7 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
+
 
 
 
