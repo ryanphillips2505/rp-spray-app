@@ -1892,27 +1892,27 @@ if process_clicked:
                 game_team[combo_key] += 1
                 game_players[batter][combo_key] += 1
 
-    # Apply GP (games played) for this game
-    for _p in gp_in_game:
-        if _p in game_players:
-            game_players[_p][GP_KEY] = game_players[_p].get(GP_KEY, 0) + 1
-
-    # Add game stats to in-memory season totals
-    add_game_to_season(
-        season_team,
-        season_players,
-        game_team,
-        game_players,
-    )
-
-    # Save season totals (includes archived players)
-    db_save_season_totals(
-        TEAM_CODE,
-        team_key,
-        season_team,
-        season_players,
-        len(processed_set),
-        archived_players,
+            # Apply GP (games played) for this game
+            for _p in gp_in_game:
+                if _p in game_players:
+                    game_players[_p][GP_KEY] = game_players[_p].get(GP_KEY, 0) + 1
+        
+            # Add game stats to in-memory season totals
+            add_game_to_season(
+                season_team,
+                season_players,
+                game_team,
+                game_players,
+            )
+        
+            # Save season totals (includes archived players)
+            db_save_season_totals(
+                TEAM_CODE,
+                team_key,
+                season_team,
+                season_players,
+                len(processed_set),
+                archived_players,
     )
 
     st.success("✅ Game processed and added to season totals (Supabase).")
@@ -3166,6 +3166,7 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
+
 
 
 
