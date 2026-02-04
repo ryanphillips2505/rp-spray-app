@@ -1996,17 +1996,18 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# Keyed by team/opponent so each opponent can have its own preferred view
+# -----------------------------
+# Stat Edit (column visibility) — per selected opponent/team
+# -----------------------------
 cols_key = f"season_cols__{TEAM_CODE_SAFE}__{team_key}"
 
-# Defensive: df_season MUST exist before touching columns
-all_cols = list(df_season.columns) if "df_season" in locals() else []
+# df_season MUST already exist before this point
+all_cols = list(df_season.columns)
 
-# Initialize stored columns only AFTER df_season exists
-if cols_key not in st.session_state and all_cols:
+# Initialize once per opponent/team
+if cols_key not in st.session_state:
     st.session_state[cols_key] = all_cols.copy()
 
-# Pull stored preference (safe fallback)
 default_cols = list(st.session_state.get(cols_key, []))
 
 # Keep only columns that still exist
@@ -2015,8 +2016,7 @@ default_cols = [c for c in default_cols if c in all_cols]
 # Always keep Player visible
 if "Player" in all_cols and "Player" not in default_cols:
     default_cols = ["Player"] + default_cols
-
-
+    
 
 # -----------------------------
 # STAT FILTERS (Popover / Expander)
@@ -3106,6 +3106,7 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
+
 
 
 
