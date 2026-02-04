@@ -2020,6 +2020,15 @@ st.markdown(
 cols_key = f"season_cols__{TEAM_CODE_SAFE}__{team_key}"
 all_cols = list(df_season.columns)
 
+# ✅ Auto-add any NEW columns to the saved Stat Edit selection (so new stats show up)
+_saved = st.session_state.get(cols_key, [])
+if isinstance(_saved, (list, tuple)):
+    missing = [c for c in all_cols if c not in _saved]
+    if missing:
+        st.session_state[cols_key] = list(_saved) + missing
+else:
+    st.session_state[cols_key] = all_cols.copy()
+
 if cols_key not in st.session_state:
     st.session_state[cols_key] = all_cols.copy()
 
@@ -2028,6 +2037,8 @@ default_cols = [c for c in default_cols if c in all_cols]
 
 if "Player" in all_cols and "Player" not in default_cols:
     default_cols = ["Player"] + default_cols
+
+
 
 
 # -----------------------------
@@ -2586,7 +2597,30 @@ def _build_individual_spray_sheet(
         cell.alignment = center
         cell.border = Border(left=thick, right=thick, top=thin, bottom=thick)
 
+    # -----------------------------
+    # Bunt / Sac Bunt totals (Row 17-18, Col G-H)
+    # -----------------------------
+    bunt_total = int(stats.get("Bunt", stats.get("BU", 0)) or 0)
+    sacb_total = int(stats.get("Sac Bunt", stats.get("SH", 0)) or 0)
+    
+    # Labels
+    bunt_lab = ws.cell(row=17, column=7, value="BUNT")   # G17
+    sacb_lab = ws.cell(row=17, column=8, value="SAC")    # H17
+    for cell in (bunt_lab, sacb_lab):
+        cell.font = Font(bold=True, size=10)
+        cell.alignment = center
+        cell.fill = PatternFill("solid", fgColor="D9D9D9")
+        cell.border = Border(left=thick, right=thick, top=thick, bottom=thin)
+    
+    # Values
+    bunt_val = ws.cell(row=18, column=7, value=bunt_total)   # G18
+    sacb_val = ws.cell(row=18, column=8, value=sacb_total)   # H18
+    for cell in (bunt_val, sacb_val):
+        cell.font = Font(bold=True, size=12)
+        cell.alignment = center
+        cell.border = Border(left=thick, right=thick, top=thin, bottom=thick)
 
+        
     # -----------------------------
     # Black divider bar
     # -----------------------------
@@ -3084,6 +3118,7 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
+
 
 
 
