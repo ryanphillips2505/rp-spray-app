@@ -1804,6 +1804,9 @@ if process_clicked:
 
         gp_in_game = set()
 
+        running_seen = set()  # ✅ per-game dedupe for SB/CS events
+
+
         for line in lines:
             clean_line = line.strip().strip('"')
             clean_line = re.sub(r"\([^)]*\)", "", clean_line)
