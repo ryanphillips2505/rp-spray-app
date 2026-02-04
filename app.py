@@ -2851,60 +2851,59 @@ with pd.ExcelWriter(out, engine="openpyxl") as writer:
     # Thick borders helpers
     thick_side = Side(style="thick", color="000000")
 
-    def _set_right_thick(col_idx: int):
-        for r in range(2, ws.max_row + 1):
-            cell = ws.cell(row=r, column=col_idx)
+def _outline_box(r1: int, c1: int, r2: int, c2: int):
+    for r in range(r1, r2 + 1):
+        for c in range(c1, c2 + 1):
+            cell = ws.cell(row=r, column=c)
             b = cell.border
-            cell.border = Border(left=b.left, right=thick_side, top=b.top, bottom=b.bottom)
+            cell.border = Border(
+                left=thick_side if c == c1 else b.left,
+                right=thick_side if c == c2 else b.right,
+                top=thick_side if r == r1 else b.top,
+                bottom=thick_side if r == r2 else b.bottom,
+            )
 
-    if fbp_idx:
-        _set_right_thick(fbp_idx)
+def _first_idx(prefix: str):
+    for j, h in enumerate(headers, start=1):
+        if h.startswith(prefix):
+            return j
+    return None
 
-    def _last_idx(prefix: str):
-        last = None
-        for j, h in enumerate(headers, start=1):
-            if h.startswith(prefix):
-                last = j
-        return last
+def _last_idx(prefix: str):
+    last = None
+    for j, h in enumerate(headers, start=1):
+        if h.startswith(prefix):
+            last = j
+    return last
 
-    gb_end = _last_idx("GB-")
-    fb_end = _last_idx("FB-")
+def _set_right_thick(col_idx: int):
+    for r in range(2, ws.max_row + 1):
+        cell = ws.cell(row=r, column=col_idx)
+        b = cell.border
+        cell.border = Border(left=b.left, right=thick_side, top=b.top, bottom=b.bottom)
 
-    if gb_end:
-        _set_right_thick(gb_end)
-    if fb_end:
-        _set_right_thick(fb_end)
-    
-    # ✅ Thick line after BIP to separate BIP from SB/CS
-    if bip_idx:
-        _set_right_thick(bip_idx)
-        
-        def _outline_box(r1: int, c1: int, r2: int, c2: int):
-            for r in range(r1, r2 + 1):
-                for c in range(c1, c2 + 1):
-                    cell = ws.cell(row=r, column=c)
-                    b = cell.border
-                    cell.border = Border(
-                        left   = thick_side if c == c1 else b.left,
-                        right  = thick_side if c == c2 else b.right,
-                        top    = thick_side if r == r1 else b.top,
-                        bottom = thick_side if r == r2 else b.bottom,
-                )
-            def _first_idx(prefix: str):
-                for j, h in enumerate(headers, start=1):
-                    if h.startswith(prefix):
-                        return j
-                 return None
+gb_end = _last_idx("GB-")
+fb_end = _last_idx("FB-")
 
-            gb_start = _first_idx("GB-")
-            fb_start = _first_idx("FB-")
-     
-        # ✅ Thick outline around GB block and FB block (includes headings row 2)
-        if gb_start and gb_end:
-            _outline_box(2, gb_start, ws.max_row, gb_end)
-        
-        if fb_start and fb_end:
-            _outline_box(2, fb_start, ws.max_row, fb_end)
+if gb_end:
+    _set_right_thick(gb_end)
+if fb_end:
+    _set_right_thick(fb_end)
+
+# Thick line after BIP to separate BIP from SB/CS
+if bip_idx:
+    _set_right_thick(bip_idx)
+
+gb_start = _first_idx("GB-")
+fb_start = _first_idx("FB-")
+
+# Thick outline around GB and FB blocks (includes headings row 2)
+if gb_start and gb_end:
+    _outline_box(2, gb_start, ws.max_row, gb_end)
+
+if fb_start and fb_end:
+    _outline_box(2, fb_start, ws.max_row, fb_end)
+
 
 
     # -----------------------------
@@ -3143,6 +3142,7 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
+
 
 
 
