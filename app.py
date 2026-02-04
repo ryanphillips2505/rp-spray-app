@@ -1900,7 +1900,7 @@ if process_clicked:
         add_game_to_season(season_team, season_players, game_team, game_players)
 
         # ✅ Save with archived_players too
-        1903 db_save_season_totals(TEAM_CODE, team_key, season_team, season_players, len(processed_set), archived_players)
+            db_save_season_totals(TEAM_CODE, team_key, season_team, season_players, len(processed_set), archived_players)
 
      # ✅ Force UI to refresh immediately (fixes 1-game lag)
      try:
@@ -3142,6 +3142,7 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
+
 
 
 
