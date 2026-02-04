@@ -2614,27 +2614,34 @@ def _build_individual_spray_sheet(
         cell.border = Border(left=thick, right=thick, top=thin, bottom=thick)
 
     # -----------------------------
-    # Bunt / Sac Bunt totals (Row 17-18, Col G-H)
-    # -----------------------------
-    bunt_total = int(stats.get("Bunt", stats.get("BU", 0)) or 0)
-    sacb_total = int(stats.get("Sac Bunt", stats.get("SH", 0)) or 0)
-    
-    # Labels
-    bunt_lab = ws.cell(row=17, column=7, value="BUNT")   # G17
-    sacb_lab = ws.cell(row=17, column=8, value="SAC")    # H17
-    for cell in (bunt_lab, sacb_lab):
-        cell.font = Font(bold=True, size=10)
-        cell.alignment = center
-        cell.fill = PatternFill("solid", fgColor="D9D9D9")
-        cell.border = Border(left=thick, right=thick, top=thick, bottom=thin)
-    
-    # Values
-    bunt_val = ws.cell(row=18, column=7, value=bunt_total)   # G18
-    sacb_val = ws.cell(row=18, column=8, value=sacb_total)   # H18
-    for cell in (bunt_val, sacb_val):
-        cell.font = Font(bold=True, size=12)
-        cell.alignment = center
-        cell.border = Border(left=thick, right=thick, top=thin, bottom=thick)
+# Bunts total (Bunt + Sac Bunt combined) — Row 17-18, Col G
+# -----------------------------
+bun_total = (
+    int(stats.get("Bunts", 0) or 0)
+    + int(stats.get("BUNT", 0) or 0)
+    + int(stats.get("Bunt", 0) or 0)
+    + int(stats.get("Sac Bunt", 0) or 0)
+    + int(stats.get("BU", 0) or 0)
+    + int(stats.get("SH", 0) or 0)
+)
+
+# Label (G17)
+bun_lab = ws.cell(row=17, column=7, value="BUNTS")   # G17
+bun_lab.font = Font(bold=True, size=10)
+bun_lab.alignment = center
+bun_lab.fill = PatternFill("solid", fgColor="D9D9D9")
+bun_lab.border = Border(left=thick, right=thick, top=thick, bottom=thin)
+
+# Value (G18)
+bun_val = ws.cell(row=18, column=7, value=bun_total)  # G18
+bun_val.font = Font(bold=True, size=12)
+bun_val.alignment = center
+bun_val.border = Border(left=thick, right=thick, top=thin, bottom=thick)
+
+# ✅ If you previously used H17/H18 for SAC, clear them so nothing shows
+ws.cell(row=17, column=8, value="")
+ws.cell(row=18, column=8, value="")
+
 
         
     # -----------------------------
@@ -3134,6 +3141,7 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
+
 
 
 
