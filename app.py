@@ -1876,163 +1876,66 @@ if process_clicked:
                     bt_reasons.append("No explicit FB phrase → inferred FB from outfield location")
 
 
-            # (confidence labels kept for future debug; not displayed)
-            _ = overall_confidence_score(loc_conf + bt_conf)
-            _ = loc_reasons + bt_reasons
-            
-            # ---------------------------
-            # Per-play stat accumulation
-            # ---------------------------
-            game_team[loc] += 1
-            game_players[batter][loc] += 1
-            
-            if ball_type in BALLTYPE_KEYS:
-                game_team[ball_type] += 1
-                game_players[batter][ball_type] += 1
-            
-            if ball_type in ("GB", "FB") and loc in COMBO_LOCS:
-                combo_key = f"{ball_type}-{loc}"
-                game_team[combo_key] += 1
-                game_players[batter][combo_key] += 1
-            
-            
-            # ==========================================================
-            # IMPORTANT:
-            # Everything above should be inside your per-play loop.
-            # Everything below should be OUTSIDE the per-play loop.
-            # ==========================================================
-            
-            rerun_needed = False
-            
-            try:
-                # Apply GP (games played) ONCE for this game (not per play)
-                for _p in gp_in_game:
-                    if _p in game_players:
-                        game_players[_p][GP_KEY] = game_players[_p].get(GP_KEY, 0) + 1
-            
-                # Add game stats to in-memory season totals
-                add_game_to_season(
-                    season_team,
-                    season_players,
-                    game_team,
-                    game_players,
-                )
-            
-                # Save season totals (includes archived players)
-                db_save_season_totals(
-                    TEAM_CODE,
-                    team_key,
-                    season_team,
-                    season_players,
-                    len(processed_set),
-                    archived_players,
-                )
-            
-                st.success("✅ Game processed and added to season totals (Supabase).")
-                rerun_needed = True
-            
-            except Exception as e:
-                # Roll back dedupe mark if something failed
-                if marked_processed and gkey:
-                    try:
-                        processed_set.discard(gkey)
-                    except Exception:
-                        pass
-            
-                    try:
-                        db_unmark_game_processed(TEAM_CODE, team_key, gkey)
-                    except Exception:
-                        pass
-            
-                _show_db_error(e, "Processing failed (rolled back dedupe mark so you can retry)")
-                st.stop()
-            
-            finally:
-                st.session_state.processing_game = False
-                st.session_state.processing_started_at = 0.0
-            
-            # Force UI refresh so totals are NOT one game behind
-            if rerun_needed:
-                try:
-                    st.cache_data.clear()
-                except Exception:
-                    pass
-                st.rerun()
+           
+# (confidence labels kept for future debug; not displayed)
+_ = overall_confidence_score(loc_conf + bt_conf)
+_ = loc_reasons + bt_reasons
+
+# ---------------------------
+# Per-play stat accumulation
+# ---------------------------
+game_team[loc] += 1
+game_players[batter][loc] += 1
+
+if ball_type in BALLTYPE_KEYS:
+    game_team[ball_type] += 1
+    game_players[batter][ball_type] += 1
+
+if ball_type in ("GB", "FB") and loc in COMBO_LOCS:
+    combo_key = f"{ball_type}-{loc}"
+    game_team[combo_key] += 1
+    game_players[batter][combo_key] += 1
 
 
-               
+# ==========================================================
+# STOP.
+# The per-play loop ENDS ABOVE THIS LINE.
+# Everything below MUST be DEDENTED so it's OUTSIDE the loop.
+# ==========================================================
 
+# Apply GP (games played) ONCE for this game (not per play)
+for _p in gp_in_game:
+    if _p in game_players:
+        game_players[_p][GP_KEY] = game_players[_p].get(GP_KEY, 0) + 1
 
-# -----------------------------
-# SEASON OUTPUTS
-# -----------------------------
+# Add game stats to in-memory season totals
+add_game_to_season(
+    season_team,
+    season_players,
+    game_team,
+    game_players,
+)
 
-# Title row (tight)
-hdr_left, _hdr_right = st.columns([10, 1])
-with hdr_left:
-    st.markdown(
-        f"<h3 style='margin:0; padding:0;'>📔 Full Team Spray – SEASON TO DATE ({selected_team})</h3>",
-        unsafe_allow_html=True,
-    )
+# Save season totals (includes archived players)
+db_save_season_totals(
+    TEAM_CODE,
+    team_key,
+    season_team,
+    season_players,
+    len(processed_set),
+    archived_players,
+)
 
-# Controls row (directly under title)
-ctl_left, ctl_right = st.columns([8, 2])
-with ctl_left:
-    show_archived = st.checkbox("Show archived players", value=False)
-with ctl_right:
-    stat_edit_slot = st.empty()  # filled after df_season is built
+st.success("✅ Game processed and added to season totals (Supabase).")
 
+# Force UI refresh so totals are NOT one game behind
+try:
+    st.cache_data.clear()
+except Exception:
+    pass
 
-# -----------------------------
-# Build season table
-# -----------------------------
-season_rows = []
+st.rerun()
 
-# Defensive: make sure these are the right types
-_roster_set = set(current_roster or [])
-_season_players = season_players or {}
-_archived_set = set(archived_players or set())
-
-active_players = sorted([p for p in _roster_set if p in _season_players])
-
-# archived list comes from DB (NOT recomputed)
-archived_list = sorted([p for p in _archived_set if p in _season_players and p not in _roster_set])
-
-display_players = active_players + archived_list if show_archived else active_players
-
-for player in display_players:
-    stats = _season_players.get(player, {}) or {}
-    row = {"Player": player}
-
-    # Totals
-    row["GB"] = stats.get("GB", 0)
-    row["FB"] = stats.get("FB", 0)
-
-    # GB/FB by position (keep)
-    for ck in (COMBO_KEYS or []):
-        row[ck] = stats.get(ck, 0)
-
-    # BUNT total
-    row["BUNT"] = stats.get("BUNT", 0)
-
-    # SB / CS totals + base buckets (NO -H buckets)
-    for rk in (RUN_KEYS or []):
-        row[rk] = stats.get(rk, 0)
-
-    season_rows.append(row)
-
-# Build DataFrame
-df_season = pd.DataFrame(season_rows)
-
-# Expected columns (keeps Stat Edit stable even when empty)
-col_order = ["Player", "GB", "FB"] + list(COMBO_KEYS or []) + ["BUNT"] + list(RUN_KEYS or [])
-
-if df_season.empty:
-    df_season = pd.DataFrame(columns=col_order)
-else:
-    # keep only columns that exist and preserve order
-    col_order = [c for c in col_order if c in df_season.columns]
-    df_season = df_season[col_order]
 
 
 # -----------------------------
@@ -3191,6 +3094,7 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
+
 
 
 
