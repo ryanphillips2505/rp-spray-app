@@ -774,12 +774,12 @@ def classify_ball_type(line_lower: str):
 
 def classify_location(line_lower: str, strict_mode: bool = False):
     
-if "sacrifice bunt" in line_lower or "sac bunt" in line_lower or "sacrifice hit" in line_lower:
-    return "BUNT", 3, ["Contains sacrifice bunt → BUNT"]
-
-# ✅ Bunts are NOT GB/FB — they are their own stat (BUNT)
-if "bunt" in line_lower:
-    return None, 3, ["Bunt detected → no GB/FB classification"]
+    if "sacrifice bunt" in line_lower or "sac bunt" in line_lower or "sacrifice hit" in line_lower:
+        return "BUNT", 3, ["Contains sacrifice bunt → BUNT"]
+    
+    # ✅ Bunts are NOT GB/FB — they are their own stat (BUNT)
+    if "bunt" in line_lower:
+        return None, 3, ["Bunt detected → no GB/FB classification"]
 
     candidates = []
 
@@ -3087,6 +3087,7 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
+
 
 
 
