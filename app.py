@@ -397,6 +397,8 @@ RUN_KEYS = ["SB", "SB-2B", "SB-3B", "CS", "CS-2B", "CS-3B"]
 
 # Games Played tracking (per player)
 GP_KEY = "GP"
+BUNTS_KEY = "Bunts"
+
 
 
 # -----------------------------
@@ -411,6 +413,7 @@ def empty_stat_dict():
     for rk in RUN_KEYS:
         d[rk] = 0
     d[GP_KEY] = 0
+    d[BUNTS_KEY] = 0
     return d
 
 
@@ -424,6 +427,7 @@ def ensure_all_keys(d: dict):
     for rk in globals().get("RUN_KEYS", []):
         d.setdefault(rk, 0)
     d.setdefault(GP_KEY, 0)
+    d.setdefault(BUNTS_KEY, 0)
     return d
 
 
@@ -751,8 +755,10 @@ def is_ball_in_play(line_lower: str) -> bool:
 
 
 def classify_ball_type(line_lower: str):
+    # ✅ Bunts are NOT GB/FB in this system
     if "bunt" in line_lower:
-        return "GB", 3, ["Contains 'bunt' → GB"]
+        return None, 3, ["Bunt detected → no GB/FB"]
+
 
     for rx in SACFLY_REGEX:
         if rx.search(line_lower):
@@ -3118,6 +3124,7 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
+
 
 
 
