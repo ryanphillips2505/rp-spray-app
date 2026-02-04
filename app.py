@@ -861,13 +861,16 @@ def save_roster_text(path: str, text: str):
 
 
 def add_game_to_season(season_team, season_players, game_team, game_players):
-    for key in LOCATION_KEYS + BALLTYPE_KEYS + COMBO_KEYS + RUN_KEYS + [GP_KEY]:
+    # ✅ include Bunts in roll-up
+    KEYS = LOCATION_KEYS + BALLTYPE_KEYS + COMBO_KEYS + RUN_KEYS + [GP_KEY, BUNTS_KEY]
+
+    for key in KEYS:
         season_team[key] = season_team.get(key, 0) + game_team.get(key, 0)
 
     for player, gstats in game_players.items():
         season_players.setdefault(player, empty_stat_dict())
         sstats = season_players[player]
-        for key in LOCATION_KEYS + BALLTYPE_KEYS + COMBO_KEYS + RUN_KEYS + [GP_KEY]:
+        for key in KEYS:
             sstats[key] = sstats.get(key, 0) + gstats.get(key, 0)
 
 
@@ -1789,89 +1792,106 @@ if process_clicked:
 
         gp_in_game = set()
         running_seen = set()  # per-game dedupe for SB/CS events
+        current_batter_ctx = None  # ✅ remembers batter from "X at bat" lines
 
-        for line in lines:
-            clean_line = line.strip().strip('"')
-            clean_line = re.sub(r"\([^)]*\)", "", clean_line)
-            clean_line = re.sub(r"\s+", " ", clean_line).strip()
-            line_lower = clean_line.lower()
 
-            # --- GP tracking (Games Played) ---
-            if not ("courtesy runner" in line_lower or re.search(r"\bcr\b", line_lower)):
-                if " at bat" in line_lower:
-                    bn = get_batter_name(clean_line, current_roster)
-                    if bn:
-                        gp_in_game.add(bn)
+        # ✅ Track current batter across lines (GC often puts "Bunt" on its own line)
+# Put this ONCE before: for line in lines:
+current_batter_ctx = None  # last known batter from "X at bat"
 
-                if ("lineup changed" in line_lower) or ("defensive" in line_lower) or (" in for " in line_lower):
-                    uline = (" " + clean_line.upper().replace(",", " ") + " ")
-                    for p in current_roster:
-                        if (" " + p.upper() + " ") in uline:
-                            gp_in_game.add(p)
 
-            # --- running events (NOT BIP) ---
-            runner, total_key, base_key = parse_running_event(clean_line, current_roster)
-            if runner and total_key:
-                dedupe_key = (runner, total_key, base_key or "", line_lower)
-                if dedupe_key not in running_seen:
-                    running_seen.add(dedupe_key)
+for line in lines:
+    clean_line = line.strip().strip('"')
+    clean_line = re.sub(r"\([^)]*\)", "", clean_line)
+    clean_line = re.sub(r"\s+", " ", clean_line).strip()
+    if not clean_line:
+        continue
+    line_lower = clean_line.lower()
 
-                    game_team[total_key] += 1
-                    game_players[runner][total_key] += 1
+    # --- GP tracking (Games Played) + keep batter context ---
+    if not ("courtesy runner" in line_lower or re.search(r"\bcr\b", line_lower)):
+        if " at bat" in line_lower:
+            bn = get_batter_name(clean_line, current_roster)
+            if bn:
+                gp_in_game.add(bn)
+                current_batter_ctx = bn  # ✅ remember batter for next lines (bunt lines, etc.)
 
-                    if base_key and base_key in RUN_KEYS:
-                        game_team[base_key] += 1
-                        game_players[runner][base_key] += 1
+        if ("lineup changed" in line_lower) or ("defensive" in line_lower) or (" in for " in line_lower):
+            uline = (" " + clean_line.upper().replace(",", " ") + " ")
+            for p in current_roster:
+                if (" " + p.upper() + " ") in uline:
+                    gp_in_game.add(p)
 
-            batter = get_batter_name(clean_line, current_roster)
-            if batter is None:
-                continue
+    # --- running events (NOT BIP) ---
+    runner, total_key, base_key = parse_running_event(clean_line, current_roster)
+    if runner and total_key:
+        dedupe_key = (runner, total_key, base_key or "", line_lower)
+        if dedupe_key not in running_seen:
+            running_seen.add(dedupe_key)
 
-            gp_in_game.add(batter)
+            game_team[total_key] += 1
+            game_players[runner][total_key] += 1
 
-            if not is_ball_in_play(line_lower):
-                continue
+            if base_key and base_key in RUN_KEYS:
+                game_team[base_key] += 1
+                game_players[runner][base_key] += 1
 
-            loc, loc_conf, loc_reasons = classify_location(line_lower, strict_mode=strict_mode)
-            ball_type, bt_conf, bt_reasons = classify_ball_type(line_lower)
+    # --- Batter resolution (name on line OR implied by last "at bat") ---
+    batter = get_batter_name(clean_line, current_roster) or current_batter_ctx
+    if batter is None:
+        continue
 
-            if loc is None:
-                if strict_mode:
-                    continue
-                loc = "UNKNOWN"
-                loc_reasons.append("No location match → bucketed as UNKNOWN")
+    gp_in_game.add(batter)
 
-            if ball_type is None and loc is not None:
-                # Do NOT infer GB/FB for bunts
-                if loc == "BUNT":
-                    ball_type = None
-                elif loc in ["SS", "3B", "2B", "1B", "P"]:
-                    ball_type = "GB"
-                    bt_conf += 1
-                    bt_reasons.append("No explicit GB phrase → inferred GB from infield location")
-                elif loc in ["LF", "CF", "RF"]:
-                    ball_type = "FB"
-                    bt_conf += 1
-                    bt_reasons.append("No explicit FB phrase → inferred FB from outfield location")
+    # Must be a ball-in-play outcome to count (bunts are included in is_ball_in_play())
+    if not is_ball_in_play(line_lower):
+        continue
 
-            # (confidence labels kept for future debug; not displayed)
-            _ = overall_confidence_score(loc_conf + bt_conf)
-            _ = loc_reasons + bt_reasons
+    # ✅ Any bunt/sac bunt/sacrifice hit -> ONE bucket: "Bunts"
+    if ("bunt" in line_lower) or ("sacrifice hit" in line_lower):
+        game_team[BUNTS_KEY] = game_team.get(BUNTS_KEY, 0) + 1
+        game_players[batter][BUNTS_KEY] = game_players[batter].get(BUNTS_KEY, 0) + 1
+        continue  # do NOT run GB/FB/location logic for bunts
 
-            # ---------------------------
-            # Per-play stat accumulation
-            # ---------------------------
-            game_team[loc] += 1
-            game_players[batter][loc] += 1
+    # --- Normal GB/FB + location classification (non-bunts) ---
+    loc, loc_conf, loc_reasons = classify_location(line_lower, strict_mode=strict_mode)
+    ball_type, bt_conf, bt_reasons = classify_ball_type(line_lower)
 
-            if ball_type in BALLTYPE_KEYS:
-                game_team[ball_type] += 1
-                game_players[batter][ball_type] += 1
+    if loc is None:
+        if strict_mode:
+            continue
+        loc = "UNKNOWN"
+        loc_reasons.append("No location match → bucketed as UNKNOWN")
 
-            if ball_type in ("GB", "FB") and loc in COMBO_LOCS:
-                combo_key = f"{ball_type}-{loc}"
-                game_team[combo_key] += 1
-                game_players[batter][combo_key] += 1
+    if ball_type is None and loc is not None:
+        if loc in ["SS", "3B", "2B", "1B", "P"]:
+            ball_type = "GB"
+            bt_conf += 1
+            bt_reasons.append("No explicit GB phrase → inferred GB from infield location")
+        elif loc in ["LF", "CF", "RF"]:
+            ball_type = "FB"
+            bt_conf += 1
+            bt_reasons.append("No explicit FB phrase → inferred FB from outfield location")
+
+    # (confidence labels kept for future debug; not displayed)
+    _ = overall_confidence_score(loc_conf + bt_conf)
+    _ = loc_reasons + bt_reasons
+
+    # ---------------------------
+    # Per-play stat accumulation (non-bunts)
+    # ---------------------------
+    game_team[loc] += 1
+    game_players[batter][loc] += 1
+
+    if ball_type in BALLTYPE_KEYS:
+        game_team[ball_type] += 1
+        game_players[batter][ball_type] += 1
+
+    if ball_type in ("GB", "FB") and loc in COMBO_LOCS:
+        combo_key = f"{ball_type}-{loc}"
+        game_team[combo_key] += 1
+        game_players[batter][combo_key] += 1
+
 
         # ---------------------------
         # OUTSIDE the per-play loop (still inside try)
@@ -3139,6 +3159,7 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
+
 
 
 
