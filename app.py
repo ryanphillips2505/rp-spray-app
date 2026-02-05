@@ -230,30 +230,36 @@ def require_team_access():
     code_raw = st.text_input("Access Code", value="")
 
     if st.button("Unlock"):
-        code = code_raw.strip().upper()
+    entered = code_raw.strip()
 
-        if not code:
-            st.error("Enter an access code")
+    if not entered:
+        st.error("Enter an access code")
+    else:
+        entered_hash = hash_access_code(entered)
+
+        matched_row = None
+        for row in (codes or {}).values():
+            stored_hash = str(row.get("code_hash", "")).strip()
+            if stored_hash and entered_hash == stored_hash:
+                matched_row = row
+                break
+
+        if matched_row:
+            team_code = str(matched_row.get("team_code", "")).strip().upper()
+
+            if not license_is_active(team_code):
+                st.error("License inactive. Contact admin.")
+                st.stop()
+
+            st.session_state.team_code = team_code
+            st.success("Unlocked")
+            st.rerun()
         else:
-            hashed = hash_access_code(code).strip().lower()
-            row = codes.get(code)
-            stored = str((row or {}).get("code_hash", "")).strip().lower()
+            st.error("Invalid access code")
 
-            if row and hashed == stored:
-                team_code = str(row.get("team_code", "")).strip().upper()
+st.stop()
+return None, None
 
-                if not license_is_active(team_code):
-                    st.error("License inactive. Contact admin.")
-                    st.stop()
-
-                st.session_state.team_code = team_code
-                st.rerun()
-
-            else:
-                st.error("Invalid access code")
-
-    st.stop()
-    return None, None
 
 TEAM_CODE, _ = require_team_access()
 
@@ -3352,6 +3358,7 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
+
 
 
 
