@@ -229,7 +229,7 @@ def require_team_access():
 
     code_raw = st.text_input("Access Code", value="")
 
-    if st.button("Unlock"):
+if st.button("Unlock"):
     entered = code_raw.strip()
 
     if not entered:
@@ -259,6 +259,8 @@ def require_team_access():
 
 st.stop()
 return None, None
+
+
 
 
 TEAM_CODE, _ = require_team_access()
@@ -3358,6 +3360,7 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
+
 
 
 
