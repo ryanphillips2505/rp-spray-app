@@ -270,22 +270,54 @@ def require_team_access():
         if admin_pin and admin_pin == st.secrets.get("ADMIN_PIN", ""):
             st.success("Admin verified.")
 
+            # RESET ALL TEAMS (CODE = TEAM CODE)
             if st.button("🔄 RESET ALL TEAMS (CODE = TEAM CODE)", key="reset_all_codes_btn"):
-                res = supabase.table("team_access").select("team_slug,team_code").execute()
+                res = supabase.table("team_access").select("id,team_code").execute()
                 rows = res.data or []
+
+                updated = 0
                 for r in rows:
+                    rid = r.get("id")
                     code = (r.get("team_code") or "").strip().upper()
-                    slug = (r.get("team_slug") or "").strip()
-                    if code and slug:
+                    if rid and code:
                         supabase.table("team_access").update(
                             {"code_hash": hash_access_code(code)}
-                        ).eq("team_slug", slug).execute()
+                        ).eq("id", rid).execute()
+                        updated += 1
 
                 load_team_codes.clear()
-                st.success("All teams reset. Access code = team code (ex: YUKON).")
+                st.success(f"Reset {updated} teams. Access code = TEAM CODE (ex: YUKON).")
                 st.rerun()
 
+            st.markdown("---")
+
+            # SET ONLY YUKON CODE
+            st.markdown("### 🔧 Set YUKON Code (only)")
+            new_yukon = st.text_input("New YUKON Access Code", type="password", key="new_yukon_code")
+            confirm_yukon = st.text_input("Confirm YUKON Code", type="password", key="confirm_yukon_code")
+
+            if st.button("🔧 Set YUKON Code Now", key="set_yukon_code_btn"):
+                if not (new_yukon or "").strip():
+                    st.error("Enter a new Yukon code.")
+                elif new_yukon != confirm_yukon:
+                    st.error("Codes don’t match.")
+                else:
+                    yukon_hash = hash_access_code(new_yukon)
+
+                    res = supabase.table("team_access").select("id").eq("team_code", "YUKON").limit(1).execute()
+                    rows = res.data or []
+                    if not rows:
+                        st.error("Could not find YUKON in team_access.")
+                    else:
+                        rid = rows[0].get("id")
+                        supabase.table("team_access").update({"code_hash": yukon_hash}).eq("id", rid).execute()
+
+                        load_team_codes.clear()
+                        st.success("YUKON code updated. Unlock using the new code.")
+                        st.rerun()
+
     st.stop()
+
 
 
 
@@ -3405,6 +3437,7 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
+
 
 
 
