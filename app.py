@@ -1593,43 +1593,62 @@ with st.sidebar:
     )
 
     st.markdown("---")
+# -----------------------------
+# ADMIN (TRULY HIDDEN BEHIND PIN)
+# -----------------------------
+with st.expander("🔐 Admin", expanded=False):
+    pin = st.text_input(
+        "Admin PIN",
+        type="password",
+        label_visibility="collapsed",
+        placeholder="Admin PIN",
+        key="admin_pin_input",
+    )
 
-    # -----------------------------
-    # ADMIN (TRULY HIDDEN BEHIND PIN)
-    # -----------------------------
-    with st.expander("🔐 Admin", expanded=False):
-        pin = st.text_input(
-            "Admin PIN",
-            type="password",
-            label_visibility="collapsed",
-            placeholder="Admin PIN",
-            key="admin_pin_input",
+    if pin != st.secrets.get("ADMIN_PIN", ""):
+        st.caption("Admin access only.")
+    else:
+        st.markdown(
+            """
+            <div style="
+                padding: 12px;
+                border-radius: 14px;
+                background: rgba(255,255,255,0.72);
+                border: 1px solid rgba(0,0,0,0.10);
+                box-shadow: 0 6px 18px rgba(0,0,0,0.06);
+                margin-bottom: 10px;
+            ">
+                <div style="font-size:0.92rem; font-weight:800; margin-bottom:6px;">
+                    Change Access Code
+                </div>
+                <div style="font-size:0.85rem; opacity:0.85;">
+                    Updates Supabase instantly.
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
         )
 
-        if pin != st.secrets.get("ADMIN_PIN", ""):
-            st.caption("Admin access only.")
-        else:
-            st.markdown(
-                """
-                <div style="
-                    padding: 12px;
-                    border-radius: 14px;
-                    background: rgba(255,255,255,0.72);
-                    border: 1px solid rgba(0,0,0,0.10);
-                    box-shadow: 0 6px 18px rgba(0,0,0,0.06);
-                    margin-bottom: 10px;
-                ">
-                    <div style="font-size:0.92rem; font-weight:800; margin-bottom:6px;">
-                        Change Access Code
-                    </div>
-                    <div style="font-size:0.85rem; opacity:0.85;">
-                        Updates Supabase instantly.
-                    </div>
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
+        # -------------------------------------------------
+        # 🚨 EMERGENCY RESET — GET BACK IN (TEMP)
+        # -------------------------------------------------
+        if st.button("🔄 RESET ALL TEAM CODES (TEMP)", key="reset_all_codes"):
+            res = supabase.table("team_access").select("team_slug,team_code").execute()
+            rows = res.data or []
 
+            for r in rows:
+                slug = (r.get("team_slug") or "").strip()
+                code = (r.get("team_code") or "").strip().upper()
+                if slug and code:
+                    supabase.table("team_access").update({
+                        "code_hash": hash_access_code(code)
+                    }).eq("team_slug", slug).execute()
+
+            load_team_codes.clear()
+            st.success("ALL TEAMS RESET. ACCESS CODE = TEAM CODE (ex: YUKON)")
+            st.rerun()
+
+    
             # Load teams
             try:
                 codes_map = load_team_codes()
@@ -3361,6 +3380,7 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
+
 
 
 
