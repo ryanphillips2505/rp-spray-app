@@ -1720,25 +1720,6 @@ with st.sidebar:
                 st.success(f"Reset {updated} teams. Access code = TEAM CODE (ex: YUKON).")
                 st.rerun()
 
-            # (Optional) remove later — not needed if you keep Emergency Reset
-            if st.button("🔄 ONE-TIME RESET: Codes = TEAM CODE", key="one_time_reset_codes"):
-                res = supabase.table("team_access").select("id, team_code").execute()
-                rows = res.data or []
-
-                updated = 0
-                for r in rows:
-                    rid = r.get("id")
-                    code = (r.get("team_code") or "").strip().upper()
-                    if rid and code:
-                        supabase.table("team_access").update(
-                            {"code_hash": hash_access_code(code)}
-                        ).eq("id", rid).execute()
-                        updated += 1
-
-                load_team_codes.clear()
-                st.success(f"Reset {updated} teams. Access code = TEAM CODE (ex: YUKON).")
-                st.rerun()
-
             # Load teams DIRECT from Supabase
             res = (
                 supabase.table("team_access")
@@ -3459,6 +3440,7 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
+
 
 
 
