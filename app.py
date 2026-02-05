@@ -258,10 +258,12 @@ def require_team_access():
 
             matched = None
             for row in (codes or {}).values():
-                stored = str((row or {}).get("code_hash", "") or "").strip()
-                if stored and entered_hash == stored:
-                    matched = row
-                    break
+                if str(row.get("id")) == "3":  # TEMP: Yukon sanity check
+                    stored = str(row.get("code_hash", "") or "").strip()
+                    if entered_hash == stored:
+                        matched = row
+                        break
+
 
             if not matched:
                 st.error("Invalid access code")
@@ -3429,6 +3431,7 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
+
 
 
 
