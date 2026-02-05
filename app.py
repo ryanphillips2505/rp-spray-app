@@ -1747,12 +1747,26 @@ with st.sidebar:
                         st.error("Codes don’t match.")
                     else:
                         ok = admin_set_access_code_by_id(pick["id"], new_code)
+                
                         if ok:
+                            # ✅ STEP 1 DEBUG: prove Supabase updated the right row
+                            st.write("Picked team:", pick)
+                
+                            check = (
+                                supabase.table("team_access")
+                                .select("id, team_code, team_name, code_hash")
+                                .eq("id", pick["id"])
+                                .limit(1)
+                                .execute()
+                            )
+                            st.write("DB after update:", check.data)
+                
                             st.success("✅ Access code updated.")
                             load_team_codes.clear()  # refresh gate cache
                             st.rerun()
                         else:
                             st.error("Update failed.")
+
 
             st.markdown("### ➕ Add New School")
 
@@ -3415,6 +3429,7 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
+
 
 
 
