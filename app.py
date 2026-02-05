@@ -1243,126 +1243,127 @@ def db_reset_season(team_code: str, team_key: str):
         _render_supabase_fix_block()
         st.stop()
 
-      import time
-      import httpx
-      from datetime import datetime
 
-        # -----------------------------
-        # SUPABASE EXECUTE (RETRY)
-        # -----------------------------
-        def _sb_execute(q, tries: int = 3, base_sleep: float = 0.4):
-            """
-            Retry wrapper for Supabase/PostgREST calls to reduce transient httpx/httpcore ReadError.
-            """
-            last_err = None
-            for i in range(tries):
-                try:
-                    return q.execute()
-                except (httpx.ReadError, httpx.ConnectError, httpx.RemoteProtocolError) as e:
-                    last_err = e
-                    time.sleep(base_sleep * (i + 1))
-                except Exception as e:
-                    # still retry a couple times — Streamlit reruns can collide
-                    last_err = e
-                    time.sleep(base_sleep * (i + 1))
-            raise last_err
-        
-        
-        # -----------------------------
-        # DB: TEAM ROSTERS
-        # -----------------------------
-        @st.cache_data(ttl=30, show_spinner=False)
-        def db_list_teams(team_code: str):
-            """
-            Returns list of dicts: [{team_key, team_name, roster_text, updated_at}]
-            Cached briefly to prevent hammering Supabase on reruns.
-            """
-            try:
-                res = _sb_execute(
-                    supabase.table("team_rosters")
-                    .select("team_key, team_name, roster_text, updated_at")
-                    .eq("team_code", str(team_code).strip().upper())
-                    .order("team_name")
-                )
-                return res.data or []
-            except Exception as e:
-                _show_db_error(e, "Supabase SELECT failed on team_rosters")
-                _render_supabase_fix_block()
-                st.stop()
-        
-        
-        def db_get_team(team_code: str, team_key: str):
-            try:
-                res = _sb_execute(
-                    supabase.table("team_rosters")
-                    .select("team_key, team_name, roster_text, updated_at")
-                    .eq("team_code", str(team_code).strip().upper())
-                    .eq("team_key", str(team_key).strip())
-                    .limit(1)
-                )
-                if res.data:
-                    return res.data[0]
-                return None
-            except Exception as e:
-                _show_db_error(e, "Supabase SELECT failed on team_rosters (single)")
-                _render_supabase_fix_block()
-                st.stop()
-        
-        
-        def db_get_roster(team_code: str, team_key: str) -> str:
-            """
-            Returns roster_text for a team, or empty string if none exists.
-            """
-            team = db_get_team(team_code, team_key)
-            if team and team.get("roster_text"):
-                return team["roster_text"]
-            return ""
-        
-        
-        def db_upsert_team(team_code: str, team_key: str, team_name: str, roster_text: str):
-            """
-            Upserts one roster row per (team_code, team_key).
-            Requires unique(team_code, team_key) on team_rosters.
-            Clears cache so UI updates immediately.
-            """
-            try:
-                _sb_execute(
-                    supabase.table("team_rosters")
-                    .upsert(
-                        {
-                            "team_code": str(team_code).strip().upper(),
-                            "team_key": str(team_key).strip(),
-                            "team_name": str(team_name or "").strip(),
-                            "roster_text": roster_text or "",
-                            "updated_at": datetime.utcnow().isoformat(),
-                        },
-                        on_conflict="team_code,team_key",
-                    )
-                )
-                db_list_teams.clear()  # bust cache after write
-            except Exception as e:
-                _show_db_error(e, "Supabase UPSERT failed on team_rosters")
-                _render_supabase_fix_block()
-                st.stop()
-        
-        
-        def db_delete_team(team_code: str, team_key: str):
-            """
-            Optional: delete a team roster row.
-            Clears cache so UI updates immediately.
-            """
-            try:
-                _sb_execute(
-                    supabase.table("team_rosters")
-                    .delete()
-                    .eq("team_code", str(team_code).strip().upper())
-                    .eq("team_key", str(team_key).strip())
-                )
-                db_list_teams.clear()  # bust cache after delete
-            except Exception as e:
-                _show_db_error(e, "Supabase DELETE failed on team_rosters")
-                _render_supabase_fix_block()
-                st.stop()
+import time
+import httpx
+from datetime import datetime
+
+# -----------------------------
+# SUPABASE EXECUTE (RETRY)
+# -----------------------------
+def _sb_execute(q, tries: int = 3, base_sleep: float = 0.4):
+    """
+    Retry wrapper for Supabase/PostgREST calls to reduce transient httpx/httpcore ReadError.
+    """
+    last_err = None
+    for i in range(tries):
+        try:
+            return q.execute()
+        except (httpx.ReadError, httpx.ConnectError, httpx.RemoteProtocolError) as e:
+            last_err = e
+            time.sleep(base_sleep * (i + 1))
+        except Exception as e:
+            # still retry a couple times — Streamlit reruns can collide
+            last_err = e
+            time.sleep(base_sleep * (i + 1))
+    raise last_err
+
+
+# -----------------------------
+# DB: TEAM ROSTERS
+# -----------------------------
+@st.cache_data(ttl=30, show_spinner=False)
+def db_list_teams(team_code: str):
+    """
+    Returns list of dicts: [{team_key, team_name, roster_text, updated_at}]
+    Cached briefly to prevent hammering Supabase on reruns.
+    """
+    try:
+        res = _sb_execute(
+            supabase.table("team_rosters")
+            .select("team_key, team_name, roster_text, updated_at")
+            .eq("team_code", str(team_code).strip().upper())
+            .order("team_name")
+        )
+        return res.data or []
+    except Exception as e:
+        _show_db_error(e, "Supabase SELECT failed on team_rosters")
+        _render_supabase_fix_block()
+        st.stop()
+
+
+def db_get_team(team_code: str, team_key: str):
+    try:
+        res = _sb_execute(
+            supabase.table("team_rosters")
+            .select("team_key, team_name, roster_text, updated_at")
+            .eq("team_code", str(team_code).strip().upper())
+            .eq("team_key", str(team_key).strip())
+            .limit(1)
+        )
+        if res.data:
+            return res.data[0]
+        return None
+    except Exception as e:
+        _show_db_error(e, "Supabase SELECT failed on team_rosters (single)")
+        _render_supabase_fix_block()
+        st.stop()
+
+
+def db_get_roster(team_code: str, team_key: str) -> str:
+    """
+    Returns roster_text for a team, or empty string if none exists.
+    """
+    team = db_get_team(team_code, team_key)
+    if team and team.get("roster_text"):
+        return team["roster_text"]
+    return ""
+
+
+def db_upsert_team(team_code: str, team_key: str, team_name: str, roster_text: str):
+    """
+    Upserts one roster row per (team_code, team_key).
+    Requires unique(team_code, team_key) on team_rosters.
+    Clears cache so UI updates immediately.
+    """
+    try:
+        _sb_execute(
+            supabase.table("team_rosters")
+            .upsert(
+                {
+                    "team_code": str(team_code).strip().upper(),
+                    "team_key": str(team_key).strip(),
+                    "team_name": str(team_name or "").strip(),
+                    "roster_text": roster_text or "",
+                    "updated_at": datetime.utcnow().isoformat(),
+                },
+                on_conflict="team_code,team_key",
+            )
+        )
+        db_list_teams.clear()  # bust cache after write
+    except Exception as e:
+        _show_db_error(e, "Supabase UPSERT failed on team_rosters")
+        _render_supabase_fix_block()
+        st.stop()
+
+
+def db_delete_team(team_code: str, team_key: str):
+    """
+    Optional: delete a team roster row.
+    Clears cache so UI updates immediately.
+    """
+    try:
+        _sb_execute(
+            supabase.table("team_rosters")
+            .delete()
+            .eq("team_code", str(team_code).strip().upper())
+            .eq("team_key", str(team_key).strip())
+        )
+        db_list_teams.clear()  # bust cache after delete
+    except Exception as e:
+        _show_db_error(e, "Supabase DELETE failed on team_rosters")
+        _render_supabase_fix_block()
+        st.stop()
 
   
   
@@ -3482,6 +3483,7 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
+
 
 
 
