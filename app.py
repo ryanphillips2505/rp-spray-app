@@ -259,6 +259,52 @@ def require_team_access():
                 st.rerun()
             else:
                 st.error("Invalid access code")
+ # -----------------------------
+# ADMIN RECOVERY (RUNS ON UNLOCK SCREEN)
+# -----------------------------
+with st.expander("🔐 Admin Recovery", expanded=False):
+    admin_pin = st.text_input("Admin PIN", type="password", key="admin_recovery_pin")
+
+    if admin_pin and admin_pin == st.secrets.get("ADMIN_PIN", ""):
+        st.success("Admin verified.")
+
+        # Make sure salt exists
+        if not st.secrets.get("ACCESS_CODE_SALT", ""):
+            st.error("ACCESS_CODE_SALT is missing in Streamlit Secrets. Add it back first.")
+        else:
+            # Reset ONLY Yukon (fastest)
+            new_yukon = st.text_input("New YUKON Access Code", type="password", key="new_yukon_code")
+            confirm_yukon = st.text_input("Confirm YUKON Code", type="password", key="confirm_yukon_code")
+
+            if st.button("🔧 Set YUKON Code Now", key="set_yukon_code_btn"):
+                if not (new_yukon or "").strip():
+                    st.error("Enter a new code.")
+                elif new_yukon != confirm_yukon:
+                    st.error("Codes don’t match.")
+                else:
+                    yukon_hash = hash_access_code(new_yukon)
+                    supabase.table("team_access").update({"code_hash": yukon_hash}).eq("team_code", "YUKON").execute()
+                    load_team_codes.clear()
+                    st.success("YUKON code updated. Now unlock with the new code.")
+                    st.rerun()
+
+            st.markdown("---")
+
+            # Nuclear option (if you want): reset ALL teams to TEAM CODE
+            if st.button("🔄 RESET ALL TEAMS (CODE = TEAM CODE)", key="reset_all_codes_btn"):
+                res = supabase.table("team_access").select("team_slug,team_code").execute()
+                rows = res.data or []
+                for r in rows:
+                    code = (r.get("team_code") or "").strip().upper()
+                    slug = (r.get("team_slug") or "").strip()
+                    if code and slug:
+                        supabase.table("team_access").update(
+                            {"code_hash": hash_access_code(code)}
+                        ).eq("team_slug", slug).execute()
+                load_team_codes.clear()
+                st.success("All teams reset. Access code = team code (ex: YUKON).")
+                st.rerun()
+               
 
     # If not unlocked yet, stop the app here (no return needed)
     st.stop()
@@ -3380,6 +3426,7 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
+
 
 
 
