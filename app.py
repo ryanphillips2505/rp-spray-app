@@ -242,8 +242,54 @@ def require_team_access():
         key="access_code_input",
     )
 
-    # Load team rows (fresh enough; cached but cleared on admin updates)
-    codes = load_team_codes() or {}
+    # -----------------------------
+# ACCESS CODE UNLOCK (DB DIRECT – DEBUG SAFE)
+# -----------------------------
+if st.button("Unlock", key="unlock_btn"):
+    entered = (code_raw or "").strip()
+
+    if not entered:
+        st.error("Enter an access code")
+        st.stop()
+
+    try:
+        entered_hash = hash_access_code(entered)
+    except Exception as e:
+        st.error(str(e))
+        st.stop()
+
+    res = (
+        supabase.table("team_access")
+        .select("id, team_code, code_hash")
+        .eq("team_code", "YUKON")   # TEMP: hard lock to Yukon
+        .limit(1)
+        .execute()
+    )
+
+    rows = res.data or []
+    if not rows:
+        st.error("YUKON not found in team_access.")
+        st.stop()
+
+    row = rows[0]
+    stored_hash = str(row.get("code_hash") or "").strip()
+
+    st.write("Entered hash:", entered_hash)
+    st.write("Stored hash:", stored_hash)
+
+    if entered_hash != stored_hash:
+        st.error("Invalid access code")
+        st.stop()
+
+    if not license_is_active("YUKON"):
+        st.error("License inactive. Contact admin.")
+        st.stop()
+
+    st.session_state.team_code = "YUKON"
+    st.success("Unlocked YUKON")
+    st.rerun()
+
+st.stop()
 
     if st.button("Unlock", key="unlock_btn"):
         entered = (code_raw or "").strip()
@@ -3431,6 +3477,7 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
+
 
 
 
