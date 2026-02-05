@@ -214,50 +214,54 @@ def license_is_active(team_code: str) -> bool:
         
 
 def require_team_access():
-    codes = load_team_codes()
+    """
+    Gate the app behind an access code.
+    Returns (team_code, row_dict) when unlocked.
+    Otherwise renders the unlock UI and stops execution.
+    """
+    # If already unlocked this session, skip UI
+    team_code = str(st.session_state.get("team_code", "") or "").strip().upper()
+    if team_code:
+        return team_code, {"team_code": team_code}
 
-    if "team_code" not in st.session_state:
-        st.session_state.team_code = None
+    st.markdown("## Enter Access Code")
+    code_raw = st.text_input("Access Code", type="password", key="access_code_input")
 
-    # Already logged in
-    if st.session_state.team_code in codes:
-        return st.session_state.team_code, codes[st.session_state.team_code]
+    # Load codes from Supabase (your cached loader)
+    try:
+        codes = load_team_codes() or {}
+    except Exception:
+        codes = {}
 
-    # Login screen
-    st.title("Welcome to RP Spray Analytics")
-    st.markdown("### Enter Access Code")
-
-    code_raw = st.text_input("Access Code", value="")
-
-if st.button("Unlock"):
-    entered = code_raw.strip()
-
-    if not entered:
-        st.error("Enter an access code")
-    else:
-        entered_hash = hash_access_code(entered)
-
-        matched_row = None
-        for row in (codes or {}).values():
-            stored_hash = str(row.get("code_hash", "")).strip()
-            if stored_hash and entered_hash == stored_hash:
-                matched_row = row
-                break
-
-        if matched_row:
-            team_code = str(matched_row.get("team_code", "")).strip().upper()
-
-            if not license_is_active(team_code):
-                st.error("License inactive. Contact admin.")
-                st.stop()
-
-            st.session_state.team_code = team_code
-            st.success("Unlocked")
-            st.rerun()
+    if st.button("Unlock", key="unlock_btn"):
+        entered = (code_raw or "").strip()
+        if not entered:
+            st.error("Enter an access code")
         else:
-            st.error("Invalid access code")
+            entered_hash = hash_access_code(entered)
 
+            matched_row = None
+            for row in (codes or {}).values():
+                stored_hash = str((row or {}).get("code_hash", "") or "").strip()
+                if stored_hash and entered_hash == stored_hash:
+                    matched_row = row
+                    break
 
+            if matched_row:
+                team_code = str(matched_row.get("team_code", "") or "").strip().upper()
+
+                if not license_is_active(team_code):
+                    st.error("License inactive. Contact admin.")
+                    st.stop()
+
+                st.session_state.team_code = team_code
+                st.success("Unlocked")
+                st.rerun()
+            else:
+                st.error("Invalid access code")
+
+    # If not unlocked yet, stop the app here (no return needed)
+    st.stop()
 
 
 TEAM_CODE, _ = require_team_access()
@@ -3357,6 +3361,7 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
+
 
 
 
