@@ -1659,139 +1659,142 @@ with st.sidebar:
         unsafe_allow_html=True,
     )
 
+with st.sidebar:
+    # ... your existing sidebar stuff above (logo, tags, quote, etc.)
+
     # -----------------------------
-# ADMIN SIDEBAR
-# -----------------------------
-st.markdown("<div style='height:10px;'></div>", unsafe_allow_html=True)
-st.markdown("---")
+    # ADMIN SIDEBAR (BOTTOM)
+    # -----------------------------
+    st.markdown("<div style='height:10px;'></div>", unsafe_allow_html=True)
+    st.markdown("---")
 
-with st.expander("🔐 Admin", expanded=False):
-    pin = st.text_input(
-        "Admin PIN",
-        type="password",
-        label_visibility="collapsed",
-        placeholder="Admin PIN",
-        key="admin_pin_input",
-    )
-
-    if pin != st.secrets.get("ADMIN_PIN", ""):
-        st.caption("Admin access only.")
-    else:
-        st.markdown(
-            """
-            <div style="
-                padding: 12px;
-                border-radius: 14px;
-                background: rgba(255,255,255,0.72);
-                border: 1px solid rgba(0,0,0,0.10);
-                box-shadow: 0 6px 18px rgba(0,0,0,0.06);
-                margin-bottom: 10px;
-            ">
-                <div style="font-size:0.92rem; font-weight:800; margin-bottom:6px;">
-                    Change Access Code
-                </div>
-                <div style="font-size:0.85rem; opacity:0.85;">
-                    Updates Supabase instantly.
-                </div>
-            </div>
-            """,
-            unsafe_allow_html=True,
+    with st.expander("🔐 Admin", expanded=False):
+        pin = st.text_input(
+            "Admin PIN",
+            type="password",
+            label_visibility="collapsed",
+            placeholder="Admin PIN",
+            key="admin_pin_input",
         )
 
-        # ✅ PERMANENT PARACHUTE (SAFE: only visible with Admin PIN)
-        if st.button("🔄 Emergency Reset: Codes = TEAM CODE", key="admin_emergency_reset"):
-            res = supabase.table("team_access").select("id, team_code").execute()
-            rows = res.data or []
-
-            updated = 0
-            for r in rows:
-                rid = r.get("id")
-                code = (r.get("team_code") or "").strip().upper()
-                if rid and code:
-                    supabase.table("team_access").update(
-                        {"code_hash": hash_access_code(code)}
-                    ).eq("id", rid).execute()
-                    updated += 1
-
-            load_team_codes.clear()
-            st.success(f"Reset {updated} teams. Access code = TEAM CODE (ex: YUKON).")
-            st.rerun()
-
-        # (Optional) You can DELETE this one-time reset now that you're back in.
-        # Keeping it doesn't hurt, but it's redundant with the emergency reset above.
-        if st.button("🔄 ONE-TIME RESET: Codes = TEAM CODE", key="one_time_reset_codes"):
-            res = supabase.table("team_access").select("id, team_code").execute()
-            rows = res.data or []
-
-            updated = 0
-            for r in rows:
-                rid = r.get("id")
-                code = (r.get("team_code") or "").strip().upper()
-                if rid and code:
-                    supabase.table("team_access").update(
-                        {"code_hash": hash_access_code(code)}
-                    ).eq("id", rid).execute()
-                    updated += 1
-
-            load_team_codes.clear()
-            st.success(f"Reset {updated} teams. Access code = TEAM CODE (ex: YUKON).")
-            st.rerun()
-
-        # Load teams DIRECT from Supabase so Admin is never stuck on cache
-        res = (
-            supabase.table("team_access")
-            .select("id, team_code, team_name, is_active")
-            .eq("is_active", True)
-            .execute()
-        )
-        rows = res.data or []
-
-        teams = []
-        for r in rows:
-            rid = r.get("id")
-            code = (r.get("team_code") or "").strip().upper()
-            name = (r.get("team_name") or "").strip()
-            if rid and code:
-                label = f"{code} — {name}" if name else code
-                teams.append({"id": rid, "label": label})
-
-        teams = sorted(teams, key=lambda x: x["label"])
-
-        if not teams:
-            st.error("No active teams found in team_access.")
+        if pin != st.secrets.get("ADMIN_PIN", ""):
+            st.caption("Admin access only.")
         else:
-            pick = st.selectbox(
-                "Team",
-                options=teams,
-                format_func=lambda x: x["label"],
-                key="admin_team_pick",
+            st.markdown(
+                """
+                <div style="
+                    padding: 12px;
+                    border-radius: 14px;
+                    background: rgba(255,255,255,0.72);
+                    border: 1px solid rgba(0,0,0,0.10);
+                    box-shadow: 0 6px 18px rgba(0,0,0,0.06);
+                    margin-bottom: 10px;
+                ">
+                    <div style="font-size:0.92rem; font-weight:800; margin-bottom:6px;">
+                        Change Access Code
+                    </div>
+                    <div style="font-size:0.85rem; opacity:0.85;">
+                        Updates Supabase instantly.
+                    </div>
+                </div>
+                """,
+                unsafe_allow_html=True,
             )
 
-            new_code = st.text_input("New Code", type="password", key="admin_new_code")
-            confirm = st.text_input("Confirm", type="password", key="admin_confirm")
+            # ✅ PERMANENT PARACHUTE (leave this)
+            if st.button("🔄 Emergency Reset: Codes = TEAM CODE", key="admin_emergency_reset"):
+                res = supabase.table("team_access").select("id, team_code").execute()
+                rows = res.data or []
 
-            c1, c2 = st.columns(2)
-            update_btn = c1.button("💾 Update", use_container_width=True, key="admin_update_btn")
-            clear_btn  = c2.button("Clear", use_container_width=True, key="admin_clear_btn")
+                updated = 0
+                for r in rows:
+                    rid = r.get("id")
+                    code = (r.get("team_code") or "").strip().upper()
+                    if rid and code:
+                        supabase.table("team_access").update(
+                            {"code_hash": hash_access_code(code)}
+                        ).eq("id", rid).execute()
+                        updated += 1
 
-            if clear_btn:
-                st.session_state["admin_new_code"] = ""
-                st.session_state["admin_confirm"] = ""
+                load_team_codes.clear()
+                st.success(f"Reset {updated} teams. Access code = TEAM CODE (ex: YUKON).")
                 st.rerun()
 
-            if update_btn:
-                if not (new_code or "").strip():
-                    st.error("Enter a new code.")
-                elif new_code != confirm:
-                    st.error("Codes don’t match.")
-                else:
-                    ok = admin_set_access_code_by_id(pick["id"], new_code)
-                    if ok:
-                        st.success("✅ Access code updated.")
-                        load_team_codes.clear()
-                        st.rerun()
+            # (Optional) remove later — not needed if you keep Emergency Reset
+            if st.button("🔄 ONE-TIME RESET: Codes = TEAM CODE", key="one_time_reset_codes"):
+                res = supabase.table("team_access").select("id, team_code").execute()
+                rows = res.data or []
+
+                updated = 0
+                for r in rows:
+                    rid = r.get("id")
+                    code = (r.get("team_code") or "").strip().upper()
+                    if rid and code:
+                        supabase.table("team_access").update(
+                            {"code_hash": hash_access_code(code)}
+                        ).eq("id", rid).execute()
+                        updated += 1
+
+                load_team_codes.clear()
+                st.success(f"Reset {updated} teams. Access code = TEAM CODE (ex: YUKON).")
+                st.rerun()
+
+            # Load teams DIRECT from Supabase
+            res = (
+                supabase.table("team_access")
+                .select("id, team_code, team_name, is_active")
+                .eq("is_active", True)
+                .execute()
+            )
+            rows = res.data or []
+
+            teams = []
+            for r in rows:
+                rid = r.get("id")
+                code = (r.get("team_code") or "").strip().upper()
+                name = (r.get("team_name") or "").strip()
+                if rid and code:
+                    label = f"{code} — {name}" if name else code
+                    teams.append({"id": rid, "label": label})
+
+            teams = sorted(teams, key=lambda x: x["label"])
+
+            if not teams:
+                st.error("No active teams found in team_access.")
+            else:
+                pick = st.selectbox(
+                    "Team",
+                    options=teams,
+                    format_func=lambda x: x["label"],
+                    key="admin_team_pick",
+                )
+
+                new_code = st.text_input("New Code", type="password", key="admin_new_code")
+                confirm = st.text_input("Confirm", type="password", key="admin_confirm")
+
+                c1, c2 = st.columns(2)
+                update_btn = c1.button("💾 Update", use_container_width=True, key="admin_update_btn")
+                clear_btn  = c2.button("Clear", use_container_width=True, key="admin_clear_btn")
+
+                if clear_btn:
+                    st.session_state["admin_new_code"] = ""
+                    st.session_state["admin_confirm"] = ""
+                    st.rerun()
+
+                if update_btn:
+                    if not (new_code or "").strip():
+                        st.error("Enter a new code.")
+                    elif new_code != confirm:
+                        st.error("Codes don’t match.")
                     else:
-                        st.error("Update failed.")
+                        ok = admin_set_access_code_by_id(pick["id"], new_code)
+                        if ok:
+                            st.success("✅ Access code updated.")
+                            load_team_codes.clear()
+                            st.rerun()
+                        else:
+                            st.error("Update failed.")
+
 
         st.markdown("### ➕ Add New School")
 
@@ -3456,6 +3459,7 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
+
 
 
 
