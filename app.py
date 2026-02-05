@@ -240,47 +240,9 @@ def require_team_access():
         key="access_code_input",
     )
 
-        # =========================================================
-    # 🔐 ADMIN RESET (ACCESS PAGE — NO LOGIN REQUIRED)
-    # =========================================================
-    with st.expander("🔐 Admin Reset", expanded=False):
-        admin_pin = st.text_input(
-            "Admin PIN",
-            type="password",
-            placeholder="Admin PIN",
-            label_visibility="collapsed",
-            key="admin_pin_access_page",
-        )
-
-        if admin_pin != st.secrets.get("ADMIN_PIN", ""):
-            st.caption("Admin access only.")
-        else:
-            if st.button("🔄 RESET ALL: Access Code = TEAM CODE", key="reset_codes_access_page"):
-                res = supabase.table("team_access").select("id, team_code").execute()
-                rows = res.data or []
-
-                updated = 0
-                for r in rows:
-                    rid = r.get("id")
-                    tc = (r.get("team_code") or "").strip().upper()
-                    if rid and tc:
-                        supabase.table("team_access").update(
-                            {"code_hash": hash_access_code(tc)}
-                        ).eq("id", rid).execute()
-                        updated += 1
-
-                try:
-                    load_team_codes.clear()
-                except Exception:
-                    pass
-
-                st.success(f"✅ Reset {updated} teams. Access code = TEAM CODE (ex: YUKON).")
-                st.rerun()
-
-
-    # =========================================================
-    # 🔓 NORMAL UNLOCK
-    # =========================================================
+    # ---------------------------------
+    # NORMAL UNLOCK
+    # ---------------------------------
     if st.button("Unlock", key="unlock_btn"):
         entered = (code_raw or "").strip()
 
@@ -319,6 +281,7 @@ def require_team_access():
         st.rerun()
 
     st.stop()
+
 
 
 
@@ -3484,6 +3447,7 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
+
 
 
 
