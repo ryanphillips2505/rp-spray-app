@@ -1829,11 +1829,6 @@ with st.sidebar:
                             st.code(f"Access Key: {raw_key}")
                             load_team_codes.clear()
                             st.rerun()
-st.rerun()
-
-
-
-
    
 # -----------------------------
 # TEAM SELECTION (SUPABASE - PERSISTENT)
@@ -3420,6 +3415,7 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
+
 
 
 
