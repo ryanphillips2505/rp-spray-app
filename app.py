@@ -2075,52 +2075,41 @@ with st.expander("Create School", expanded=False):
 
    
 # -----------------------------
-# TEAM SELECTION (TEAM_ACCESS = SOURCE OF TRUTH)  ✅ OPTION A
+# TEAM SELECTION (team_rosters = SOURCE OF TRUTH)
 # -----------------------------
-code_hash = str(st.session_state.get("code_hash", "") or "").strip()
+TEAM_CODE_SAFE = str(st.session_state.get("team_code", TEAM_CODE)).strip().upper()
 
-@st.cache_data(ttl=30, show_spinner=False)
-def db_list_teams_for_access(code_hash: str):
-    try:
-        res = _sb_execute(
-            supabase.table("team_access")
-            .select("team_slug, team_code, team_name")
-            .eq("code_hash", code_hash)
-            .eq("is_active", True)
-            .order("team_name")
-        )
-        rows = res.data or []
-        out = []
-        for r in rows:
-            out.append({
-                "team_key": str(r.get("team_slug") or "").strip(),
-                "team_code": str(r.get("team_code") or "").strip().upper(),
-                "team_name": str(r.get("team_name") or "").strip(),
-            })
-        return out
-    except Exception as e:
-        _show_db_error(e, "Supabase SELECT failed on team_access (team list)")
-        st.stop()
-
-teams = db_list_teams_for_access(code_hash)
-
+teams = db_list_teams(TEAM_CODE_SAFE)  # pulls opponents from team_rosters
 st.error(f"DEBUG teams_query_count={len(teams)}")
-st.error(f"DEBUG code_hash_present={bool(code_hash)}")
 
+# If no opponents exist yet, create ONE default row so the app doesn't feel empty
 if not teams:
-    st.warning("No teams found for THIS access code.")
-    st.stop()
+    default_name = "ADD OPPONENT (type name below)"
+    default_key = "opponent_1"
+    db_upsert_team(TEAM_CODE_SAFE, default_key, default_name, "")
+    teams = db_list_teams(TEAM_CODE_SAFE)
 
-team_labels = [f"{t['team_code']} — {t['team_name']}" for t in teams]
-pick = st.selectbox("Choose a team:", team_labels)
+team_labels = [t["team_name"] for t in teams]
+pick_name = st.selectbox("Choose a team:", team_labels, key="team_pick_name")
 
-selected_row = teams[team_labels.index(pick)]
-TEAM_CODE = selected_row["team_code"]
-TEAM_CODE_SAFE = TEAM_CODE
+selected_row = next(t for t in teams if t["team_name"] == pick_name)
 selected_team = selected_row["team_name"]
+team_key = str(selected_row["team_key"]).strip()
 
-team_key = selected_row["team_key"] or TEAM_CODE.lower()
 st.session_state["team_key"] = team_key
+
+# Quick add opponent (no Supabase schema changes needed)
+with st.expander("➕ Add Opponent", expanded=False):
+    new_name = st.text_input("Opponent name (ex: Norman North)", key="new_opponent_name")
+    if st.button("Create Opponent", key="create_opponent_btn"):
+        nm = (new_name or "").strip()
+        if not nm:
+            st.error("Enter a name.")
+        else:
+            new_key = safe_team_key(nm)
+            db_upsert_team(TEAM_CODE_SAFE, new_key, nm, "")
+            st.success("Opponent created.")
+            st.rerun()
 
 
 # -----------------------------
