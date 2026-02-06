@@ -2073,6 +2073,8 @@ with st.expander("Create School", expanded=False):
 # -----------------------------
 
 teams = db_list_teams(TEAM_CODE_SAFE)
+st.error(f"DEBUG teams_query_count={len(teams) if 'teams' in locals() else 'teams var not in locals'}")
+st.error(f"DEBUG TEAM_CODE={TEAM_CODE!r} team_key={st.session_state.get('team_key')!r}")
 
 if not teams:
     st.warning("No teams found yet for THIS access code. Create one below.")
