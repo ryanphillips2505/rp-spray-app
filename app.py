@@ -1679,7 +1679,6 @@ with st.expander("🔐 Admin", expanded=False):
     if pin != st.secrets.get("ADMIN_PIN", ""):
         st.caption("Admin access only.")
     else:
-        # Always use service-role inside Admin
         admin = supa_admin()
 
         st.markdown(
@@ -1708,8 +1707,6 @@ with st.expander("🔐 Admin", expanded=False):
             try:
                 res = admin.table("team_access").select("id, team_code").execute()
                 rows = res.data or []
-                st.write("DEBUG UNLOCK ROW COUNT:", len(rows))
-
 
                 updated = 0
                 for r in rows:
@@ -1731,7 +1728,7 @@ with st.expander("🔐 Admin", expanded=False):
             except Exception as e:
                 st.error(f"Emergency reset failed: {e}")
 
-        # Load teams DIRECT from Supabase (service role inside Admin)
+        # Load teams (ADMIN read so it always works)
         try:
             res = (
                 admin.table("team_access")
@@ -1783,7 +1780,6 @@ with st.expander("🔐 Admin", expanded=False):
                 elif new_code != confirm:
                     st.error("Codes don’t match.")
                 else:
-                    # Update by ID using service-role
                     try:
                         new_hash = hash_access_code(new_code)
                         upd = (
@@ -1804,6 +1800,98 @@ with st.expander("🔐 Admin", expanded=False):
                             st.error("Update failed (no rows updated).")
                     except Exception as e:
                         st.error(f"Update failed: {e}")
+
+        st.markdown("### ➕ Add New School")
+
+        with st.expander("Create School", expanded=False):
+            colA, colB = st.columns(2)
+            with colA:
+                new_team_name = st.text_input("School Name", key="new_team_name")
+                new_team_code = st.text_input("Team Code (ex: ROCK, YUKON)", key="new_team_code")
+            with colB:
+                new_team_slug = st.text_input("Team Slug (unique)", key="new_team_slug")
+                new_active = st.checkbox("Active", value=True, key="new_team_active")
+
+            new_logo = st.file_uploader("Team Logo", type=["png", "jpg", "jpeg", "webp"], key="new_logo")
+            new_bg   = st.file_uploader("Background Image", type=["png", "jpg", "jpeg", "webp"], key="new_bg")
+
+            if st.button("🚀 Create School", key="create_school_btn"):
+                if not (new_team_name or "").strip() or not (new_team_code or "").strip():
+                    st.error("School name and team code are required.")
+                else:
+                    team_slug = (new_team_slug or new_team_name.lower().replace(" ", "_")).strip()
+                    team_code = new_team_code.upper().strip()
+
+                    try:
+                        exists = (
+                            admin.table("team_access")
+                            .select("id")
+                            .eq("team_slug", team_slug)
+                            .limit(1)
+                            .execute()
+                        )
+                        if getattr(exists, "data", None):
+                            st.error("That team slug already exists.")
+                            st.stop()
+                    except Exception as e:
+                        st.error(f"Slug check failed: {e}")
+                        st.stop()
+
+                    bucket = "team-assets"
+                    try:
+                        admin.storage.create_bucket(bucket, public=True)
+                    except Exception:
+                        pass
+
+                    logo_url = None
+                    bg_url = None
+
+                    try:
+                        if new_logo:
+                            path = f"{team_slug}/logo.png"
+                            admin.storage.from_(bucket).upload(
+                                path,
+                                new_logo.getvalue(),
+                                file_options={"content-type": new_logo.type, "upsert": True},
+                            )
+                            logo_url = admin.storage.from_(bucket).get_public_url(path)
+
+                        if new_bg:
+                            path = f"{team_slug}/background.png"
+                            admin.storage.from_(bucket).upload(
+                                path,
+                                new_bg.getvalue(),
+                                file_options={"content-type": new_bg.type, "upsert": True},
+                            )
+                            bg_url = admin.storage.from_(bucket).get_public_url(path)
+                    except Exception as e:
+                        st.error(f"Asset upload failed: {e}")
+                        st.stop()
+
+                    raw_key = uuid.uuid4().hex[:6].upper()
+                    key_hash = hash_access_code(raw_key)
+
+                    try:
+                        admin.table("team_access").insert({
+                            "team_slug": team_slug,
+                            "team_code": team_code,
+                            "team_name": new_team_name.strip(),
+                            "code_hash": key_hash,
+                            "is_active": bool(new_active),
+                            "logo_url": logo_url,
+                            "background_url": bg_url,
+                        }).execute()
+
+                        st.success("School created!")
+                        st.code(f"Access Key: {raw_key}")
+                        try:
+                            load_team_codes.clear()
+                        except Exception:
+                            pass
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Create school failed: {e}")
+
 
         st.markdown("### ➕ Add New School")
 
@@ -3486,6 +3574,7 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
+
 
 
 
