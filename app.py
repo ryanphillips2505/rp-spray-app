@@ -90,7 +90,6 @@ def hash_access_code(code: str) -> str:
     pepper = st.secrets["ACCESS_CODE_PEPPER"]
     c = (code or "").strip().upper()
     raw = (pepper + "|" + c).encode("utf-8")
-    st.write("HASH FUNC ACTIVE: PEPPER + UPPER")
     return hashlib.sha256(raw).hexdigest()
 
 
@@ -166,6 +165,15 @@ st.set_page_config(
     page_title=SETTINGS.get("app_title", "RP Spray Charts"),
     page_icon="⚾",
     layout="wide",
+)
+
+st.markdown(
+    """
+    <style>
+    section[data-testid="stSidebar"] { display: block !important; }
+    </style>
+    """,
+    unsafe_allow_html=True
 )
 
 # ============================
@@ -320,12 +328,6 @@ def require_team_access():
 
     st.stop()
     return "", {}
-
-if st.session_state.get("team_code"):
-    if st.button("🔁 Change Team / Log Out", key="logout_btn"):
-        st.session_state.pop("team_code", None)
-        st.rerun()
-
 
 
 # -----------------------------
@@ -1704,7 +1706,7 @@ def admin_set_access_code_by_id(row_id: int, new_code: str) -> bool:
 st.markdown("<div style='height:10px;'></div>", unsafe_allow_html=True)
 st.markdown("---")
 
-with st.expander("🔐 Admin", expanded=False):
+with st.sidebar.expander("🔐 Admin", expanded=False):
     pin = st.text_input(
         "Admin PIN",
         type="password",
@@ -3662,47 +3664,6 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
