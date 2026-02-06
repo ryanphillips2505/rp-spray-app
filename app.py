@@ -278,7 +278,7 @@ def require_team_access():
         rows = res.data or []
         matched = None
     
-     for r in rows:
+    for r in rows:
         stored = str((r or {}).get("code_hash", "")).strip()
         tc = str((r or {}).get("team_code", "")).strip().upper()
 
