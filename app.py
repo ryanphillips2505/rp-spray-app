@@ -86,9 +86,12 @@ supabase: Client = supa_public()
 
 def hash_access_code(code: str) -> str:
     pepper = st.secrets["ACCESS_CODE_PEPPER"]
-    c = (code or "").strip().upper()          # <-- THE FIX (case-insensitive)
-    raw = (pepper + "|" + c).encode("utf-8")  # stable + clear separator
+    c = (code or "").strip().upper()
+    raw = (pepper + "|" + c).encode("utf-8")
+    st.write("HASH FUNC ACTIVE: PEPPER + UPPER")
     return hashlib.sha256(raw).hexdigest()
+
+
 
 def admin_set_access_code(team_slug: str, team_code: str, new_code: str) -> bool:
     team_slug = (team_slug or "").strip()
@@ -3481,6 +3484,7 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
+
 
 
 
