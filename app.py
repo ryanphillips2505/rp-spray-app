@@ -1829,7 +1829,7 @@ with st.expander("🔐 Admin", expanded=False):
 
         st.markdown("### ➕ Add New School")
 
-        with st.expander("Create School", expanded=False):
+    with st.expander("Create School", expanded=False):
             colA, colB = st.columns(2)
             with colA:
                 new_team_name = st.text_input("School Name", key="new_team_name")
@@ -1916,7 +1916,7 @@ with st.expander("🔐 Admin", expanded=False):
                             pass
                         st.rerun()
                     except Exception as e:
-                        st.error(f"Create school failed: {e}")
+                        st.error(f"Create school failed: {e}")    
 
 
         st.markdown("### ➕ Add New School")
