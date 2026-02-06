@@ -322,14 +322,6 @@ if st.session_state.get("team_code"):
         st.rerun()
 
 
-TEAM_CODE, _ = require_team_access()
-if "TEAM_CFG" not in st.session_state:
-    st.session_state["TEAM_CFG"] = _load_team_cfg_from_file(TEAM_CODE) or {}
-st.error(f"DEBUG TEAM_CODE={TEAM_CODE!r}  team_key={st.session_state.get('team_key')!r}")
-st.error(f"DEBUG secrets/team_cfg keys: {list((st.session_state.get('TEAM_CFG') or {}).keys()) if 'TEAM_CFG' in st.session_state else 'no TEAM_CFG in session'}")
-if "team_key" not in st.session_state:
-    st.session_state.team_key = TEAM_CODE.lower()
-
 
 # -----------------------------
 # TEAM CFG LOADER (FILE)
@@ -360,8 +352,17 @@ def _load_team_cfg_from_file(team_code: str) -> dict:
     except Exception:
         return {}
 
+# -----------------------------
+# TEAM ACCESS + CFG BOOTSTRAP
+# -----------------------------
+TEAM_CODE, _ = require_team_access()
 
-TEAM_CFG = _load_team_cfg_from_file(TEAM_CODE) or {}
+TEAM_CFG = load_team_cfg_from_file(TEAM_CODE) or {}
+st.session_state["TEAM_CFG"] = TEAM_CFG
+
+if "team_key" not in st.session_state:
+    st.session_state["team_key"] = TEAM_CODE.lower()
+
 
 # ===============================
 # TERMS OF USE — HARD GATE (PAGE-LEVEL)
