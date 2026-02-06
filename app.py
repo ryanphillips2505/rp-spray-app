@@ -1068,7 +1068,8 @@ def db_load_season_totals(team_code: str, team_key: str, current_roster: set[str
         st.code(repr(e))
         st.stop()
 
-        )
+     )
+        
     except Exception as e:
         _show_db_error(e, "Supabase SELECT failed on season_totals")
         _render_supabase_fix_block()
@@ -3578,6 +3579,7 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
+
 
 
 
