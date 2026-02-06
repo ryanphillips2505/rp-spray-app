@@ -24,6 +24,8 @@ import time  # anti-stuck processing lock + failsafe unlock
 from datetime import datetime
 import uuid
 import traceback
+DEBUG = False
+
 
 
 def _write_table_two_blocks(ws, start_row, cols, row_values, split_at=None, gap=2):
@@ -366,7 +368,8 @@ st.session_state["TEAM_CFG"] = TEAM_CFG
 if "team_key" not in st.session_state:
     st.session_state["team_key"] = TEAM_CODE.lower()
 
-st.error(f"DEBUG SETTINGS_PATH={SETTINGS_PATH!r}  exists={os.path.exists(SETTINGS_PATH)}  TEAM_CFG_keys={list(TEAM_CFG.keys())}")
+if DEBUG:
+    st.error(f"DEBUG SETTINGS_PATH={SETTINGS_PATH!r}  exists={os.path.exists(SETTINGS_PATH)}  TEAM_CFG_keys={list(TEAM_CFG.keys())}")
 
 
 # ===============================
@@ -2071,7 +2074,9 @@ with st.expander("Create School", expanded=False):
 TEAM_CODE_SAFE = str(st.session_state.get("team_code", TEAM_CODE)).strip().upper()
 
 teams = db_list_teams(TEAM_CODE_SAFE)  # pulls opponents from team_rosters
-st.error(f"DEBUG teams_query_count={len(teams)}")
+if DEBUG:
+    st.error(f"DEBUG teams_query_count={len(teams)}")
+
 
 # If no opponents exist yet, create ONE default row so the app doesn't feel empty
 if not teams:
