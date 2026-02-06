@@ -1774,7 +1774,7 @@ with st.expander("🔐 Admin", expanded=False):
                 admin.table("team_access")
                 .select("id, team_code, team_name, is_active")
                 .eq("team_code", st.session_state.get("team_code", TEAM_CODE))
-                .eq("is_active", True)
+                .eq("team_code", st.session_state.get("team_code", TEAM_CODE))
                 .execute()
 )
 
