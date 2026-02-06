@@ -323,6 +323,8 @@ if st.session_state.get("team_code"):
 
 
 TEAM_CODE, _ = require_team_access()
+st.error(f"DEBUG TEAM_CODE={TEAM_CODE!r}  team_key={st.session_state.get('team_key')!r}")
+st.error(f"DEBUG secrets/team_cfg keys: {list((st.session_state.get('TEAM_CFG') or {}).keys()) if 'TEAM_CFG' in st.session_state else 'no TEAM_CFG in session'}")
 if "team_key" not in st.session_state:
     st.session_state.team_key = TEAM_CODE.lower()
 
