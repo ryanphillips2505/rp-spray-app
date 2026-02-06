@@ -239,8 +239,10 @@ def require_team_access():
     # Already unlocked?
     # ---------------------------------
     team_code = str(st.session_state.get("team_code", "") or "").strip().upper()
+    code_hash = str(st.session_state.get("code_hash", "") or "").strip()
     if team_code:
-        return team_code, {"team_code": team_code}
+        return team_code, {"team_code": team_code, "code_hash": code_hash}
+
 
     st.markdown("## Enter Access Code")
 
@@ -311,6 +313,7 @@ def require_team_access():
             st.stop()
 
         st.session_state.team_code = team_code
+        st.session_state["code_hash"] = entered_hash
         st.rerun()
 
     st.stop()
@@ -2072,37 +2075,53 @@ with st.expander("Create School", expanded=False):
 
    
 # -----------------------------
-# TEAM SELECTION (SUPABASE - PERSISTENT)
+# TEAM SELECTION (TEAM_ACCESS = SOURCE OF TRUTH)  ✅ OPTION A
 # -----------------------------
+code_hash = str(st.session_state.get("code_hash", "") or "").strip()
 
-teams = db_list_teams(TEAM_CODE_SAFE)
-st.error(f"DEBUG teams_query_count={len(teams) if 'teams' in locals() else 'teams var not in locals'}")
-st.error(f"DEBUG TEAM_CODE={TEAM_CODE!r} team_key={st.session_state.get('team_key')!r}")
+@st.cache_data(ttl=30, show_spinner=False)
+def db_list_teams_for_access(code_hash: str):
+    try:
+        res = _sb_execute(
+            supabase.table("team_access")
+            .select("team_slug, team_code, team_name")
+            .eq("code_hash", code_hash)
+            .eq("is_active", True)
+            .order("team_name")
+        )
+        rows = res.data or []
+        out = []
+        for r in rows:
+            out.append({
+                "team_key": str(r.get("team_slug") or "").strip(),
+                "team_code": str(r.get("team_code") or "").strip().upper(),
+                "team_name": str(r.get("team_name") or "").strip(),
+            })
+        return out
+    except Exception as e:
+        _show_db_error(e, "Supabase SELECT failed on team_access (team list)")
+        st.stop()
+
+teams = db_list_teams_for_access(code_hash)
+
+st.error(f"DEBUG teams_query_count={len(teams)}")
+st.error(f"DEBUG code_hash_present={bool(code_hash)}")
 
 if not teams:
-    st.warning("No teams found yet for THIS access code. Create one below.")
-else:
-    team_names = [t.get("team_name", "Unnamed Team") for t in teams]
-    selected_team = st.selectbox("Choose a team:", team_names)
-
-    selected_row = next((t for t in teams if t.get("team_name") == selected_team), teams[0])
-    team_key = selected_row.get("team_key") or safe_team_key(selected_team)
-
-with st.expander("➕ Add a new team (stored in Supabase)"):
-    new_team_name = st.text_input("New team name:")
-    if st.button("Create Team"):
-        if not new_team_name.strip():
-            st.error("Enter a team name first.")
-        else:
-            new_key = safe_team_key(new_team_name)
-            db_upsert_team(TEAM_CODE_SAFE, new_key, new_team_name.strip(), "")
-            st.success("Team created. Reloading…")
-            st.rerun()
-
-if not teams:
+    st.warning("No teams found for THIS access code.")
     st.stop()
 
-st.markdown("---")
+team_labels = [f"{t['team_code']} — {t['team_name']}" for t in teams]
+pick = st.selectbox("Choose a team:", team_labels)
+
+selected_row = teams[team_labels.index(pick)]
+TEAM_CODE = selected_row["team_code"]
+TEAM_CODE_SAFE = TEAM_CODE
+selected_team = selected_row["team_name"]
+
+team_key = selected_row["team_key"] or TEAM_CODE.lower()
+st.session_state["team_key"] = team_key
+
 
 # -----------------------------
 # ROSTER UI (SUPABASE - PERSISTENT)
