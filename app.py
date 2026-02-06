@@ -363,6 +363,8 @@ st.session_state["TEAM_CFG"] = TEAM_CFG
 if "team_key" not in st.session_state:
     st.session_state["team_key"] = TEAM_CODE.lower()
 
+st.error(f"DEBUG SETTINGS_PATH={SETTINGS_PATH!r}  exists={os.path.exists(SETTINGS_PATH)}  TEAM_CFG_keys={list(TEAM_CFG.keys())}")
+
 
 # ===============================
 # TERMS OF USE — HARD GATE (PAGE-LEVEL)
@@ -3651,6 +3653,79 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
