@@ -316,6 +316,11 @@ def require_team_access():
     st.stop()
     return "", {}
 
+if st.session_state.get("team_code"):
+    if st.button("🔁 Change Team / Log Out", key="logout_btn"):
+        st.session_state.pop("team_code", None)
+        st.rerun()
+
 
 TEAM_CODE, _ = require_team_access()
 
