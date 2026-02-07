@@ -570,13 +570,11 @@ except Exception:
     pass
 
 # ✅ Background CSS source (URL vs local base64)
-BG_B64 = get_base64_image(BG_PATH)
 if BG_PATH and (str(BG_PATH).startswith("http://") or str(BG_PATH).startswith("https://")):
     BG_CSS_URL = BG_PATH
-elif BG_B64:
-    BG_CSS_URL = f"data:image/png;base64,{BG_B64}"
 else:
     BG_CSS_URL = ""
+
 
 
 # -----------------------------
