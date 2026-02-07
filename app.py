@@ -25,6 +25,30 @@ from datetime import datetime
 import uuid
 import traceback
 DEBUG = False
+# -----------------------------
+# BRANDING HELPERS (MUST BE ABOVE FIRST USE)
+# -----------------------------
+def get_base64_image(path_or_url: str) -> str:
+    """
+    Supports BOTH:
+    - Local file paths (assets/background.jpg)
+    - Public URLs (Supabase public URLs)
+    """
+    if not path_or_url:
+        return ""
+
+    s = str(path_or_url).strip()
+
+    # If it's a URL, don't base64 it (CSS can use the URL directly)
+    if s.startswith("http://") or s.startswith("https://"):
+        return ""
+
+    # Local file
+    if not os.path.exists(s):
+        return ""
+
+    with open(s, "rb") as f:
+        return base64.b64encode(f.read()).decode("utf-8")
 
 def get_base64_image(path_or_url: str) -> str:
     """
