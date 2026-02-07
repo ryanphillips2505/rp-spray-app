@@ -86,12 +86,36 @@ def supa_admin() -> Client:
 
 supabase: Client = supa_admin()
 
+
+
 def hash_access_code(code: str) -> str:
     pepper = st.secrets["ACCESS_CODE_PEPPER"]
     c = (code or "").strip().upper()
     raw = (pepper + "|" + c).encode("utf-8")
     return hashlib.sha256(raw).hexdigest()
 
+# -----------------------------
+# SUPABASE STORAGE UPLOAD (DIRECT HTTP) — avoids supabase-py header bugs
+# -----------------------------
+def storage_upload_bytes(bucket: str, path: str, data: bytes, content_type: str) -> str:
+    base_url = (st.secrets["SUPABASE_URL"] or "").rstrip("/")
+    service_key = st.secrets["SUPABASE_SERVICE_ROLE_KEY"]
+
+    upload_url = f"{base_url}/storage/v1/object/{bucket}/{path}"
+
+    headers = {
+        "Authorization": f"Bearer {service_key}",
+        "apikey": service_key,
+        "Content-Type": (content_type or "application/octet-stream"),
+        "x-upsert": "true",  # MUST be string
+    }
+
+    r = httpx.post(upload_url, headers=headers, content=data, timeout=60.0)
+    if r.status_code >= 300:
+        raise RuntimeError(f"Storage upload failed ({r.status_code}): {r.text}")
+
+    # public URL (bucket must be public)
+    return f"{base_url}/storage/v1/object/public/{bucket}/{path}"
 
 
 def admin_set_access_code(team_slug: str, team_code: str, new_code: str) -> bool:
@@ -1920,43 +1944,33 @@ with st.sidebar.expander("🔐 Admin", expanded=False):
                 logo_url = None
                 bg_url = None
 
-                # ---- Upload assets (Supabase Storage) — FIXED for "Header value must be str or bytes"
-                try:
-                    headers = {"x-upsert": "true"}  # <-- MUST be string, NOT bool
+                # ---- Upload assets (Supabase Storage) — bulletproof
+                logo_url = None
+                bg_url = None
 
+                try:
                     if new_logo:
+                        logo_bytes = new_logo.getvalue()
+                        logo_ct = new_logo.type or "image/png"
                         logo_path = f"{team_slug}/logo.png"
-                        admin.storage.from_(bucket).upload(
-                            logo_path,
-                            new_logo.getvalue(),
-                            file_options={
-                                "content-type": (new_logo.type or "image/png"),
-                                "headers": headers,
-                            },
-                        )
-                        logo_url = admin.storage.from_(bucket).get_public_url(logo_path)
+                        logo_url = storage_upload_bytes(bucket, logo_path, logo_bytes, logo_ct)
 
                     if new_bg:
+                        bg_bytes = new_bg.getvalue()
+                        bg_ct = new_bg.type or "image/png"
                         bg_path = f"{team_slug}/background.png"
-                        admin.storage.from_(bucket).upload(
-                            bg_path,
-                            new_bg.getvalue(),
-                            file_options={
-                                "content-type": (new_bg.type or "image/png"),
-                                "headers": headers,
-                            },
-                        )
-                        bg_url = admin.storage.from_(bucket).get_public_url(bg_path)
+                        bg_url = storage_upload_bytes(bucket, bg_path, bg_bytes, bg_ct)
 
                 except Exception as e:
-                    st.error(f"Asset upload failed: {e}")
+                    st.error("Asset upload failed.")
+                    st.code(repr(e))
                     st.stop()
 
 
                 raw_key = uuid.uuid4().hex[:6].upper()
                 key_hash = hash_access_code(raw_key)
 
-                                try:
+                try:
                     admin.table("team_access").insert({
                         "team_slug": team_slug,
                         "team_code": team_code,
@@ -1978,16 +1992,9 @@ with st.sidebar.expander("🔐 Admin", expanded=False):
                     st.rerun()
 
                 except Exception as e:
-                    # Uncomment ONLY when debugging locally:
-                    # st.code(repr(e))
-                    st.error("Create school failed. Please check that the team code and slug are unique.")
+                    st.error("Create school failed (Supabase insert rejected it).")
+                    st.code(repr(e))
                     st.stop()
-
-
-
-    
-
-
 
    
 # -----------------------------
