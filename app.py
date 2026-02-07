@@ -26,6 +26,26 @@ import uuid
 import traceback
 DEBUG = False
 
+def get_base64_image(path_or_url: str) -> str:
+    """
+    Supports BOTH:
+    - Local file paths (assets/background.jpg)
+    - Supabase public URLs (https://...)
+    """
+    if not path_or_url:
+        return ""
+
+    s = str(path_or_url).strip()
+
+    # If it's a URL, don't base64 it
+    if s.startswith("http://") or s.startswith("https://"):
+        return ""
+
+    if not os.path.exists(s):
+        return ""
+
+    with open(s, "rb") as f:
+        return base64.b64encode(f.read()).decode("utf-8")
 
 
 def _write_table_two_blocks(ws, start_row, cols, row_values, split_at=None, gap=2):
@@ -1544,39 +1564,6 @@ BG_PATH = (
 if TEAM_CFG:
     LOGO_PATH = TEAM_CFG.get("logo_path", LOGO_PATH)
     BG_PATH = TEAM_CFG.get("background_path", BG_PATH)
-
-# -----------------------------
-# BRANDING + BACKGROUND
-# -----------------------------
-def get_base64_image(path_or_url: str) -> str:
-    """
-    Supports BOTH:
-    - Local file paths (assets/background.jpg)
-    - Supabase public URLs (https://...)
-    """
-    if not path_or_url:
-        return ""
-
-    # ✅ If it's a URL, return empty so CSS can use it directly
-    if path_or_url.startswith("http://") or path_or_url.startswith("https://"):
-        return ""
-
-    # ✅ Local file path
-    if not os.path.exists(path_or_url):
-        return ""
-
-    with open(path_or_url, "rb") as f:
-        return base64.b64encode(f.read()).decode("utf-8")
-
-BG_B64 = get_base64_image(BG_PATH)
-
-# ✅ If BG_PATH is a URL (Supabase), use it directly; otherwise use base64 (local file)
-if BG_PATH and (BG_PATH.startswith("http://") or BG_PATH.startswith("https://")):
-    BG_CSS_URL = BG_PATH
-elif BG_B64:
-    BG_CSS_URL = f"data:image/png;base64,{BG_B64}"
-else:
-    BG_CSS_URL = ""
 
 
 # -----------------------------
