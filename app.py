@@ -469,9 +469,43 @@ Access may be revoked immediately for violations without refund.
 
 # -----------------------------
 # RESOLVED TEAM BRANDING (logo + background)
+# Priority:
+# 1) Supabase team_access.logo_url/background_url
+# 2) TEAM_CFG logo_path/background_path (local)
+# 3) SETTINGS defaults (local)
 # -----------------------------
+
+TEAM_CODE_SAFE = str(TEAM_CODE).strip().upper()
+
+# Start with TEAM_CFG/local fallback
 LOGO_PATH = TEAM_CFG.get("logo_path") or SETTINGS.get("logo_image")
 BG_PATH   = TEAM_CFG.get("background_path") or SETTINGS.get("background_image")
+
+# ✅ Override with Supabase URLs (this is what Create School writes)
+try:
+    brand = (
+        supabase.table("team_access")
+        .select("logo_url, background_url")
+        .eq("team_code", TEAM_CODE_SAFE)
+        .limit(1)
+        .execute()
+    )
+    row = (brand.data or [{}])[0]
+    if row.get("logo_url"):
+        LOGO_PATH = row["logo_url"]
+    if row.get("background_url"):
+        BG_PATH = row["background_url"]
+except Exception:
+    pass
+
+# ✅ Background CSS source (URL vs local base64)
+BG_B64 = get_base64_image(BG_PATH)
+if BG_PATH and (str(BG_PATH).startswith("http://") or str(BG_PATH).startswith("https://")):
+    BG_CSS_URL = BG_PATH
+elif BG_B64:
+    BG_CSS_URL = f"data:image/png;base64,{BG_B64}"
+else:
+    BG_CSS_URL = ""
 
 
 # -----------------------------
@@ -1500,18 +1534,6 @@ else:
 # FONTS (force load)
 # -----------------------------
 st.markdown(
-    """
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Black+Ops+One&family=Jersey+10&display=swap" rel="stylesheet">
-""",
-    unsafe_allow_html=True,
-)
-
-# -----------------------------
-# STYLES (sharp + bordered title)
-# -----------------------------
-st.markdown(
     f"""
 <style>
 h1.app-title {{
@@ -1544,8 +1566,8 @@ h1.app-title {{
 [data-testid="stAppViewContainer"] {{
     background:
         linear-gradient(rgba(229,231,235,0.90), rgba(229,231,235,0.90)),
-        url("data:image/jpeg;base64,{BG_B64}") no-repeat center fixed;
-    background-size: 600px;
+        url("{BG_CSS_URL}") no-repeat center fixed;
+    background-size: cover;
     color: #111827;
 }}
 
@@ -1556,15 +1578,14 @@ h1.app-title {{
     background: rgba(255,255,255,0.75);
 }}
 
-/* Make expander label bold */
 [data-testid="stExpander"] summary {{
     font-weight: 800 !important;
 }}
 </style>
-
 """,
     unsafe_allow_html=True,
 )
+
 
 
 # -----------------------------
