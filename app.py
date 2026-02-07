@@ -1708,33 +1708,6 @@ def admin_rehash_access_code(team_code: str) -> bool:
 
 
 # -----------------------------
-# SIDEBAR
-# -----------------------------
-import hashlib
-import secrets
-from datetime import datetime
-
-# -----------------------------
-# HALL OF FAME QUOTES (SIDEBAR)
-# -----------------------------
-HOF_QUOTES = [
-    ("Hank Aaron", "Failure is a part of success."),
-    ("Yogi Berra", "Baseball is 90% mental. The other half is physical."),
-    ("Babe Ruth", "Never let the fear of striking out get in your way."),
-    ("Ted Williams", "Hitting is timing. Pitching is upsetting timing."),
-    ("Willie Mays", "It isn’t difficult to be great from time to time. What’s difficult is to be great all the time."),
-    ("Cal Ripken Jr.", "Success is a process. You have to commit to the process."),
-    ("Sandy Koufax", "Pitching is the art of instilling fear."),
-    ("Nolan Ryan", "Enjoying success requires the ability to adapt."),
-    ("Lou Gehrig", "It’s the ballplayer’s job to always be ready to play."),
-    ("Jackie Robinson", "A life is not important except in the impact it has on other lives."),
-]
-
-def get_daily_quote(quotes):
-    idx = int(datetime.utcnow().strftime("%Y%m%d")) % len(quotes)
-    return quotes[idx]
-
-# -----------------------------
 # ACCESS CODE HASHING (ONE SOURCE OF TRUTH)
 # -----------------------------
 def hash_access_code__OLD_DO_NOT_USE_2(raw_code: str) -> str:
