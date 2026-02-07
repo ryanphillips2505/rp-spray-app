@@ -1640,31 +1640,43 @@ def get_daily_quote(quotes):
 # -----------------------------
 # ACCESS CODE HASHING (ONE SOURCE OF TRUTH)
 # -----------------------------
-def hash_access_code__OLD_DO_NOT_USE_2(raw_code: str) -> str:
+import hashlib
+
+def hash_access_code(raw_code: str) -> str:
+    """
+    The ONLY hashing function used anywhere in the app.
+    Access code comparisons MUST always use this.
+    """
     salt = st.secrets.get("ACCESS_CODE_SALT", "")
     code = (raw_code or "").strip()
+
     if not salt:
         raise ValueError("Missing ACCESS_CODE_SALT in Streamlit secrets.")
     if not code:
         raise ValueError("Blank access code not allowed.")
+
     return hashlib.sha256((salt + "|" + code).encode("utf-8")).hexdigest()
 
-def admin_set_access_code(team_slug: str, team_code: str, new_code: str) -> bool:
+
+def admin_set_access_code(team_slug: str = "", team_code: str = "", new_code: str = "") -> bool:
     """
     Updates team_access.code_hash for a team.
-    Uses BOTH slug and code to hit the correct row no matter how the app identifies teams.
+    Uses slug and/or code so it can hit the correct row reliably.
     """
     team_slug = (team_slug or "").strip()
     team_code = (team_code or "").strip().upper()
+    new_code  = (new_code or "").strip()
 
     if not team_slug and not team_code:
+        return False
+    if not new_code:
         return False
 
     new_hash = hash_access_code(new_code)
 
     admin = supa_admin()
     q = admin.table("team_access").update({"code_hash": new_hash})
-    
+
     if team_slug:
         q = q.eq("team_slug", team_slug)
     if team_code:
@@ -1672,6 +1684,28 @@ def admin_set_access_code(team_slug: str, team_code: str, new_code: str) -> bool
 
     res = q.execute()
     return bool(getattr(res, "data", None))
+
+
+def admin_rehash_access_code(team_code: str) -> bool:
+    """
+    Forces team_access.code_hash to match the CURRENT hash_access_code()
+    using policy: access code = TEAM CODE.
+    """
+    tc = (team_code or "").strip().upper()
+    if not tc:
+        return False
+
+    admin = supa_admin()
+    new_hash = hash_access_code(tc)
+
+    res = (
+        admin.table("team_access")
+        .update({"code_hash": new_hash})
+        .eq("team_code", tc)
+        .execute()
+    )
+    return bool(getattr(res, "data", None))
+
 
 # -----------------------------
 # SIDEBAR
