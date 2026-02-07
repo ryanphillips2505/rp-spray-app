@@ -2039,6 +2039,43 @@ with st.sidebar.expander("🔐 Admin", expanded=False):
 
                 admin = supa_admin()
 
+
+                # =============================
+                # 🛠 ADMIN: FIX / REHASH ACCESS
+                # =============================
+                st.markdown("---")
+                st.subheader("🛠 Fix Access Code (Rehash)")
+
+                rehash_code = st.text_input(
+                    "Team Code to fix (ex: NN, ROCK, YUKON)",
+                    key="rehash_team_code",
+                ).strip().upper()
+
+                if st.button("🔁 Rehash Access Code", key="rehash_btn"):
+                    if not rehash_code:
+                        st.error("Enter a TEAM CODE.")
+                        st.stop()
+
+                    try:
+                        ok = admin_rehash_access_code(rehash_code)
+                        if ok:
+                            st.success(f"Access code fixed for {rehash_code}. Try unlocking now.")
+                            try:
+                                load_team_codes.clear()
+                            except Exception:
+                                pass
+                            st.cache_data.clear()
+                            st.rerun()
+                        else:
+                            st.error("No row updated. Check that the TEAM CODE exists.")
+                    except Exception as e:
+                        st.error("Rehash failed.")
+                        st.code(repr(e))
+
+                # =============================
+                # ---- Create School flow ----
+                # =============================
+
                 # ---- Uniqueness checks (slug + team_code)
                 try:
                     slug_exists = (
@@ -2142,6 +2179,7 @@ with st.sidebar.expander("🔐 Admin", expanded=False):
                     st.error("Create school failed (Supabase insert rejected it).")
                     st.code(repr(e))
                     st.stop()
+
 
    
 # -----------------------------
