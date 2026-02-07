@@ -1603,7 +1603,7 @@ h1.app-title {{
     background:
         linear-gradient(rgba(229,231,235,0.90), rgba(229,231,235,0.90)),
         url("{BG_CSS_URL}") no-repeat center fixed;
-    background-size: cover;
+    background-size: cover 60%;
     color: #111827;
 }}
 
