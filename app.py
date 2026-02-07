@@ -1602,8 +1602,8 @@ h1.app-title {{
 [data-testid="stAppViewContainer"] {{
     background:
         linear-gradient(rgba(229,231,235,0.90), rgba(229,231,235,0.90)),
-        url("{BG_CSS_URL}") no-repeat center fixed;
-    background-size: cover 50% auto;
+        url("{BG_CSS_URL}") no-repeat center center fixed;
+    background-size: cover 50% auto;  /* HALF SIZE */
     color: #111827;
 }}
 
