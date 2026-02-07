@@ -1920,29 +1920,37 @@ with st.sidebar.expander("🔐 Admin", expanded=False):
                 logo_url = None
                 bg_url = None
 
-                # ---- Upload assets (Supabase Storage)
+                # ---- Upload assets
                 try:
                     if new_logo:
-                        path = f"{team_slug}/logo.png"
+                        logo_path = f"{team_slug}/logo.png"
                         admin.storage.from_(bucket).upload(
-                            path,
+                            logo_path,
                             new_logo.getvalue(),
-                            file_options={"content-type": (new_logo.type or "image/png")},
+                            file_options={
+                                "content-type": new_logo.type or "image/png",
+                                "upsert": "true",   # MUST be string
+                            },
                         )
-                        logo_url = admin.storage.from_(bucket).get_public_url(path)
+                        logo_url = admin.storage.from_(bucket).get_public_url(logo_path)
 
                     if new_bg:
-                        path = f"{team_slug}/background.png"
+                        bg_path = f"{team_slug}/background.png"
                         admin.storage.from_(bucket).upload(
-                            path,
+                            bg_path,
                             new_bg.getvalue(),
-                            file_options={"content-type": (new_bg.type or "image/png")},
+                            file_options={
+                                "content-type": new_bg.type or "image/png",
+                                "upsert": "true",   # MUST be string
+                            },
                         )
-                        bg_url = admin.storage.from_(bucket).get_public_url(path)
+                        bg_url = admin.storage.from_(bucket).get_public_url(bg_path)
 
                 except Exception as e:
-                    st.error(f"Asset upload failed: {e}")
+                    # print(e)  # uncomment ONLY when debugging locally
+                    st.error("Asset upload failed. Please upload a valid image file.")
                     st.stop()
+
 
 
                 raw_key = uuid.uuid4().hex[:6].upper()
