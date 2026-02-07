@@ -17,6 +17,9 @@ _RP_RUN_NONCE = st.session_state["_rp_run_nonce"]
 import os
 import json
 import base64
+def get_base64_image(path_or_url: str) -> str:
+    return get_base64_image(path_or_url)
+
 import re
 import hashlib
 import httpx
@@ -25,30 +28,7 @@ from datetime import datetime
 import uuid
 import traceback
 DEBUG = False
-# -----------------------------
-# BRANDING HELPERS (MUST BE ABOVE FIRST USE)
-# -----------------------------
-def get_base64_image(path_or_url: str) -> str:
-    """
-    Supports BOTH:
-    - Local file paths (assets/background.jpg)
-    - Public URLs (Supabase public URLs)
-    """
-    if not path_or_url:
-        return ""
 
-    s = str(path_or_url).strip()
-
-    # If it's a URL, don't base64 it (CSS can use the URL directly)
-    if s.startswith("http://") or s.startswith("https://"):
-        return ""
-
-    # Local file
-    if not os.path.exists(s):
-        return ""
-
-    with open(s, "rb") as f:
-        return base64.b64encode(f.read()).decode("utf-8")
 
 def get_base64_image(path_or_url: str) -> str:
     """
