@@ -1973,7 +1973,8 @@ with st.sidebar.expander("🔐 Admin", expanded=False):
         st.markdown("### ➕ Create School")
 
         # ✅ ONE Create School (inside Admin PIN only)
-         with st.expander("Create School", expanded=False):
+        # Paste this whole block where your current Create School expander is.
+        with st.expander("Create School", expanded=False):
             colA, colB = st.columns(2)
             with colA:
                 new_team_name = st.text_input("School Name", key="new_team_name_admin")
@@ -1982,8 +1983,16 @@ with st.sidebar.expander("🔐 Admin", expanded=False):
                 new_team_slug = st.text_input("Team Slug (unique)", key="new_team_slug_admin")
                 new_active = st.checkbox("Active", value=True, key="new_team_active_admin")
 
-            new_logo = st.file_uploader("Team Logo", type=["png", "jpg", "jpeg", "webp"], key="new_logo_admin")
-            new_bg   = st.file_uploader("Background Image", type=["png", "jpg", "jpeg", "webp"], key="new_bg_admin")
+            new_logo = st.file_uploader(
+                "Team Logo",
+                type=["png", "jpg", "jpeg", "webp"],
+                key="new_logo_admin",
+            )
+            new_bg = st.file_uploader(
+                "Background Image",
+                type=["png", "jpg", "jpeg", "webp"],
+                key="new_bg_admin",
+            )
 
             if st.button("🚀 Create School", key="create_school_btn_admin"):
                 # ---- Required fields
@@ -2019,12 +2028,13 @@ with st.sidebar.expander("🔐 Admin", expanded=False):
                     if getattr(code_exists, "data", None):
                         st.error("That TEAM CODE already exists. Pick a different code.")
                         st.stop()
+
                 except Exception as e:
                     st.error("Could not check uniqueness in Supabase.")
                     st.code(repr(e))
                     st.stop()
 
-                # ---- Upload assets to Supabase Storage (optional)
+                # ---- Upload assets (optional)
                 bucket = "team-assets"
                 logo_url = None
                 bg_url = None
@@ -2037,6 +2047,7 @@ with st.sidebar.expander("🔐 Admin", expanded=False):
                             data=new_logo.getvalue(),
                             content_type=(new_logo.type or "image/png"),
                         )
+
                     if new_bg:
                         bg_url = storage_upload_bytes(
                             bucket=bucket,
@@ -2044,6 +2055,7 @@ with st.sidebar.expander("🔐 Admin", expanded=False):
                             data=new_bg.getvalue(),
                             content_type=(new_bg.type or "image/png"),
                         )
+
                 except Exception as e:
                     st.error("Asset upload failed.")
                     st.code(repr(e))
@@ -2067,8 +2079,7 @@ with st.sidebar.expander("🔐 Admin", expanded=False):
                         }
                     ).execute()
 
-                    # IMPORTANT: your app blocks unlock unless license_is_active(team_code) is True
-                    # So we auto-create/activate the license here.
+                    # ✅ Auto-create/activate license so unlock works immediately
                     try:
                         admin.table("licenses").upsert(
                             {
@@ -2078,14 +2089,15 @@ with st.sidebar.expander("🔐 Admin", expanded=False):
                             },
                             on_conflict="team_code",
                         ).execute()
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        st.warning(f"License auto-create skipped: {e}")
 
-                    # Refresh caches so the new team can unlock immediately
+                    # ---- Clear caches so the new team can unlock immediately
                     try:
                         load_team_codes.clear()
                     except Exception:
                         pass
+
                     st.cache_data.clear()
 
                     st.success("School created!")
@@ -2096,8 +2108,6 @@ with st.sidebar.expander("🔐 Admin", expanded=False):
                     st.error("Create school failed (Supabase insert rejected it).")
                     st.code(repr(e))
                     st.stop()
-
-
 
    
 # -----------------------------
