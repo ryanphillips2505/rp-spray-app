@@ -1817,8 +1817,14 @@ with st.sidebar.expander("🔐 Admin", expanded=False):
                 except Exception:
                     pass
 
+                # ✅ FIX: hard-clear ALL cached data + clear any unlocked session state
+                st.cache_data.clear()
+                st.session_state.pop("team_code", None)
+                st.session_state.pop("code_hash", None)
+
                 st.success(f"Reset {updated} teams. Access code = TEAM CODE (ex: YUKON).")
                 st.rerun()
+
             except Exception as e:
                 st.error(f"Emergency reset failed: {e}")
 
@@ -1971,6 +1977,7 @@ with st.sidebar.expander("🔐 Admin", expanded=False):
                 key_hash = hash_access_code(raw_key)
 
                 try:
+                    # ---- Insert team
                     admin.table("team_access").insert({
                         "team_slug": team_slug,
                         "team_code": team_code,
@@ -1981,20 +1988,36 @@ with st.sidebar.expander("🔐 Admin", expanded=False):
                         "background_url": bg_url,
                     }).execute()
 
-                    st.success("School created!")
-                    st.code(f"Access Key: {raw_key}")
+                    # ✅ PROBLEM 2 FIX: auto-create/activate license so the code will unlock
+                    try:
+                        admin.table("licenses").upsert(
+                            {
+                                "team_code": team_code,
+                                "status": "active",
+                                "expires_at": None,  # or set a date if you want
+                            },
+                            on_conflict="team_code",
+                        ).execute()
+                    except Exception:
+                        # If licenses table isn't set up yet, don't crash Create School
+                        pass
 
+                    # refresh cached unlock/team lists
                     try:
                         load_team_codes.clear()
                     except Exception:
                         pass
+                    st.cache_data.clear()
 
+                    st.success("School created!")
+                    st.code(f"Access Key: {raw_key}")
                     st.rerun()
 
                 except Exception as e:
                     st.error("Create school failed (Supabase insert rejected it).")
                     st.code(repr(e))
                     st.stop()
+
 
    
 # -----------------------------
