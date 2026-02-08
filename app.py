@@ -1664,40 +1664,6 @@ st.markdown(
 
 
 
-    /* APPLY TO BOTH so Streamlit can't dodge it */
-    [data-testid="stApp"],
-    [data-testid="stAppViewContainer"].rp-bg-fix {{
-        background-image:
-            linear-gradient(rgba(229,231,235,0.50), rgba(229,231,235,0.50)),
-            url("{BG_CSS_URL}");
-        background-repeat: no-repeat, no-repeat !important;
-        background-position: center center, center center !important;
-        background-attachment: fixed, fixed !important;
-
-        /* gradient normal, IMAGE smaller */
-        background-size: auto, 35% auto !important;
-
-        color: #111827;
-    }}
-
-    .spray-card {{
-        padding: 12px 14px;
-        border-radius: 12px;
-        border: 1px solid rgba(17,24,39,0.15);
-        background: rgba(255,255,255,0.75);
-    }}
-
-    [data-testid="stExpander"] summary {{
-        font-weight: 800 !important;
-    }}
-    </style>
-    """,
-        unsafe_allow_html=True,
-    )
-
-
-
-
 # -----------------------------
 # HEADER
 # -----------------------------
