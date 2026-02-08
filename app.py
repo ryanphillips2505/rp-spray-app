@@ -282,7 +282,7 @@ st.markdown(
     }
 
     div[data-testid="stTitle"] h1 {
-        color: #2E2E2E !important;
+        color: #3A3A3A !important;
     }
     </style>
     """,
@@ -1628,7 +1628,7 @@ h1.app-title {{
 }}
 
 .app-subtitle {{
-    font-size: 1.10rem !important;
+    font-size: 3.10rem !important;
     font-weight: 700 !important;
     letter-spacing: 0.05em !important;
     color: #111827 !important;
@@ -1784,7 +1784,7 @@ with st.sidebar:
 # =============================
 # ADMIN (SIDEBAR)
 # =============================
-with st.sidebar.expander("🔐 Admin", expanded=False):
+with st.sidebar.expander("🔐", expanded=False):
     pin = st.text_input(
         "Admin PIN",
         type="password",
