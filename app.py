@@ -1642,22 +1642,6 @@ st.markdown(
 )
 
 
-.app-subtitle {
-    font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif !important;
-
-    font-size: clamp(1.05rem, 2.8vw, 1.5rem) !important;
-    font-weight: 600 !important;
-
-    letter-spacing: 0.02em !important;
-    color: #374151 !important;
-
-    opacity: 0.95 !important;
-    text-align: center !important;
-
-    margin-bottom: 14px !important;
-}
-
-
     /* APPLY TO BOTH so Streamlit can't dodge it */
     [data-testid="stApp"],
     [data-testid="stAppViewContainer"].rp-bg-fix {{
