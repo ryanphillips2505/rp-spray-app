@@ -1640,7 +1640,7 @@ st.markdown(
         margin-bottom: 14px !important;
     }}
 
-    /* ===== BACKGROUND (KEEP INSIDE STYLE) ===== */
+    /* ===== BACKGROUND ===== */
 
     [data-testid="stApp"],
     [data-testid="stAppViewContainer"].rp-bg-fix {{
@@ -1658,6 +1658,24 @@ st.markdown(
         color: #111827;
     }}
 
+    /* ===== TEXT AREAS (ROSTER + PLAY BY PLAY) ===== */
+
+    [data-testid="stTextArea"] textarea {{
+        border: 1px solid rgba(17,24,39,0.20) !important;
+        border-radius: 10px !important;
+        background: rgba(255,255,255,0.92) !important;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.06) !important;
+        padding: 12px !important;
+        font-size: 0.95rem !important;
+    }}
+
+    [data-testid="stTextArea"] textarea:focus {{
+        border-color: rgba(17,24,39,0.45) !important;
+        box-shadow: 0 0 0 2px rgba(17,24,39,0.10) !important;
+    }}
+
+    /* ===== MISC ===== */
+
     .spray-card {{
         padding: 12px 14px;
         border-radius: 12px;
@@ -1668,24 +1686,6 @@ st.markdown(
     [data-testid="stExpander"] summary {{
         font-weight: 800 !important;
     }}
-
-    /* ===== ESPN CLEAN TEXT AREAS (Roster + Play-by-Play) ===== */
-
-    [data-testid="stTextArea"] textarea {
-        border: 1px solid rgba(17,24,39,0.20) !important;
-        border-radius: 10px !important;
-        background: rgba(255,255,255,0.92) !important;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.06) !important;
-        padding: 12px !important;
-        font-size: 0.95rem !important;
-    }
-
-    /* Focus state */
-    [data-testid="stTextArea"] textarea:focus {
-        border-color: rgba(17,24,39,0.45) !important;
-        box-shadow: 0 0 0 2px rgba(17,24,39,0.10) !important;
-    }
-
 
     </style>
     """,
