@@ -3,25 +3,38 @@
 # All rights reserved.
 # Unauthorized copying, distribution, or resale prohibited.
 
-# -------------------------------------------------
-# Per-run nonce (prevents accidental duplicate UI renders in loops)
-# -------------------------------------------------
+import streamlit as st
+
+# ✅ MUST BE FIRST STREAMLIT CALL
+st.set_page_config(
+    page_title="RP Spray Analytics",
+    layout="wide",
+)
+
+# -----------------------------
+# Per-run nonce (safe)
+# -----------------------------
 if "_rp_run_nonce" not in st.session_state:
     st.session_state["_rp_run_nonce"] = 0
 st.session_state["_rp_run_nonce"] += 1
 _RP_RUN_NONCE = st.session_state["_rp_run_nonce"]
 
+# -----------------------------
+# Imports
+# -----------------------------
 import os
 import json
 import base64
 import re
 import hashlib
 import httpx
-import time  # anti-stuck processing lock + failsafe unlock
+import time
 from datetime import datetime
 import uuid
 import traceback
+
 DEBUG = False
+
 
 
 # -----------------------------
