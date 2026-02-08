@@ -1610,7 +1610,8 @@ if TEAM_CFG:
 st.markdown(
     f"""
     <style>
-    h1.app-title {
+    h1.app-title {{
+        font-family: 'Black Ops One', 'Jersey 10', sans-serif !important;
         font-size: clamp(1.9rem, 6vw, 4rem) !important;
         color: {PRIMARY} !important;
         text-align: center !important;
@@ -1629,9 +1630,9 @@ st.markdown(
 
         margin-top: -6px !important;
         margin-bottom: 10px !important;
-    }
+    }}
 
-    .app-subtitle {
+    .app-subtitle {{
         font-size: clamp(1.1rem, 3.2vw, 1.8rem) !important;
         font-weight: 700 !important;
         letter-spacing: 0.04em !important;
@@ -1639,7 +1640,12 @@ st.markdown(
         opacity: 0.97 !important;
         text-align: center !important;
         margin-bottom: 16px !important;
-    }
+    }}
+    </style>
+    """,
+    unsafe_allow_html=True
+)
+
 
     /* APPLY TO BOTH so Streamlit can't dodge it */
     [data-testid="stApp"],
