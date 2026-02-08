@@ -5,7 +5,7 @@
 import streamlit as st
 
 st.set_page_config(
-    page_title="RP Spray Analytics TEST",
+    page_title="RP Spray Analytics",
     layout="wide",
     page_icon="⚾"
 )
@@ -3698,6 +3698,7 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
+
 
 
 
