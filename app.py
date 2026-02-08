@@ -277,11 +277,18 @@ settings = SETTINGS  # alias so the rest of the code can use `settings`
 st.markdown(
     """
     <style>
-    section[data-testid="stSidebar"] { display: block !important; }
+    section[data-testid="stSidebar"] {
+        display: block !important;
+    }
+
+    div[data-testid="stTitle"] h1 {
+        color: #2E2E2E !important;
+    }
     </style>
     """,
     unsafe_allow_html=True,
 )
+
 
 # ============================
 # ACCESS CODE GATE (CLEAN + STABLE)
