@@ -26,6 +26,10 @@ import uuid
 import traceback
 DEBUG = False
 
+APP_BUILD = "2026-02-07-A"
+st.sidebar.caption(f"Build: {APP_BUILD}")
+
+
 # -----------------------------
 # STRICT MODE (GLOBAL SAFE)
 # -----------------------------
