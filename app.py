@@ -1736,18 +1736,19 @@ from datetime import datetime
 # -----------------------------
 # HALL OF FAME QUOTES (SIDEBAR)
 # -----------------------------
-HOF_QUOTES = [
-    ("Hank Aaron", "Failure is a part of success."),
-    ("Yogi Berra", "Baseball is 90% mental. The other half is physical."),
-    ("Babe Ruth", "Never let the fear of striking out get in your way."),
-    ("Ted Williams", "Hitting is timing. Pitching is upsetting timing."),
-    ("Willie Mays", "It isn’t difficult to be great from time to time. What’s difficult is to be great all the time."),
-    ("Cal Ripken Jr.", "Success is a process. You have to commit to the process."),
-    ("Sandy Koufax", "Pitching is the art of instilling fear."),
-    ("Nolan Ryan", "Enjoying success requires the ability to adapt."),
-    ("Lou Gehrig", "It’s the ballplayer’s job to always be ready to play."),
-    ("Jackie Robinson", "A life is not important except in the impact it has on other lives."),
+PREPARATION_QUOTES = [
+    ("Nick Saban", "The process of preparation is what separates good teams from great ones."),
+    ("Tony La Russa", "Preparation doesn’t guarantee success, but lack of preparation guarantees failure."),
+    ("Andy Reid", "You win games during the week with preparation. Saturday just confirms it."),
+    ("Pat Casey", "Preparation gives players confidence. Confidence wins games."),
+    ("Jim Schlossnagle", "Good teams prepare. Great teams prepare with purpose."),
+    ("Augie Garrido", "Preparation is respect—for the game, your teammates, and your opponent."),
+    ("Brian O’Connor", "The details of preparation show up when the game speeds up."),
+    ("Mike Bianco", "Preparation turns pressure into opportunity."),
+    ("Paul Mainieri", "When preparation is right, performance follows."),
+    ("Dave Van Horn", "Preparation is what allows players to play free.")
 ]
+
 
 def get_daily_quote(quotes):
     idx = int(datetime.utcnow().strftime("%Y%m%d")) % len(quotes)
