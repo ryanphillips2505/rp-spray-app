@@ -4,16 +4,16 @@
 
 import streamlit as st
 
-st.write("BOOT MARKER 2026-02-07 A")
+st.set_page_config(
+    page_title="RP Spray Analytics",
+    layout="wide",
+    page_icon="⚾"
+)
 
-
-# MUST be the first Streamlit call in the script
-st.set_page_config(page_title="RP Spray Analytics", layout="wide", page_icon="⚾")
-
-# Safe nonce AFTER st exists
 st.session_state.setdefault("_rp_run_nonce", 0)
 st.session_state["_rp_run_nonce"] += 1
 _RP_RUN_NONCE = st.session_state["_rp_run_nonce"]
+
 
 # ---- normal imports below this line ----
 import os
@@ -467,9 +467,7 @@ def _load_team_cfg_from_file(team_code: str) -> dict:
 # -----------------------------
 # TEAM ACCESS + CFG BOOTSTRAP
 # -----------------------------
-st.write("BOOT MARKER C — before access gate")
 TEAM_CODE, _ = require_team_access()
-st.write("BOOT MARKER D — after access gate")
 
 
 TEAM_CFG = _load_team_cfg_from_file(TEAM_CODE) or {}
