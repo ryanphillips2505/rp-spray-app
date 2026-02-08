@@ -1654,7 +1654,6 @@ st.markdown(
         background-position: center center, center center !important;
         background-attachment: fixed, fixed !important;
         background-size: cover, 28% auto !important;
-        filter: grayscale(100%) contrast(0.9);
         color: #111827;
     }}
 
