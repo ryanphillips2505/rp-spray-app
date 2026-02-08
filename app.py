@@ -4,34 +4,22 @@
 
 import streamlit as st
 
-st.write("BOOT MARKER 2026-02-07 A")
+# MUST be the first Streamlit call
+st.set_page_config(
+    page_title="RP Spray Analytics",
+    layout="wide",
+    page_icon="⚾"
+)
 
+# Boot diagnostics
+st.write("BOOT MARKER A")
 
-# MUST be the first Streamlit call in the script
-st.set_page_config(page_title="RP Spray Analytics", layout="wide", page_icon="⚾")
-
-# Safe nonce AFTER st exists
+# Session-safe nonce
 st.session_state.setdefault("_rp_run_nonce", 0)
 st.session_state["_rp_run_nonce"] += 1
 _RP_RUN_NONCE = st.session_state["_rp_run_nonce"]
 
-# ---- normal imports below this line ----
-import os
-import json
-import base64
-import re
-import hashlib
-import httpx
-import time
-from datetime import datetime, timezone
-import uuid
-import traceback
-
-DEBUG = False
-
-
-# Unique per-run id for widget keys (no session_state nonce needed)
-RUN_ID = uuid.uuid4().hex
+st.write("BOOT MARKER B")
 
 
 # -----------------------------
@@ -3700,6 +3688,7 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
+
 
 
 
