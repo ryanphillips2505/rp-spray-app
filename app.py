@@ -1611,27 +1611,43 @@ st.markdown(
     f"""
     <style>
 
-    h1.app-title {{
-        color: {PRIMARY} !important;
-        text-align: center !important;
-        letter-spacing: clamp(0.08em, 0.4vw, 0.20em) !important;
-        text-transform: uppercase !important;
-        line-height: 1.05 !important;
-        white-space: normal !important;
-        word-break: break-word !important;
-        margin-top: -6px !important;
-        margin-bottom: 10px !important;
-    }}
+   h1.app-title {
+    font-family: 'Black Ops One', 'Jersey 10', sans-serif !important;
 
-    .app-subtitle {{
-        font-size: clamp(1.1rem, 3.2vw, 1.8rem) !important;
-        font-weight: 700 !important;
-        letter-spacing: 0.04em !important;
-        color: #111827 !important;
-        opacity: 0.97 !important;
-        text-align: center !important;
-        margin-bottom: 16px !important;
-    }}
+    /* Responsive but restrained */
+    font-size: clamp(1.9rem, 5vw, 3.2rem) !important;
+
+    color: #111827 !important;
+    text-align: center !important;
+
+    /* ESPN-style tight tracking */
+    letter-spacing: 0.06em !important;
+    text-transform: uppercase !important;
+    line-height: 1.1 !important;
+
+    /* CLEAN: kill the poster effects */
+    -webkit-text-stroke: 0 !important;
+    text-shadow: 0 2px 6px rgba(0,0,0,0.18) !important;
+
+    margin-top: 0 !important;
+    margin-bottom: 6px !important;
+}
+
+.app-subtitle {
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif !important;
+
+    font-size: clamp(1.05rem, 2.8vw, 1.5rem) !important;
+    font-weight: 600 !important;
+
+    letter-spacing: 0.02em !important;
+    color: #374151 !important;
+
+    opacity: 0.95 !important;
+    text-align: center !important;
+
+    margin-bottom: 14px !important;
+}
+
 
     /* APPLY TO BOTH so Streamlit can't dodge it */
     [data-testid="stApp"],
