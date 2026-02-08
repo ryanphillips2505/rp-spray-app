@@ -1607,31 +1607,40 @@ if TEAM_CFG:
 # -----------------------------
 # FONTS (force load)
 # -----------------------------
+PRIMARY_HEX = "#111827"  # change if you want
+
 st.markdown(
-    f"""
+    """
     <style>
+    h1.app-title {
+        font-family: 'Black Ops One', 'Jersey 10', sans-serif !important;
+        font-size: clamp(1.9rem, 5vw, 3.2rem) !important;
+        color: #111827 !important;
+        text-align: center !important;
+        letter-spacing: 0.06em !important;
+        text-transform: uppercase !important;
+        line-height: 1.1 !important;
+        -webkit-text-stroke: 0 !important;
+        text-shadow: 0 2px 6px rgba(0,0,0,0.18) !important;
+        margin-top: 0 !important;
+        margin-bottom: 6px !important;
+    }
 
-   h1.app-title {
-    font-family: 'Black Ops One', 'Jersey 10', sans-serif !important;
+    .app-subtitle {
+        font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif !important;
+        font-size: clamp(1.05rem, 2.8vw, 1.5rem) !important;
+        font-weight: 600 !important;
+        letter-spacing: 0.02em !important;
+        color: #374151 !important;
+        opacity: 0.95 !important;
+        text-align: center !important;
+        margin-bottom: 14px !important;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True
+)
 
-    /* Responsive but restrained */
-    font-size: clamp(1.9rem, 5vw, 3.2rem) !important;
-
-    color: #111827 !important;
-    text-align: center !important;
-
-    /* ESPN-style tight tracking */
-    letter-spacing: 0.06em !important;
-    text-transform: uppercase !important;
-    line-height: 1.1 !important;
-
-    /* CLEAN: kill the poster effects */
-    -webkit-text-stroke: 0 !important;
-    text-shadow: 0 2px 6px rgba(0,0,0,0.18) !important;
-
-    margin-top: 0 !important;
-    margin-bottom: 6px !important;
-}
 
 .app-subtitle {
     font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif !important;
