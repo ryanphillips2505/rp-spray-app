@@ -4,14 +4,14 @@
 
 import streamlit as st
 
-st.write("GITHUB MAIN APP.PY IS LIVE: 2026-02-07")
-
 
 st.set_page_config(
     page_title="RP Spray Analytics",
     layout="wide",
     page_icon="⚾"
 )
+st.write("THIS IS GITHUB MAIN APP.PY — TEST")
+
 
 st.session_state.setdefault("_rp_run_nonce", 0)
 st.session_state["_rp_run_nonce"] += 1
@@ -3701,6 +3701,7 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
+
 
 
 
