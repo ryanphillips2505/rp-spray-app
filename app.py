@@ -641,6 +641,23 @@ else:
     else:
         BG_CSS_URL = ""
 
+# -----------------------------
+# LOGO SOURCE (URL vs local base64)
+# -----------------------------
+LOGO_B64 = ""
+LOGO_SRC = ""
+
+if LOGO_PATH and (str(LOGO_PATH).startswith("http://") or str(LOGO_PATH).startswith("https://")):
+    # Supabase URL already
+    LOGO_SRC = str(LOGO_PATH).strip()
+else:
+    # Local file fallback (base64)
+    LOGO_B64 = get_base64_image(LOGO_PATH)
+    if LOGO_B64:
+        mime = _guess_mime_from_path(str(LOGO_PATH))
+        LOGO_SRC = f"data:{mime};base64,{LOGO_B64}"
+    else:
+        LOGO_SRC = ""
 
 
 # -----------------------------
