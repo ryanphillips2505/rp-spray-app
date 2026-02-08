@@ -1734,10 +1734,9 @@ import secrets
 from datetime import datetime
 
 # -----------------------------
-# HALL OF FAME QUOTES (SIDEBAR)
+# COACH PREPARATION QOUTES(SIDEBAR)
 # -----------------------------
-PREPARATION_QUOTES = [
-    ("Nick Saban", "The process of preparation is what separates good teams from great ones."),
+PREPARATION_QUOTES = [("Nick Saban", "The process of preparation is what separates good teams from great ones."),
     ("Tony La Russa", "Preparation doesn’t guarantee success, but lack of preparation guarantees failure."),
     ("Andy Reid", "You win games during the week with preparation. Saturday just confirms it."),
     ("Pat Casey", "Preparation gives players confidence. Confidence wins games."),
