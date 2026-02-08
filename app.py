@@ -14,13 +14,16 @@ st.set_page_config(
 )
 
 # -------------------------------------------------
-# Per-run nonce (prevents accidental duplicate UI renders)
+# Per-run nonce (SAFE – guards against Cloud loader edge cases)
 # -------------------------------------------------
-if "_rp_run_nonce" not in st.session_state:
-    st.session_state["_rp_run_nonce"] = 0
-
-st.session_state["_rp_run_nonce"] += 1
-_RP_RUN_NONCE = st.session_state["_rp_run_nonce"]
+try:
+    if "_rp_run_nonce" not in st.session_state:
+        st.session_state["_rp_run_nonce"] = 0
+    st.session_state["_rp_run_nonce"] += 1
+    _RP_RUN_NONCE = st.session_state["_rp_run_nonce"]
+except Exception:
+    # Streamlit not fully initialized yet (Cloud hot reload / cache restore)
+    _RP_RUN_NONCE = 0
 
 # -------------------------------------------------
 # Standard library / third-party imports
