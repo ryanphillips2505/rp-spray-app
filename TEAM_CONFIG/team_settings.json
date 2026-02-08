@@ -1,7 +1,7 @@
 {
   "app_title": "The Opponent IQ",
   "subtitle": "Know the opponent, win the game",
-  "primary_color": "#2E2E2E",
+  "primary_color": "#3A3A3A",
   "secondary_color": "#111111",
   "background_image": "assets/background.jpg",
   "logo_image": "assets/logo.png",
@@ -61,6 +61,7 @@
     }
   }
 }
+
 
 
 
