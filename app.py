@@ -258,7 +258,7 @@ def load_settings():
     "strict_mode_default": True,
 }
 
-    }
+
     if os.path.exists(SETTINGS_PATH):
         try:
             with open(SETTINGS_PATH, "r", encoding="utf-8") as f:
