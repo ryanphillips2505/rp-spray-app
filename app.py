@@ -1610,9 +1610,8 @@ if TEAM_CFG:
 st.markdown(
     f"""
     <style>
+
     h1.app-title {{
-        font-family: 'Black Ops One', 'Jersey 10', sans-serif !important;
-        font-size: clamp(1.9rem, 6vw, 4rem) !important;
         color: {PRIMARY} !important;
         text-align: center !important;
         letter-spacing: clamp(0.08em, 0.4vw, 0.20em) !important;
@@ -1620,14 +1619,6 @@ st.markdown(
         line-height: 1.05 !important;
         white-space: normal !important;
         word-break: break-word !important;
-
-        -webkit-text-stroke: 2.2px #000000;
-        text-shadow:
-            2px 2px 0 #000000,
-            -2px 2px 0 #000000,
-            2px -2px 0 #000000,
-            -2px -2px 0 #000000;
-
         margin-top: -6px !important;
         margin-bottom: 10px !important;
     }}
@@ -1641,10 +1632,36 @@ st.markdown(
         text-align: center !important;
         margin-bottom: 16px !important;
     }}
+
+    /* APPLY TO BOTH so Streamlit can't dodge it */
+    [data-testid="stApp"],
+    [data-testid="stAppViewContainer"].rp-bg-fix {{
+        background-image:
+            linear-gradient(rgba(229,231,235,0.50), rgba(229,231,235,0.50)),
+            url("{BG_CSS_URL}");
+        background-repeat: no-repeat, no-repeat !important;
+        background-position: center center, center center !important;
+        background-attachment: fixed, fixed !important;
+        background-size: auto, 35% auto !important;
+        color: #111827;
+    }}
+
+    .spray-card {{
+        padding: 12px 14px;
+        border-radius: 12px;
+        border: 1px solid rgba(17,24,39,0.15);
+        background: rgba(255,255,255,0.75);
+    }}
+
+    [data-testid="stExpander"] summary {{
+        font-weight: 800 !important;
+    }}
+
     </style>
     """,
     unsafe_allow_html=True
 )
+
 
 
     /* APPLY TO BOTH so Streamlit can't dodge it */
