@@ -1,14 +1,15 @@
-# RP Spray Analytics
+# The Opponent IQ
 # Copyright © 2026 Ryan Phillips
 # All rights reserved.
 
 import streamlit as st
 
 st.set_page_config(
-    page_title="RP Spray Analytics",
+    page_title="The Opponent IQ",
     layout="wide",
-    page_icon="⚾"
+    page_icon="🧠⚾"
 )
+
 
 st.session_state.setdefault("_rp_run_nonce", 0)
 st.session_state["_rp_run_nonce"] += 1
@@ -248,13 +249,15 @@ except Exception:
 # -----------------------------
 def load_settings():
     defaults = {
-        "app_title": "RP Spray Charts",
-        "subtitle": "Coaches that want to win, WILL put in the time",
-        "primary_color": "#b91c1c",
-        "secondary_color": "#111111",
-        "background_image": os.path.join("assets", "background.jpg"),
-        "logo_image": os.path.join("assets", "logo.png"),
-        "strict_mode_default": True,
+    "app_title": "The Opponent IQ",
+    "subtitle": "Know your opponent. Win the game.",
+    "primary_color": "#b91c1c",   # keep for now
+    "secondary_color": "#111111",
+    "background_image": os.path.join("assets", "background.jpg"),
+    "logo_image": os.path.join("assets", "logo.png"),
+    "strict_mode_default": True,
+}
+
     }
     if os.path.exists(SETTINGS_PATH):
         try:
@@ -495,12 +498,12 @@ if not st.session_state[_TERMS_KEY]:
     st.title("Terms of Use")
 
     terms_text = """
-TERMS OF USE — RP SPRAY ANALYTICS
+TERMS OF USE — The Opponent IQ
 
-By accessing or using RP Spray Analytics, you acknowledge and agree to the following:
+By accessing or using The Opponent IQ, you acknowledge and agree to the following:
 
 1. LICENSED USE (NOT SOLD)
-RP Spray Analytics is licensed, not sold. Each license grants one baseball program (school) a non-exclusive, non-transferable right to use the application for internal team and coaching purposes during the licensed season only.
+The Opponent IQ is licensed, not sold. Each license grants one baseball program (school) a non-exclusive, non-transferable right to use the application for internal team and coaching purposes during the licensed season only.
 
 2. PRICING & SCOPE
 Licenses are issued per program, per season. One license covers unlimited games, players, and exports for the licensed program during the active season.
@@ -1631,14 +1634,14 @@ h1.app-title {{
 [data-testid="stApp"],
 [data-testid="stAppViewContainer"].rp-bg-fix {{
     background-image:
-        linear-gradient(rgba(229,231,235,0.30), rgba(229,231,235,0.30)),
+        linear-gradient(rgba(229,231,235,0.50), rgba(229,231,235,0.50)),
         url("{BG_CSS_URL}");
     background-repeat: no-repeat, no-repeat !important;
     background-position: center center, center center !important;
     background-attachment: fixed, fixed !important;
 
     /* gradient normal, IMAGE smaller */
-    background-size: auto, 50% auto !important;
+    background-size: auto, 35% auto !important;
 
     color: #111827;
 }}
@@ -1664,7 +1667,7 @@ h1.app-title {{
 # -----------------------------
 # HEADER
 # -----------------------------
-st.markdown(f"<h1 class='app-title'>{SETTINGS.get('app_title','RP Spray Analytics')}</h1>", unsafe_allow_html=True)
+st.markdown(f"<h1 class='app-title'>{SETTINGS.get('app_title','The Opponent IQ')}</h1>", unsafe_allow_html=True)
 st.markdown(f"<div class='app-subtitle'>{SETTINGS.get('subtitle','')}</div>", unsafe_allow_html=True)
 st.markdown("---")
 
@@ -2287,7 +2290,7 @@ st.markdown(
 )
 
 st.markdown('<div id="process-wrap">', unsafe_allow_html=True)
-process_clicked = st.button("📥 Process Game (ADD to Season Totals)", key="process_game_btn")
+process_clicked = st.button("Process Game (ADD to Season Totals)", key="process_game_btn")
 st.markdown("</div>", unsafe_allow_html=True)
 
 if process_clicked:
@@ -3536,7 +3539,7 @@ with pd.ExcelWriter(out, engine="openpyxl") as writer:
 
     # Watermark
     try:
-        ws.oddHeader.center.text = "RP Spray Analytics"
+        ws.oddHeader.center.text = "The Opponent IQ"
         ws.oddHeader.center.font = "Tahoma,Bold"
         ws.oddHeader.center.size = 14
         ws.oddHeader.center.color = "808080"
@@ -3692,16 +3695,12 @@ st.markdown(
     </style>
 
     <div class="rp-footer">
-        © 2026 RP Spray Analytics. All rights reserved.<br>
+        © 2026 The Opponent IQ. All rights reserved.<br>
         Proprietary software. Unauthorized copying, redistribution, or reverse engineering prohibited.
     </div>
     """,
     unsafe_allow_html=True,
 )
-
-
-
-
 
 
 
