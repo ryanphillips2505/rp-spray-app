@@ -1,7 +1,7 @@
 {
-  "app_title": "RP Spray Analytics",
-  "subtitle": "Coaches that want to win, WILL put in the time",
-  "primary_color": "#b91c1c",
+  "app_title": "The Opponent IQ",
+  "subtitle": "Know the opponent, win the game",
+  "primary_color": "#2E2E2E",
   "secondary_color": "#111111",
   "background_image": "assets/background.jpg",
   "logo_image": "assets/logo.png",
@@ -61,6 +61,7 @@
     }
   }
 }
+
 
 
 
