@@ -2395,6 +2395,10 @@ if process_clicked:
 
         lines = [ln.strip() for ln in (raw_text or "").split("\n") if ln.strip()]
 
+        # make strict_mode always defined for every user/session
+        strict_mode = bool(st.session_state.get("strict_mode", True))
+
+
         game_team = empty_stat_dict()
         game_players = {p: empty_stat_dict() for p in current_roster}
 
