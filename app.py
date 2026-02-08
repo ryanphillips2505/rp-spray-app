@@ -3,9 +3,6 @@
 # All rights reserved.
 # Unauthorized copying, distribution, or resale prohibited.
 
-import streamlit as st
-st.cache_data.clear()
-
 # -------------------------------------------------
 # Per-run nonce (prevents accidental duplicate UI renders in loops)
 # -------------------------------------------------
@@ -25,11 +22,6 @@ from datetime import datetime
 import uuid
 import traceback
 DEBUG = False
-
-APP_BUILD = "2026-02-07-B"
-st.sidebar.caption(f"Build: {APP_BUILD}")
-st.sidebar.caption(f"Commit-ish: {hashlib.sha1(open(__file__,'rb').read()).hexdigest()[:10]}")
-
 
 
 # -----------------------------
@@ -184,10 +176,20 @@ def admin_rehash_access_code(team_code: str) -> bool:
 
 
 # -----------------------------
-# SUPABASE STORAGE UPLOAD (DIRECT HTTP) — avoids supabase-py header bugs
+# SUPABASE STORAGE UPLOAD (DIRECT HTTP)
+# Avoids supabase-py header bugs
 # -----------------------------
-def storage_upload_bytes(bucket: str, path: str, data: bytes, content_type: str) -> str:
-    base_url = (st.secrets["SUPABASE_URL"] or "").rstrip("/")
+def storage_upload_bytes(
+    bucket: str,
+    path: str,
+    data: bytes,
+    content_type: str | None = None,
+) -> str:
+    """
+    Upload raw bytes to Supabase Storage via direct HTTP and return the public URL.
+    Bucket must already exist and be public.
+    """
+    base_url = st.secrets["SUPABASE_URL"].rstrip("/")
     service_key = st.secrets["SUPABASE_SERVICE_ROLE_KEY"]
 
     upload_url = f"{base_url}/storage/v1/object/{bucket}/{path}"
@@ -195,15 +197,24 @@ def storage_upload_bytes(bucket: str, path: str, data: bytes, content_type: str)
     headers = {
         "Authorization": f"Bearer {service_key}",
         "apikey": service_key,
-        "Content-Type": (content_type or "application/octet-stream"),
-        "x-upsert": "true",  # MUST be string
+        "Content-Type": content_type or "application/octet-stream",
+        "x-upsert": "true",  # MUST be string (Supabase bug)
     }
 
-    r = httpx.post(upload_url, headers=headers, content=data, timeout=60.0)
-    if r.status_code >= 300:
-        raise RuntimeError(f"Storage upload failed ({r.status_code}): {r.text}")
+    resp = httpx.post(
+        upload_url,
+        headers=headers,
+        content=data,
+        timeout=60.0,
+    )
 
-    # public URL (bucket must be public)
+    if resp.status_code >= 300:
+        raise RuntimeError(
+            f"Supabase storage upload failed "
+            f"({resp.status_code}): {resp.text}"
+        )
+
+    # Public URL (bucket must be public)
     return f"{base_url}/storage/v1/object/public/{bucket}/{path}"
 
 
@@ -1691,47 +1702,6 @@ import hashlib
 import secrets
 from datetime import datetime
 
-# -----------------------------
-# HALL OF FAME QUOTES (SIDEBAR)
-# -----------------------------
-HOF_QUOTES = [
-    ("Hank Aaron", "Failure is a part of success."),
-    ("Yogi Berra", "Baseball is 90% mental. The other half is physical."),
-    ("Babe Ruth", "Never let the fear of striking out get in your way."),
-    ("Ted Williams", "Hitting is timing. Pitching is upsetting timing."),
-    ("Willie Mays", "It isn’t difficult to be great from time to time. What’s difficult is to be great all the time."),
-    ("Cal Ripken Jr.", "Success is a process. You have to commit to the process."),
-    ("Sandy Koufax", "Pitching is the art of instilling fear."),
-    ("Nolan Ryan", "Enjoying success requires the ability to adapt."),
-    ("Lou Gehrig", "It’s the ballplayer’s job to always be ready to play."),
-    ("Jackie Robinson", "A life is not important except in the impact it has on other lives."),
-]
-
-def get_daily_quote(quotes):
-    idx = int(datetime.utcnow().strftime("%Y%m%d")) % len(quotes)
-    return quotes[idx]
-
-
-def admin_rehash_access_code(team_code: str) -> bool:
-    """
-    Forces team_access.code_hash to match the CURRENT hash_access_code()
-    using policy: access code = TEAM CODE.
-    """
-    tc = (team_code or "").strip().upper()
-    if not tc:
-        return False
-
-    admin = supa_admin()
-    new_hash = hash_access_code(tc)
-
-    res = (
-        admin.table("team_access")
-        .update({"code_hash": new_hash})
-        .eq("team_code", tc)
-        .execute()
-    )
-    return bool(getattr(res, "data", None))
-
 
 # -----------------------------
 # SUPABASE STORAGE HELPERS
@@ -1746,31 +1716,6 @@ def ensure_bucket(admin, bucket: str):
     except Exception:
         # Bucket already exists
         pass
-
-
-def storage_upload_bytes(bucket: str, path: str, data: bytes, content_type: str) -> str:
-    """
-    Upload raw bytes to Supabase Storage and return public URL.
-    Bulletproof: no bool headers, no silent failures.
-    """
-    admin = supa_admin()
-
-    ensure_bucket(admin, bucket)
-
-    res = admin.storage.from_(bucket).upload(
-        path,
-        data,
-        file_options={
-            "content-type": content_type,
-            "x-upsert": "true",  # MUST be string
-        },
-    )
-
-    if not res:
-        raise RuntimeError("Storage upload returned empty response")
-
-    return admin.storage.from_(bucket).get_public_url(path)
-
 
 
 # =============================
@@ -1822,32 +1767,6 @@ with st.sidebar:
         pass
 
     st.markdown("---")
-
-def ensure_bucket(admin_client, bucket_name: str):
-    # Creates bucket if missing. If it already exists, ignore.
-    try:
-        admin_client.storage.create_bucket(bucket_name, public=True)
-    except Exception:
-        pass
-
-def storage_upload_bytes(admin_client, bucket: str, path: str, data: bytes, content_type: str) -> str:
-    """
-    Uploads bytes to Supabase Storage and returns public URL.
-    Uses 'x-upsert' header as string to avoid the bool header bug.
-    """
-    # Ensure bucket exists (or at least try)
-    ensure_bucket(admin_client, bucket)
-
-    # Upload with upsert header as STRING
-    admin_client.storage.from_(bucket).upload(
-        path,
-        data,
-        file_options={
-            "content-type": content_type,
-            "headers": {"x-upsert": "true"},
-        },
-    )
-    return admin_client.storage.from_(bucket).get_public_url(path)
 
 
 # =============================
