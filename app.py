@@ -4,10 +4,6 @@
 
 import streamlit as st
 
-st.error("DEPLOY TEST: 8c3f (if you see this, Streamlit is pulling THIS file)")
-raise SystemExit("STOP HERE")
-
-
 st.set_page_config(
     page_title="RP Spray Analytics",
     layout="wide",
@@ -3702,6 +3698,7 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
+
 
 
 
