@@ -2464,7 +2464,7 @@ if process_clicked:
                 continue
 
             # --- normal GB/FB + location ---
-            loc, loc_conf, _ = classify_location(line_lower, strict_mode=strict_mode)
+            loc, loc_conf, _ = classify_location(line_lower)
             ball_type, bt_conf, _ = classify_ball_type(line_lower)
 
             if loc is None:
