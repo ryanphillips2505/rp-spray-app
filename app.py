@@ -26,8 +26,10 @@ import uuid
 import traceback
 DEBUG = False
 
-APP_BUILD = "2026-02-07-A"
+APP_BUILD = "2026-02-07-B"
 st.sidebar.caption(f"Build: {APP_BUILD}")
+st.sidebar.caption(f"Commit-ish: {hashlib.sha1(open(__file__,'rb').read()).hexdigest()[:10]}")
+
 
 
 # -----------------------------
