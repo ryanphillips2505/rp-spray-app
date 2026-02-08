@@ -26,6 +26,15 @@ import uuid
 import traceback
 DEBUG = False
 
+# -----------------------------
+# STRICT MODE (GLOBAL SAFE)
+# -----------------------------
+if "strict_mode" not in st.session_state:
+    st.session_state.strict_mode = True  # or whatever default you want
+
+strict_mode = bool(st.session_state.strict_mode)
+
+
 
 def get_base64_image(path_or_url: str) -> str:
     """
