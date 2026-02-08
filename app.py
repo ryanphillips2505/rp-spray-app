@@ -1645,12 +1645,16 @@ st.markdown(
     [data-testid="stApp"],
     [data-testid="stAppViewContainer"].rp-bg-fix {{
         background-image:
-            linear-gradient(rgba(229,231,235,0.50), rgba(229,231,235,0.50)),
+            linear-gradient(
+                rgba(243,244,246,0.88),
+                rgba(243,244,246,0.88)
+            ),
             url("{BG_CSS_URL}");
         background-repeat: no-repeat, no-repeat !important;
         background-position: center center, center center !important;
         background-attachment: fixed, fixed !important;
-        background-size: auto, 35% auto !important;
+        background-size: cover, 28% auto !important;
+        filter: grayscale(100%) contrast(0.9);
         color: #111827;
     }}
 
@@ -1664,6 +1668,24 @@ st.markdown(
     [data-testid="stExpander"] summary {{
         font-weight: 800 !important;
     }}
+
+    /* ===== ESPN CLEAN TEXT AREAS (Roster + Play-by-Play) ===== */
+
+    [data-testid="stTextArea"] textarea {
+        border: 1px solid rgba(17,24,39,0.20) !important;
+        border-radius: 10px !important;
+        background: rgba(255,255,255,0.92) !important;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.06) !important;
+        padding: 12px !important;
+        font-size: 0.95rem !important;
+    }
+
+    /* Focus state */
+    [data-testid="stTextArea"] textarea:focus {
+        border-color: rgba(17,24,39,0.45) !important;
+        box-shadow: 0 0 0 2px rgba(17,24,39,0.10) !important;
+    }
+
 
     </style>
     """,
