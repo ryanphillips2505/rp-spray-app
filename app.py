@@ -1734,7 +1734,7 @@ import secrets
 from datetime import datetime
 
 # -----------------------------
-# COACH PREPARATION QOUTES(SIDEBAR)
+# COACH PREPARATION QUOTES (SIDEBAR)
 # -----------------------------
 PREPARATION_QUOTES = [("Nick Saban", "The process of preparation is what separates good teams from great ones."),
     ("Tony La Russa", "Preparation doesn’t guarantee success, but lack of preparation guarantees failure."),
@@ -1752,14 +1752,6 @@ PREPARATION_QUOTES = [("Nick Saban", "The process of preparation is what separat
 def get_daily_quote(quotes):
     idx = int(datetime.utcnow().strftime("%Y%m%d")) % len(quotes)
     return quotes[idx]
-
-
-# -----------------------------
-# SIDEBAR
-# -----------------------------
-import hashlib
-import secrets
-from datetime import datetime
 
 
 # -----------------------------
@@ -1806,7 +1798,7 @@ with st.sidebar:
 
     # --- Daily quote (restyled for dark sidebar) ---
     try:
-        who, quote = get_daily_quote(HOF_QUOTES)
+        who, quote = get_daily_quote(PREPARATION_QUOTES)
         st.markdown(
             f"""
             <div style="
