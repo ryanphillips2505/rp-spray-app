@@ -4,6 +4,9 @@
 
 import streamlit as st
 
+st.write("GITHUB MAIN APP.PY IS LIVE: 2026-02-07")
+
+
 st.set_page_config(
     page_title="RP Spray Analytics",
     layout="wide",
@@ -3698,6 +3701,7 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
+
 
 
 
