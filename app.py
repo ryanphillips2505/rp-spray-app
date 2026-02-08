@@ -1638,7 +1638,7 @@ h1.app-title {{
     background-attachment: fixed, fixed !important;
 
     /* gradient normal, IMAGE smaller */
-    background-size: auto, 35% auto !important;
+    background-size: auto, 50% auto !important;
 
     color: #111827;
 }}
@@ -3698,6 +3698,7 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
+
 
 
 
