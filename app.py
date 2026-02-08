@@ -1611,7 +1611,6 @@ st.markdown(
     f"""
     <style>
     h1.app-title {
-        font-family: 'Black Ops One', 'Jersey 10', sans-serif !important;
         font-size: clamp(1.9rem, 6vw, 4rem) !important;
         color: {PRIMARY} !important;
         text-align: center !important;
