@@ -276,7 +276,7 @@ except Exception:
 def load_settings():
     defaults = {
     "app_title": "The Opponent IQ",
-    "subtitle": "Know your opponent. Win the game.",
+    "subtitle": "Know the opponent. Win the game.",
     "primary_color": "#b91c1c",   # keep for now
     "secondary_color": "#111111",
     "background_image": os.path.join("assets", "background.jpg"),
