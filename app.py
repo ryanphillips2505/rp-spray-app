@@ -2470,7 +2470,11 @@ if process_clicked:
                 continue
 
             # --- normal GB/FB + location ---
-            loc, loc_conf, _ = classify_location(line_lower)
+            loc, loc_conf, _ = classify_location(
+                line_lower,
+                strict_mode=bool(st.session_state.get("strict_mode", True))
+            )
+
             ball_type, bt_conf, _ = classify_ball_type(line_lower)
 
             if loc is None:
