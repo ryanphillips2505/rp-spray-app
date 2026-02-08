@@ -1610,21 +1610,38 @@ if TEAM_CFG:
 st.markdown(
     f"""
 <style>
-h1.app-title {{
+h1.app-title {
     font-family: 'Black Ops One', 'Jersey 10', sans-serif !important;
-    font-size: 4.0rem !important;
+    font-size: clamp(1.9rem, 6vw, 4rem) !important;
     color: {PRIMARY} !important;
     text-align: center !important;
-    letter-spacing: 0.20em !important;
+    letter-spacing: clamp(0.08em, 0.4vw, 0.20em) !important;
     text-transform: uppercase !important;
-    -webkit-text-stroke: 2.5px #000000;
+    line-height: 1.05 !important;
+    white-space: normal !important;
+    word-break: break-word !important;
+
+    -webkit-text-stroke: 2.2px #000000;
     text-shadow:
         2px 2px 0 #000000,
         -2px 2px 0 #000000,
         2px -2px 0 #000000,
         -2px -2px 0 #000000;
-    margin-top: -10px !important;
-    margin-bottom: 12px !important;
+
+    margin-top: -6px !important;
+    margin-bottom: 10px !important;
+}
+
+.app-subtitle {
+    font-size: clamp(1.1rem, 3.2vw, 1.8rem) !important;
+    font-weight: 700 !important;
+    letter-spacing: 0.04em !important;
+    color: #111827 !important;
+    opacity: 0.97 !important;
+    text-align: center !important;
+    margin-bottom: 16px !important;
+}
+
 }}
 
 .app-subtitle {{
