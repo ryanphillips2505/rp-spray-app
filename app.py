@@ -2170,7 +2170,7 @@ with st.expander("➕ Add Opponent", expanded=False):
 # -----------------------------
 # ROSTER UI (SUPABASE - PERSISTENT)
 # -----------------------------
-st.subheader(f"📝 {selected_team} Roster (Hitters)")
+st.subheader(f"{selected_team} Roster (Hitters)")
 
 default_roster_text = db_get_roster(TEAM_CODE_SAFE, team_key)
 
@@ -2495,7 +2495,7 @@ if process_clicked:
 hdr_left, hdr_right = st.columns([8, 2], vertical_alignment="center")
 with hdr_left:
     st.markdown(
-        f"<h3 style='margin:0; padding:0;'>📔 Full Team Spray – SEASON TO DATE ({selected_team})</h3>",
+        f"<h3 style='margin:0; padding:0;'>Full Team Spray – SEASON TO DATE ({selected_team})</h3>",
         unsafe_allow_html=True,
     )
 with hdr_right:
