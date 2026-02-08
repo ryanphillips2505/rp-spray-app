@@ -4,29 +4,18 @@
 # Unauthorized copying, distribution, or resale prohibited.
 
 # -------------------------------------------------
-# Streamlit bootstrap (MUST come first)
+# Streamlit bootstrap (ONLY page_config here)
 # -------------------------------------------------
 import streamlit as st
 
 st.set_page_config(
     page_title="RP Spray Analytics",
+    page_icon="⚾",
     layout="wide",
 )
 
 # -------------------------------------------------
-# Per-run nonce (SAFE – guards against Cloud loader edge cases)
-# -------------------------------------------------
-try:
-    if "_rp_run_nonce" not in st.session_state:
-        st.session_state["_rp_run_nonce"] = 0
-    st.session_state["_rp_run_nonce"] += 1
-    _RP_RUN_NONCE = st.session_state["_rp_run_nonce"]
-except Exception:
-    # Streamlit not fully initialized yet (Cloud hot reload / cache restore)
-    _RP_RUN_NONCE = 0
-
-# -------------------------------------------------
-# Standard library / third-party imports
+# Imports (everything else AFTER page_config)
 # -------------------------------------------------
 import os
 import json
@@ -35,16 +24,25 @@ import re
 import hashlib
 import httpx
 import time
-from datetime import datetime
 import uuid
 import traceback
+from datetime import datetime, timezone
+from typing import Optional, Tuple
+from io import BytesIO
+
+import pandas as pd
+from openpyxl.utils import get_column_letter
+from openpyxl.formatting.rule import ColorScaleRule, FormulaRule, CellIsRule
+from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
+from supabase import create_client, Client
 
 # -------------------------------------------------
 # Global flags
 # -------------------------------------------------
 DEBUG = False
 
-
+# Unique per-run id for widget keys (no session_state nonce needed)
+RUN_ID = uuid.uuid4().hex
 
 
 # -----------------------------
@@ -283,15 +281,6 @@ def load_settings():
 SETTINGS = load_settings()
 settings = SETTINGS  # alias so the rest of the code can use `settings`
 
-
-# -----------------------------
-# ✅ MUST BE FIRST STREAMLIT CALL
-# -----------------------------
-st.set_page_config(
-    page_title=SETTINGS.get("app_title", "RP Spray Charts"),
-    page_icon="⚾",
-    layout="wide",
-)
 
 st.markdown(
     """
@@ -3662,7 +3651,7 @@ with col_dl1:
         data=excel_bytes,
         file_name=f"{TEAM_CODE}_{safe_team}_Season_Spray_Report.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        key=f"dl_season_excel_{TEAM_CODE}_{_RP_RUN_NONCE}",
+        key=f"dl_season_excel_{TEAM_CODE}_{RUN_ID}",
         use_container_width=True,
     )
 
@@ -3672,7 +3661,7 @@ with col_dl2:
         data=gs_bytes,
         file_name=f"{TEAM_CODE}_{safe_team}_Season_Spray_Report_GoogleSheets.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        key=f"dl_season_gs_{TEAM_CODE}_{_RP_RUN_NONCE}",
+        key=f"dl_season_gs_{TEAM_CODE}_{RUN_ID}",
         use_container_width=True,
     )
     st.caption("To open: sheets.google.com → File → Import → Upload.")
@@ -3683,7 +3672,7 @@ with col_dl3:
         data=csv_bytes,
         file_name=f"{TEAM_CODE}_{safe_team}_Season_Spray_Report.csv",
         mime="text/csv",
-        key=f"dl_season_csv_{TEAM_CODE}_{_RP_RUN_NONCE}",
+        key=f"dl_season_csv_{TEAM_CODE}_{RUN_ID}",
         use_container_width=True,
     )
 
